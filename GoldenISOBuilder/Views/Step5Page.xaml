@@ -81,7 +81,7 @@
                                 <Grid><TextBlock Text="Applications staged" Foreground="{DynamicResource FG2Brush}" FontSize="12"/>
                                       <TextBlock x:Name="V_Apps" HorizontalAlignment="Right" Foreground="{DynamicResource FG0Brush}" FontSize="12"/></Grid>
                                 <Border Style="{StaticResource DividerStyle}"/>
-                                <Grid><TextBlock Text="Public Desktop files" Foreground="{DynamicResource FG2Brush}" FontSize="12"/>
+                                <Grid><TextBlock Text="Staged image files" Foreground="{DynamicResource FG2Brush}" FontSize="12"/>
                                       <TextBlock x:Name="V_PublicFiles" HorizontalAlignment="Right" Foreground="{DynamicResource FG0Brush}" FontSize="12"/></Grid>
                                 <Border Style="{StaticResource DividerStyle}"/>
                                 <Grid><TextBlock Text="Deployment scripts" Foreground="{DynamicResource FG2Brush}" FontSize="12"/>
@@ -168,8 +168,13 @@
                                 <Grid><TextBlock Text="Custom registry entries" Foreground="{DynamicResource FG2Brush}" FontSize="12"/>
                                       <TextBlock x:Name="V_RegEntries" HorizontalAlignment="Right" Foreground="{DynamicResource FG0Brush}" FontSize="12"/></Grid>
                                 <Border Style="{StaticResource DividerStyle}"/>
-                                <Grid><TextBlock Text="Features to enable" Foreground="{DynamicResource FG2Brush}" FontSize="12"/>
-                                      <TextBlock x:Name="V_Features" HorizontalAlignment="Right" Foreground="{DynamicResource FG0Brush}" FontSize="12"/></Grid>
+                                <!-- Features list can be long — stacked layout prevents the value
+                                     overflowing left and obscuring the label in a column-less Grid. -->
+                                <StackPanel>
+                                    <TextBlock Text="Features to enable / disable" Foreground="{DynamicResource FG2Brush}" FontSize="12" Margin="0,0,0,3"/>
+                                    <TextBlock x:Name="V_Features" Foreground="{DynamicResource FG0Brush}" FontSize="12"
+                                               TextWrapping="Wrap" LineHeight="18"/>
+                                </StackPanel>
                                 <Border Style="{StaticResource DividerStyle}"/>
                                 <Grid><TextBlock Text="Power Plan" Foreground="{DynamicResource FG2Brush}" FontSize="12"/>
                                       <TextBlock x:Name="V_Power" HorizontalAlignment="Right" Foreground="{DynamicResource FG0Brush}" FontSize="12"/></Grid>

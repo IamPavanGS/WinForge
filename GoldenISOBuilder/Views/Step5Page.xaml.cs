@@ -38,7 +38,11 @@ public partial class Step5Page : UserControl
 
         V_Wallpaper.Text  = string.IsNullOrEmpty(s.WallpaperPath) ? "None" : Path.GetFileName(s.WallpaperPath);
         V_Apps.Text       = $"{s.StagedApps.Count} application(s)";
-        V_PublicFiles.Text= $"{s.PublicDesktopFiles.Count} file(s)";
+        // StagedFiles is the current field; PublicDesktopFiles is the legacy field kept
+        // for backward-compatible profile loading only. Show the combined count so
+        // both old and new profiles display correctly.
+        int stagedFileCount = s.StagedFiles.Count + s.PublicDesktopFiles.Count;
+        V_PublicFiles.Text = stagedFileCount == 0 ? "None" : $"{stagedFileCount} file(s)";
         V_Keyboard.Text   = s.IncludeDeploymentScripts && s.DeploymentScripts.Count > 0
                             ? $"{s.DeploymentScripts.Count} script(s)"
                             : "None";
@@ -58,7 +62,12 @@ public partial class Step5Page : UserControl
         V_Prefix.Text     = string.IsNullOrEmpty(s.ComputerPrefix) ? "(default)" : s.ComputerPrefix;
 
         V_RegEntries.Text = $"{s.CustomRegistryEntries.Count} entry(ies)";
-        V_Features.Text   = s.EnabledFeatures.Count == 0 ? "None" : string.Join(", ", s.EnabledFeatures.Select(ShortFeatureName));
+        // Combine enabled (+) and disabled (−) into one wrapped line.
+        // Using a stacked layout in XAML prevents long lists from overflowing left over the label.
+        var featureParts = new List<string>();
+        if (s.EnabledFeatures.Count  > 0) featureParts.Add("＋ " + string.Join(", ", s.EnabledFeatures.Select(ShortFeatureName)));
+        if (s.DisabledFeatures.Count > 0) featureParts.Add("－ " + string.Join(", ", s.DisabledFeatures.Select(ShortFeatureName)));
+        V_Features.Text = featureParts.Count == 0 ? "None" : string.Join("\n", featureParts);
         V_Power.Text      = s.PowerPlan;
 
         BuildPreflight();

@@ -264,6 +264,32 @@ public partial class WelcomePage : UserControl
                 return;
             }
             CopyToCurrent(loaded);
+
+            // Validate every path in the loaded profile and warn the user about
+            // anything that is missing before they reach the build step.
+            var issues = CollectMissingPaths(BuildSession.Current);
+            if (issues.Count > 0)
+            {
+                var sb = new System.Text.StringBuilder();
+                sb.AppendLine($"{issues.Count} path(s) referenced in this profile could not be found on this machine.");
+                sb.AppendLine("Please validate and fix these paths in the wizard before building:");
+
+                string? lastGroup = null;
+                foreach (var (group, detail) in issues)
+                {
+                    if (group != lastGroup)
+                    {
+                        sb.AppendLine();
+                        sb.AppendLine($"  ▸ {group}");
+                        lastGroup = group;
+                    }
+                    sb.AppendLine($"    {detail}");
+                }
+
+                AppDialog.Alert(this, sb.ToString().TrimEnd(),
+                    "Profile Validation — Missing Paths", AppDialogIcon.Warning);
+            }
+
             NavigateRequested?.Invoke("wizard", 0);
         }
         catch (Exception ex)
@@ -273,11 +299,20 @@ public partial class WelcomePage : UserControl
         }
     }
 
-    /// <summary>Copies values from a deserialised profile into the singleton BuildSession
-    /// (the rest of the app keeps a reference to BuildSession.Current).</summary>
+    /// <summary>
+    /// Copies every user-configurable field from a deserialised profile into the
+    /// singleton BuildSession.  The wizard pages hold a direct reference to
+    /// BuildSession.Current so we update it in-place rather than replacing the object.
+    ///
+    /// IMPORTANT: whenever a new field is added to BuildSession, add it here too.
+    /// Fields omitted from this method silently revert to their default values
+    /// after a profile import — the exact bug this method was audited to fix.
+    /// </summary>
     private static void CopyToCurrent(BuildSession src)
     {
         var d = BuildSession.Current;
+
+        // ── Step 1: Source & Output ───────────────────────────────────────────
         d.SourceIsoPath           = src.SourceIsoPath;
         d.SelectedEdition         = src.SelectedEdition;
         d.SelectedArch            = src.SelectedArch;
@@ -286,14 +321,44 @@ public partial class WelcomePage : UserControl
         d.OutputPath              = src.OutputPath;
         d.WorkspacePath           = src.WorkspacePath;
         d.OutputFilename          = src.OutputFilename;
+
+        // ISO language fields (windowsPE boot language + deployed OS locale)
+        d.IsoSourceLanguage       = src.IsoSourceLanguage;
+        d.IsoAvailableLanguages   = src.IsoAvailableLanguages;
+        d.TargetOsLocale          = src.TargetOsLocale;
+
+        // ── Step 2: Assets ────────────────────────────────────────────────────
         d.WallpaperPath           = src.WallpaperPath;
         d.StagedApps              = src.StagedApps;
+        d.StagedFiles             = src.StagedFiles;
         d.PublicDesktopFiles      = src.PublicDesktopFiles;
         d.IncludeDeploymentScripts = src.IncludeDeploymentScripts;
-        d.DeploymentScripts        = src.DeploymentScripts
-                                         .Select(s => new DeploymentScript { Path = s.Path, Trigger = s.Trigger })
-                                         .ToList();
+        d.DeploymentScripts       = src.DeploymentScripts
+                                        .Select(s => new DeploymentScript { Path = s.Path, Trigger = s.Trigger })
+                                        .ToList();
+        d.LanguagePackPaths       = src.LanguagePackPaths;
+        d.DriverFolderPaths       = src.DriverFolderPaths;
+        d.ScheduledTasks          = src.ScheduledTasks;
+
+        // ── Step 3: Customisations ────────────────────────────────────────────
         d.BloatwareToRemove       = src.BloatwareToRemove;
+
+        // Security toggles
+        d.EnableBitLocker         = src.EnableBitLocker;
+        d.BitLockerDriveLetter    = src.BitLockerDriveLetter;
+        d.BitLockerSaveRecoveryKey = src.BitLockerSaveRecoveryKey;
+        d.BitLockerKeyFolder      = src.BitLockerKeyFolder;
+        d.EnableDefenderAtp       = src.EnableDefenderAtp;
+        d.DisableSmbV1            = src.DisableSmbV1;
+        d.DisableTelemetry        = src.DisableTelemetry;
+
+        // System defaults
+        d.DarkMode                = src.DarkMode;
+        d.ShowFileExtensions      = src.ShowFileExtensions;
+        d.ShowHiddenFiles         = src.ShowHiddenFiles;
+        d.EnableHyperV            = src.EnableHyperV;
+
+        // Group policies
         d.GroupPolicies           = src.GroupPolicies
                                         .Select(g => new GroupPolicyEntry
                                         {
@@ -308,17 +373,17 @@ public partial class WelcomePage : UserControl
                                         }).ToList();
         d.AdmxSourceMode          = src.AdmxSourceMode;
         d.CustomAdmxPath          = src.CustomAdmxPath;
-        d.DisableSmbV1            = src.DisableSmbV1;
-        d.DisableTelemetry        = src.DisableTelemetry;
-        d.EnableDefenderAtp       = src.EnableDefenderAtp;
-        d.DarkMode                = src.DarkMode;
-        d.ShowFileExtensions      = src.ShowFileExtensions;
-        d.ShowHiddenFiles         = src.ShowHiddenFiles;   // FIX #5: was missing
+
+        // ── Step 4: Admin Account ─────────────────────────────────────────────
         d.AdminUsername           = src.AdminUsername;
         d.AdminPassword           = src.AdminPassword;
         d.AutoLoginEnabled        = src.AutoLoginEnabled;
         d.PasswordNeverExpires    = src.PasswordNeverExpires;
+
+        // ── Step 5: Registry ──────────────────────────────────────────────────
         d.CustomRegistryEntries   = src.CustomRegistryEntries;
+
+        // ── Step 6: Advanced ──────────────────────────────────────────────────
         d.OrgName                 = src.OrgName;
         d.RegisteredOwner         = src.RegisteredOwner;
         d.ComputerPrefix          = src.ComputerPrefix;
@@ -326,6 +391,7 @@ public partial class WelcomePage : UserControl
         d.SkipOobe                = src.SkipOobe;
         d.AutoLogonCount          = src.AutoLogonCount;
         d.PowerPlan               = src.PowerPlan;
+        d.TimeZone                = src.TimeZone;
         d.OemManufacturer         = src.OemManufacturer;
         d.OemModel                = src.OemModel;
         d.OemSupportUrl           = src.OemSupportUrl;
@@ -379,5 +445,70 @@ public partial class WelcomePage : UserControl
     {
         RefreshStats();
         RefreshRecentBuilds();
+    }
+
+    // ── Profile path validation ───────────────────────────────────────────────
+
+    /// <summary>
+    /// Checks every path-based field in <paramref name="s"/> and returns a list
+    /// of (group, detail) pairs for anything that is missing on this machine.
+    /// Called immediately after loading a .gibprofile so the user is told about
+    /// stale paths before they reach the build step.
+    /// </summary>
+    private static List<(string Group, string Detail)> CollectMissingPaths(BuildSession s)
+    {
+        var issues = new List<(string, string)>();
+
+        // ── Source ISO (critical — build cannot start without it) ─────────────
+        if (!string.IsNullOrWhiteSpace(s.SourceIsoPath) && !System.IO.File.Exists(s.SourceIsoPath))
+            issues.Add(("Source ISO", s.SourceIsoPath));
+
+        // ── Wallpaper ─────────────────────────────────────────────────────────
+        if (!string.IsNullOrWhiteSpace(s.WallpaperPath) && !System.IO.File.Exists(s.WallpaperPath))
+            issues.Add(("Wallpaper", s.WallpaperPath));
+
+        // ── Staged app installers ─────────────────────────────────────────────
+        foreach (var app in s.StagedApps)
+        {
+            if (!string.IsNullOrWhiteSpace(app.FilePath) && !System.IO.File.Exists(app.FilePath))
+                issues.Add(($"App installer — {app.Name}", app.FilePath));
+
+            if (!string.IsNullOrWhiteSpace(app.MstPath) && !System.IO.File.Exists(app.MstPath))
+                issues.Add(($"MST transform — {app.Name}", app.MstPath));
+        }
+
+        // ── Staged files (extra files copied into the image) ──────────────────
+        foreach (var sf in s.StagedFiles)
+            if (!string.IsNullOrWhiteSpace(sf.SourcePath) && !System.IO.File.Exists(sf.SourcePath))
+                issues.Add(("Staged file", sf.SourcePath));
+
+        // ── Public desktop files ──────────────────────────────────────────────
+        foreach (var pf in s.PublicDesktopFiles)
+            if (!string.IsNullOrWhiteSpace(pf) && !System.IO.File.Exists(pf))
+                issues.Add(("Public desktop file", pf));
+
+        // ── Language packs (.cab files) ───────────────────────────────────────
+        foreach (var lp in s.LanguagePackPaths)
+            if (!string.IsNullOrWhiteSpace(lp) && !System.IO.File.Exists(lp))
+                issues.Add(("Language pack", lp));
+
+        // ── Driver folders ────────────────────────────────────────────────────
+        foreach (var df in s.DriverFolderPaths)
+            if (!string.IsNullOrWhiteSpace(df) && !System.IO.Directory.Exists(df))
+                issues.Add(("Driver folder", df));
+
+        // ── Deployment scripts ────────────────────────────────────────────────
+        foreach (var ds in s.DeploymentScripts)
+            if (!string.IsNullOrWhiteSpace(ds.Path) && !System.IO.File.Exists(ds.Path))
+                issues.Add(("Deployment script", ds.Path));
+
+        // ── Output / Workspace folders (warn — build will fail if missing) ────
+        if (!string.IsNullOrWhiteSpace(s.OutputPath) && !System.IO.Directory.Exists(s.OutputPath))
+            issues.Add(("Output folder", s.OutputPath));
+
+        if (!string.IsNullOrWhiteSpace(s.WorkspacePath) && !System.IO.Directory.Exists(s.WorkspacePath))
+            issues.Add(("Workspace folder", s.WorkspacePath));
+
+        return issues;
     }
 }

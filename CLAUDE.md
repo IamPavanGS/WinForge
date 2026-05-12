@@ -2,6 +2,23 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Debugging Philosophy
+- When fixing crashes or runtime errors, FIRST diagnose the root cause before applying fixes. Read the full stack trace, examine the relevant resources/theme/binding setup holistically, and explain the root cause before editing.
+- Do NOT apply piecemeal one-error-at-a-time fixes. If you see a XAML/binding/theme error, audit the entire resource dictionary and related templates in one pass.
+- After a fix attempt, verify the actual outcome (don't assume success from a build passing - confirm the GUI/dialog actually launches correctly).
+
+## UI/UX Conventions
+
+### Mobile/Touch UI Rules
+- Never use hover-only styles (e.g., opacity on hover) for interactive elements - they are invisible on touch devices. Always provide a persistent visible state for buttons, delete icons, and controls.
+- Test responsive layouts assume mobile viewport unless told otherwise.
+
+## Workflow Rules
+
+### Bulk/Destructive Actions
+- Never run 'fix everything' or batch destructive operations blindly. Always present the list of planned changes and get explicit confirmation before executing more than 3 related fixes at once.
+- When an external API returns an error (e.g., 401 from warranty APIs), propose a fallback strategy before retrying.
+
 ## What This Project Is
 
 **ALE ISO Creator** (internal name: GoldenISOBuilder) is a Windows enterprise deployment tool: a WPF wizard that customizes Windows 11 ISO images and injects a first-boot launcher that silently installs apps on the first login after deployment.

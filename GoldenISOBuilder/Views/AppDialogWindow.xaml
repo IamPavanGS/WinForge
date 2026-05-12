@@ -70,10 +70,15 @@
                                    Foreground="{DynamicResource FG0Brush}"
                                    TextWrapping="Wrap"
                                    Margin="0,0,0,5"/>
-                        <TextBlock x:Name="MessageBlock"
-                                   FontSize="13"
-                                   Foreground="{DynamicResource FG1Brush}"
-                                   TextWrapping="Wrap" LineHeight="19"/>
+                        <!-- ScrollViewer caps height for long messages (e.g. path-validation lists)
+                             while leaving short messages unaffected (Auto collapses the scrollbar). -->
+                        <ScrollViewer MaxHeight="340" VerticalScrollBarVisibility="Auto"
+                                      Focusable="False" Padding="0,0,4,0">
+                            <TextBlock x:Name="MessageBlock"
+                                       FontSize="13"
+                                       Foreground="{DynamicResource FG1Brush}"
+                                       TextWrapping="Wrap" LineHeight="19"/>
+                        </ScrollViewer>
                     </StackPanel>
                 </StackPanel>
 
