@@ -1,0 +1,514 @@
+<UserControl x:Class="GoldenISOBuilder.Views.Step3Page"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:h="clr-namespace:GoldenISOBuilder.Helpers"
+             Background="{DynamicResource BG0Brush}"
+             FontFamily="Segoe UI">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Page Header -->
+        <StackPanel Grid.Row="0" Margin="40,32,40,0">
+            <TextBlock Text="CUSTOMIZATIONS" Style="{StaticResource GoldEyebrowText}"/>
+            <TextBlock Text="Remove bloatware, manage features, and harden your image"
+                       Foreground="{DynamicResource FG2Brush}" FontSize="14" Margin="0,4,0,0"/>
+        </StackPanel>
+
+        <!-- Scrollable Content -->
+        <ScrollViewer Focusable="False" Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="40,24,40,0">
+            <StackPanel h:PanelSpacing.Spacing="16">
+
+                <!-- ══ Scan ISO Banner ════════════════════════════════════════ -->
+                <!-- Shown when no scan done yet or scan in progress -->
+                <Border Style="{StaticResource CardStyle}"
+                        BorderBrush="{DynamicResource Gold1Brush}" BorderThickness="1">
+                    <!-- Grid stacks the three states; only one is Visible at a time -->
+                    <Grid>
+                        <!-- Pre-scan prompt -->
+                        <StackPanel x:Name="ScanPrompt" h:PanelSpacing.Spacing="12">
+                            <StackPanel Orientation="Horizontal" h:PanelSpacing.Spacing="12">
+                                <Path Style="{StaticResource IconPath}" Width="20" Height="20"
+                                      Data="{StaticResource DiscIcon}" Stroke="{DynamicResource Gold1Brush}"/>
+                                <StackPanel>
+                                    <TextBlock Text="Scan ISO for Installed Packages &amp; Features"
+                                               Foreground="{DynamicResource FG0Brush}"
+                                               FontSize="14" FontWeight="SemiBold"/>
+                                    <TextBlock TextWrapping="Wrap"
+                                               Foreground="{DynamicResource FG2Brush}" FontSize="12" Margin="0,2,0,0"
+                                               Text="Instead of a fixed list, this scans your actual ISO and shows exactly what Microsoft has packaged — so you always see new additions regardless of Windows version."/>
+                                </StackPanel>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" h:PanelSpacing.Spacing="10">
+                                <Button Content="⟳  Scan ISO Now"
+                                        Style="{StaticResource PrimaryButtonStyle}"
+                                        Click="ScanIso_Click"/>
+                                <TextBlock x:Name="ScanNoIsoHint"
+                                           Text="⚠ Select a Windows ISO in Step 1 first"
+                                           Foreground="{DynamicResource WarnBrush}" FontSize="12"
+                                           VerticalAlignment="Center" Visibility="Collapsed"/>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- During-scan progress -->
+                        <StackPanel x:Name="ScanProgress" Visibility="Collapsed" h:PanelSpacing.Spacing="8">
+                            <StackPanel Orientation="Horizontal" h:PanelSpacing.Spacing="8">
+                                <TextBlock x:Name="ScanStatusText" Text="Scanning…"
+                                           Foreground="{DynamicResource FG2Brush}" FontSize="13"
+                                           VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis"/>
+                                <TextBlock x:Name="ScanProgressPct" Text="0%"
+                                           Foreground="{DynamicResource Gold1Brush}"
+                                           FontSize="13" FontWeight="SemiBold"
+                                           VerticalAlignment="Center" MinWidth="38"/>
+                            </StackPanel>
+                            <ProgressBar x:Name="ScanProgressBar"
+                                         Value="0" Minimum="0" Maximum="100"
+                                         Height="8" Style="{StaticResource GoldProgressBar}"/>
+                            <TextBlock Text="Mount (4–8 min) · Packages · Features · Policy Definitions · Unmount — all in one pass, progress bar tracks every stage"
+                                       Foreground="{DynamicResource FG3Brush}" FontSize="11"/>
+                        </StackPanel>
+
+                        <!-- Post-scan summary -->
+                        <StackPanel x:Name="ScanComplete" Visibility="Collapsed"
+                                    Orientation="Horizontal" h:PanelSpacing.Spacing="16">
+                            <TextBlock x:Name="ScanSummaryText"
+                                       Foreground="{DynamicResource OkBrush}" FontSize="13"
+                                       VerticalAlignment="Center"/>
+                            <Button Content="Re-scan" Style="{StaticResource GhostButtonStyle}"
+                                    FontSize="12" Click="ScanIso_Click" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <!-- ══ Bloatware Removal ══════════════════════════════════════ -->
+                <Expander x:Name="BloatExpander" Style="{StaticResource AccordionStyle}" IsExpanded="True">
+                    <Expander.Header>
+                        <StackPanel Orientation="Horizontal" h:PanelSpacing.Spacing="10">
+                            <Path Style="{StaticResource IconPath}" Width="16" Height="16"
+                                  Data="{StaticResource TrashIcon}" Stroke="{DynamicResource Gold1Brush}"/>
+                            <TextBlock Text="Bloatware Removal" Foreground="{DynamicResource FG0Brush}"
+                                       FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                            <Border Style="{StaticResource PillStyle}" Margin="4,0,0,0">
+                                <TextBlock x:Name="BloatCountPill" Text="0 selected"/>
+                            </Border>
+                        </StackPanel>
+                    </Expander.Header>
+
+                    <StackPanel Margin="0,12,0,0" h:PanelSpacing.Spacing="10">
+
+                        <!-- Pre-scan placeholder -->
+                        <Border x:Name="BloatNoScanPanel"
+                                Background="{DynamicResource BG3Brush}" CornerRadius="6"
+                                Padding="20,16">
+                            <StackPanel HorizontalAlignment="Center" h:PanelSpacing.Spacing="6">
+                                <TextBlock Text="Click 'Scan ISO Now' above to discover all installed packages."
+                                           Foreground="{DynamicResource FG2Brush}" FontSize="13"
+                                           HorizontalAlignment="Center"/>
+                                <TextBlock Text="The list is read directly from your ISO — no guessing."
+                                           Foreground="{DynamicResource FG3Brush}" FontSize="11"
+                                           HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Post-scan: toolbar + package list -->
+                        <StackPanel x:Name="BloatResultPanel" Visibility="Collapsed" h:PanelSpacing.Spacing="10">
+
+                            <!-- Toolbar -->
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBox x:Name="PkgSearchBox" Grid.Column="0"
+                                         Style="{StaticResource TextInputStyle}"
+                                         Margin="0,0,10,0"
+                                         TextChanged="PkgSearch_Changed">
+                                    <TextBox.Tag>Search packages…</TextBox.Tag>
+                                </TextBox>
+                                <Button Grid.Column="1" Content="★ Select Known Bloat"
+                                        Style="{StaticResource GhostButtonStyle}"
+                                        FontSize="12" Margin="0,0,6,0"
+                                        Click="SelectKnownBloat_Click"/>
+                                <Button Grid.Column="2" Content="All" Style="{StaticResource GhostButtonStyle}"
+                                        FontSize="12" Margin="0,0,4,0" Click="SelectAllPkgs_Click"/>
+                                <Button Grid.Column="3" Content="None" Style="{StaticResource GhostButtonStyle}"
+                                        FontSize="12" Click="DeselectAllPkgs_Click"/>
+                            </Grid>
+
+                            <!-- Package rows (dynamic) -->
+                            <Border Background="{DynamicResource BG1Brush}" CornerRadius="6"
+                                    BorderBrush="{DynamicResource LineBrush}" BorderThickness="1">
+                                <ScrollViewer Focusable="False" MaxHeight="420"
+                                              VerticalScrollBarVisibility="Auto" Padding="4">
+                                    <StackPanel x:Name="PackageListPanel" h:PanelSpacing.Spacing="2"
+                                                Margin="4"/>
+                                </ScrollViewer>
+                            </Border>
+                        </StackPanel>
+                    </StackPanel>
+                </Expander>
+
+                <!-- ══ Windows Features ═══════════════════════════════════════ -->
+                <Expander Style="{StaticResource AccordionStyle}" IsExpanded="False">
+                    <Expander.Header>
+                        <StackPanel Orientation="Horizontal" h:PanelSpacing.Spacing="10">
+                            <Path Style="{StaticResource IconPath}" Width="16" Height="16"
+                                  Data="{StaticResource SettingsIcon}" Stroke="{DynamicResource Gold1Brush}"/>
+                            <TextBlock Text="Windows Features" Foreground="{DynamicResource FG0Brush}"
+                                       FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                            <Border Style="{StaticResource PillStyle}" Margin="4,0,0,0">
+                                <TextBlock x:Name="FeatCountPill" Text="0 changes"/>
+                            </Border>
+                        </StackPanel>
+                    </Expander.Header>
+
+                    <StackPanel Margin="0,12,0,0" h:PanelSpacing.Spacing="10">
+
+                        <!-- Pre-scan placeholder -->
+                        <Border x:Name="FeatNoScanPanel"
+                                Background="{DynamicResource BG3Brush}" CornerRadius="6"
+                                Padding="20,16">
+                            <TextBlock Text="Click 'Scan ISO Now' above to discover available Windows features."
+                                       Foreground="{DynamicResource FG2Brush}" FontSize="13"
+                                       HorizontalAlignment="Center"/>
+                        </Border>
+
+                        <!-- Post-scan feature lists -->
+                        <StackPanel x:Name="FeatResultPanel" Visibility="Collapsed" h:PanelSpacing.Spacing="12">
+
+                            <!-- Search -->
+                            <TextBox x:Name="FeatSearchBox" Style="{StaticResource TextInputStyle}"
+                                     TextChanged="FeatSearch_Changed">
+                                <TextBox.Tag>Search features…</TextBox.Tag>
+                            </TextBox>
+
+                            <!-- Two-column layout: Disable | Enable -->
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="12"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <!-- Currently ENABLED → check to DISABLE -->
+                                <Border Grid.Column="0" Background="{DynamicResource BG1Brush}"
+                                        CornerRadius="6" BorderBrush="{DynamicResource LineBrush}"
+                                        BorderThickness="1">
+                                    <StackPanel>
+                                        <Border Background="{DynamicResource BG3Brush}" CornerRadius="6,6,0,0"
+                                                Padding="12,8">
+                                            <StackPanel Orientation="Horizontal" h:PanelSpacing.Spacing="8">
+                                                <TextBlock Text="☑ Currently ENABLED"
+                                                           Foreground="{DynamicResource FG0Brush}"
+                                                           FontSize="12" FontWeight="SemiBold"/>
+                                                <TextBlock Text="(check to DISABLE in image)"
+                                                           Foreground="{DynamicResource FG2Brush}" FontSize="11"/>
+                                            </StackPanel>
+                                        </Border>
+                                        <ScrollViewer Focusable="False" MaxHeight="340"
+                                                      VerticalScrollBarVisibility="Auto" Padding="4">
+                                            <StackPanel x:Name="EnabledFeaturesPanel" h:PanelSpacing.Spacing="2"
+                                                        Margin="4"/>
+                                        </ScrollViewer>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Currently DISABLED → check to ENABLE -->
+                                <Border Grid.Column="2" Background="{DynamicResource BG1Brush}"
+                                        CornerRadius="6" BorderBrush="{DynamicResource LineBrush}"
+                                        BorderThickness="1">
+                                    <StackPanel>
+                                        <Border Background="{DynamicResource BG3Brush}" CornerRadius="6,6,0,0"
+                                                Padding="12,8">
+                                            <StackPanel Orientation="Horizontal" h:PanelSpacing.Spacing="8">
+                                                <TextBlock Text="○ Currently DISABLED"
+                                                           Foreground="{DynamicResource FG0Brush}"
+                                                           FontSize="12" FontWeight="SemiBold"/>
+                                                <TextBlock Text="(check to ENABLE in image)"
+                                                           Foreground="{DynamicResource FG2Brush}" FontSize="11"/>
+                                            </StackPanel>
+                                        </Border>
+                                        <ScrollViewer Focusable="False" MaxHeight="340"
+                                                      VerticalScrollBarVisibility="Auto" Padding="4">
+                                            <StackPanel x:Name="DisabledFeaturesPanel" h:PanelSpacing.Spacing="2"
+                                                        Margin="4"/>
+                                        </ScrollViewer>
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+                        </StackPanel>
+                    </StackPanel>
+                </Expander>
+
+                <!-- ══ Security &amp; Hardening ══════════════════════════════ -->
+                <Expander Style="{StaticResource AccordionStyle}" IsExpanded="False">
+                    <Expander.Header>
+                        <StackPanel Orientation="Horizontal" h:PanelSpacing.Spacing="10">
+                            <Path Style="{StaticResource IconPath}" Width="16" Height="16"
+                                  Data="{StaticResource ShieldIcon}" Stroke="{DynamicResource Gold1Brush}"/>
+                            <TextBlock Text="Security &amp; Hardening" Foreground="{DynamicResource FG0Brush}"
+                                       FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Expander.Header>
+                    <StackPanel Margin="0,12,0,0" h:PanelSpacing.Spacing="10">
+                        <Border Background="{DynamicResource BG3Brush}" CornerRadius="6" Padding="14,10">
+                            <Grid>
+                                <StackPanel>
+                                    <TextBlock Text="Disable SMBv1" Foreground="{DynamicResource FG0Brush}" FontSize="13"/>
+                                    <TextBlock Text="Prevents WannaCry-style worm attacks (recommended)" Foreground="{DynamicResource FG2Brush}" FontSize="11"/>
+                                </StackPanel>
+                                <CheckBox x:Name="SecDisableSmb1" HorizontalAlignment="Right" IsChecked="True" Style="{StaticResource ToggleSwitchStyle}"/>
+                            </Grid>
+                        </Border>
+                        <Border Background="{DynamicResource BG3Brush}" CornerRadius="6" Padding="14,10">
+                            <Grid>
+                                <StackPanel>
+                                    <TextBlock Text="Disable Telemetry / Diagnostics" Foreground="{DynamicResource FG0Brush}" FontSize="13"/>
+                                    <TextBlock Text="Sets diagnostic data collection to minimum (0)" Foreground="{DynamicResource FG2Brush}" FontSize="11"/>
+                                </StackPanel>
+                                <CheckBox x:Name="SecDisableTelemetry" HorizontalAlignment="Right" IsChecked="True" Style="{StaticResource ToggleSwitchStyle}"/>
+                            </Grid>
+                        </Border>
+                        <Border Background="{DynamicResource BG3Brush}" CornerRadius="6" Padding="14,10">
+                            <Grid>
+                                <StackPanel>
+                                    <TextBlock Text="Update Defender Signatures at First Boot" Foreground="{DynamicResource FG0Brush}" FontSize="13"/>
+                                    <TextBlock Text="Runs MpCmdRun -SignatureUpdate in SetupComplete.cmd" Foreground="{DynamicResource FG2Brush}" FontSize="11"/>
+                                </StackPanel>
+                                <CheckBox x:Name="SecDefenderUpdate" HorizontalAlignment="Right" IsChecked="True" Style="{StaticResource ToggleSwitchStyle}"/>
+                            </Grid>
+                        </Border>
+                        <Border Background="{DynamicResource BG3Brush}" CornerRadius="6" Padding="14,10">
+                            <StackPanel>
+                                <!-- Main toggle row -->
+                                <Grid>
+                                    <StackPanel>
+                                        <TextBlock Text="Enable BitLocker Drive Encryption" Foreground="{DynamicResource FG0Brush}" FontSize="13"/>
+                                        <TextBlock Text="Encrypts C: at first boot via scheduled task (SYSTEM/TPM + Recovery Password)" Foreground="{DynamicResource FG2Brush}" FontSize="11" TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                    <CheckBox x:Name="SecBitLocker" HorizontalAlignment="Right" IsChecked="False"
+                                              Style="{StaticResource ToggleSwitchStyle}"
+                                              Checked="SecBitLocker_Toggled" Unchecked="SecBitLocker_Toggled"/>
+                                </Grid>
+
+                                <!-- Sub-options — visible only when BitLocker is enabled -->
+                                <StackPanel x:Name="BitLockerOptions" Visibility="Collapsed" Margin="0,10,0,0">
+                                    <Border Background="{DynamicResource BG2Brush}" CornerRadius="4" Padding="12,8">
+                                        <StackPanel>
+
+                                            <!-- Save key toggle -->
+                                            <Grid Margin="0,0,0,8">
+                                                <StackPanel>
+                                                    <TextBlock Text="Save recovery key to disk" Foreground="{DynamicResource FG0Brush}" FontSize="12"/>
+                                                    <TextBlock Text="Writes BitlockerPassword_L{serial}.txt to the folder below" Foreground="{DynamicResource FG2Brush}" FontSize="11" TextWrapping="Wrap"/>
+                                                </StackPanel>
+                                                <CheckBox x:Name="SecBitLockerSaveKey" HorizontalAlignment="Right"
+                                                          IsChecked="True" Style="{StaticResource ToggleSwitchStyle}"
+                                                          Checked="SecBitLockerSaveKey_Toggled" Unchecked="SecBitLockerSaveKey_Toggled"/>
+                                            </Grid>
+
+                                            <!-- Key folder row — hidden when save key is off -->
+                                            <StackPanel x:Name="BitLockerKeyFolderPanel">
+                                                <TextBlock Text="Recovery key save folder" Foreground="{DynamicResource FG1Brush}" FontSize="11" Margin="0,0,0,4"/>
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBox x:Name="TxtBitLockerKeyFolder" Grid.Column="0"
+                                                             Style="{StaticResource TextInputStyle}"
+                                                             Margin="0,0,8,0">
+                                                        <TextBox.Tag>e.g. C:\</TextBox.Tag>
+                                                    </TextBox>
+                                                    <Button Grid.Column="1" Content="Browse…"
+                                                            Style="{StaticResource GhostButtonStyle}"
+                                                            FontSize="12" Click="BrowseBitLockerFolder_Click"/>
+                                                </Grid>
+                                            </StackPanel>
+
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Expander>
+
+                <!-- ══ System Defaults ════════════════════════════════════════ -->
+                <Expander Style="{StaticResource AccordionStyle}" IsExpanded="True">
+                    <Expander.Header>
+                        <StackPanel Orientation="Horizontal" h:PanelSpacing.Spacing="10">
+                            <Path Style="{StaticResource IconPath}" Width="16" Height="16"
+                                  Data="{StaticResource SettingsIcon}" Stroke="{DynamicResource Gold1Brush}"/>
+                            <TextBlock Text="System Defaults" Foreground="{DynamicResource FG0Brush}"
+                                       FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Expander.Header>
+                    <StackPanel Margin="0,12,0,0" h:PanelSpacing.Spacing="10">
+                        <Border Background="{DynamicResource BG3Brush}" CornerRadius="6" Padding="14,10">
+                            <Grid>
+                                <StackPanel>
+                                    <TextBlock Text="Dark Mode" Foreground="{DynamicResource FG0Brush}" FontSize="13"/>
+                                    <TextBlock Text="System and app dark theme for all new user accounts" Foreground="{DynamicResource FG2Brush}" FontSize="11"/>
+                                </StackPanel>
+                                <CheckBox x:Name="SysDarkMode" HorizontalAlignment="Right" IsChecked="True" Style="{StaticResource ToggleSwitchStyle}"/>
+                            </Grid>
+                        </Border>
+                        <Border Background="{DynamicResource BG3Brush}" CornerRadius="6" Padding="14,10">
+                            <Grid>
+                                <StackPanel>
+                                    <TextBlock Text="Show File Extensions" Foreground="{DynamicResource FG0Brush}" FontSize="13"/>
+                                    <TextBlock Text="Reveal extensions in Explorer (e.g. document.docx instead of document)" Foreground="{DynamicResource FG2Brush}" FontSize="11"/>
+                                </StackPanel>
+                                <CheckBox x:Name="SysShowExt" HorizontalAlignment="Right" IsChecked="True" Style="{StaticResource ToggleSwitchStyle}"/>
+                            </Grid>
+                        </Border>
+                        <Border Background="{DynamicResource BG3Brush}" CornerRadius="6" Padding="14,10">
+                            <Grid>
+                                <StackPanel>
+                                    <TextBlock Text="Show Hidden Files and Folders" Foreground="{DynamicResource FG0Brush}" FontSize="13"/>
+                                    <TextBlock Text="Display hidden items in Explorer for all new user accounts" Foreground="{DynamicResource FG2Brush}" FontSize="11"/>
+                                </StackPanel>
+                                <CheckBox x:Name="SysShowHidden" HorizontalAlignment="Right" IsChecked="False" Style="{StaticResource ToggleSwitchStyle}"/>
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+                </Expander>
+
+                <!-- ══ Local Group Policy ════════════════════════════════════ -->
+                <Expander Style="{StaticResource AccordionStyle}" IsExpanded="False">
+                    <Expander.Header>
+                        <StackPanel Orientation="Horizontal" h:PanelSpacing.Spacing="10">
+                            <Path Style="{StaticResource IconPath}" Width="16" Height="16"
+                                  Data="{StaticResource ShieldIcon}" Stroke="{DynamicResource Gold1Brush}"/>
+                            <TextBlock Text="Local Group Policy" Foreground="{DynamicResource FG0Brush}"
+                                       FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                            <Border Style="{StaticResource PillStyle}" Margin="4,0,0,0">
+                                <TextBlock x:Name="GPOCountPill" Text="0 policies"/>
+                            </Border>
+                        </StackPanel>
+                    </Expander.Header>
+
+                    <StackPanel Margin="0,12,0,0" h:PanelSpacing.Spacing="10">
+
+                        <!-- Info note -->
+                        <Border Background="{DynamicResource BG3Brush}" CornerRadius="6" Padding="14,10">
+                            <TextBlock TextWrapping="Wrap"
+                                       Foreground="{DynamicResource FG2Brush}" FontSize="12"
+                                       Text="Policies are injected into the offline registry during the build. Select which ADMX source to use for the policy picker below."/>
+                        </Border>
+
+                        <!-- ADMX Source Selector -->
+                        <Border Background="{DynamicResource BG3Brush}" CornerRadius="6" Padding="14,10">
+                            <StackPanel h:PanelSpacing.Spacing="10">
+                                <!-- Label + pills row -->
+                                <Grid>
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="Policy Definitions Source"
+                                                   Foreground="{DynamicResource FG0Brush}"
+                                                   FontSize="13" FontWeight="SemiBold"/>
+                                        <TextBlock Text="Which ADMX templates to use in the policy picker"
+                                                   Foreground="{DynamicResource FG2Brush}"
+                                                   FontSize="11" Margin="0,2,0,0"/>
+                                    </StackPanel>
+                                    <StackPanel HorizontalAlignment="Right" Orientation="Horizontal"
+                                                h:PanelSpacing.Spacing="6" VerticalAlignment="Center">
+                                        <Border x:Name="AdmxPillMachine" Tag="machine"
+                                                CornerRadius="5" Padding="10,4" Cursor="Hand"
+                                                BorderThickness="1"
+                                                MouseLeftButtonUp="AdmxSourcePill_Click">
+                                            <TextBlock x:Name="AdmxPillMachineText" Text="This Machine"
+                                                       FontSize="11" FontWeight="SemiBold"/>
+                                        </Border>
+                                        <Border x:Name="AdmxPillIso" Tag="iso"
+                                                CornerRadius="5" Padding="10,4" Cursor="Hand"
+                                                BorderThickness="1"
+                                                MouseLeftButtonUp="AdmxSourcePill_Click">
+                                            <TextBlock x:Name="AdmxPillIsoText" Text="From ISO"
+                                                       FontSize="11" FontWeight="SemiBold"/>
+                                        </Border>
+                                        <Border x:Name="AdmxPillCustom" Tag="custom"
+                                                CornerRadius="5" Padding="10,4" Cursor="Hand"
+                                                BorderThickness="1"
+                                                MouseLeftButtonUp="AdmxSourcePill_Click">
+                                            <TextBlock x:Name="AdmxPillCustomText" Text="Custom Folder"
+                                                       FontSize="11" FontWeight="SemiBold"/>
+                                        </Border>
+                                    </StackPanel>
+                                </Grid>
+                                <!-- Custom folder path row — only visible when "custom" is selected -->
+                                <Grid x:Name="AdmxCustomFolderRow" Visibility="Collapsed">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox x:Name="AdmxCustomFolderBox" Grid.Column="0"
+                                             Style="{StaticResource TextInputStyle}"
+                                             IsReadOnly="True" Margin="0,0,8,0">
+                                        <TextBox.Tag>No folder selected…</TextBox.Tag>
+                                    </TextBox>
+                                    <Button Grid.Column="1" Content="Browse…"
+                                            Style="{StaticResource GhostButtonStyle}"
+                                            FontSize="12" Click="BrowseAdmxFolder_Click"/>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Add Policy button row -->
+                        <StackPanel Orientation="Horizontal" h:PanelSpacing.Spacing="10"
+                                    VerticalAlignment="Center">
+                            <Button Content="+ Add Policy"
+                                    Style="{StaticResource GhostButtonStyle}"
+                                    FontSize="12" Click="AddGroupPolicy_Click"/>
+                            <TextBlock x:Name="AdmxIsoLoadingText"
+                                       Foreground="{DynamicResource FG2Brush}" FontSize="12"
+                                       VerticalAlignment="Center" Visibility="Collapsed"
+                                       TextTrimming="CharacterEllipsis"/>
+                        </StackPanel>
+
+                        <!-- Empty hint (Collapsed at init — RefreshGroupPoliciesPanel sets it) -->
+                        <TextBlock x:Name="GPOEmptyHint"
+                                   Text="No group policies configured. Click 'Add Policy' to browse ADMX settings."
+                                   Foreground="{DynamicResource FG3Brush}" FontSize="12"
+                                   Margin="0,4,0,0" Visibility="Collapsed"/>
+
+                        <!-- Configured policy rows (dynamic) -->
+                        <Border x:Name="GPOListContainer"
+                                Background="{DynamicResource BG1Brush}" CornerRadius="6"
+                                BorderBrush="{DynamicResource LineBrush}" BorderThickness="1"
+                                Visibility="Collapsed">
+                            <ScrollViewer Focusable="False" MaxHeight="320"
+                                          VerticalScrollBarVisibility="Auto" Padding="4">
+                                <StackPanel x:Name="GPOListPanel" h:PanelSpacing.Spacing="2" Margin="4"/>
+                            </ScrollViewer>
+                        </Border>
+                    </StackPanel>
+                </Expander>
+
+                <Border Height="24"/>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Footer Nav -->
+        <Border Grid.Row="2" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,1,0,0"
+                Padding="40,16" Background="{DynamicResource BG1Brush}">
+            <Grid>
+                <Button Content="← Back" Style="{StaticResource GhostButtonStyle}"
+                        HorizontalAlignment="Left" Click="Back_Click"/>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" h:PanelSpacing.Spacing="12">
+                    <TextBlock Text="Step 3 of 8" Foreground="{DynamicResource FG2Brush}"
+                               VerticalAlignment="Center" FontSize="13"/>
+                    <Button Content="Continue →" Style="{StaticResource PrimaryButtonStyle}"
+                            Click="Continue_Click"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

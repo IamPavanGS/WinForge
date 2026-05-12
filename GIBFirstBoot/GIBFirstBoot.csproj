@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>app.ico</ApplicationIcon>
+    <AssemblyName>GIBFirstBoot</AssemblyName>
+    <RootNamespace>GIBFirstBoot</RootNamespace>
+    <Platforms>x64</Platforms>
+
+    <!--
+      Self-contained + single-file publish:
+      Bundles the entire .NET 8 runtime into one GIBFirstBoot.exe (~120 MB).
+      This is critical — the target PC will NOT have .NET 8 pre-installed,
+      so a framework-dependent build will silently fail at first boot.
+      Use: dotnet publish -c Release -r win-x64
+    -->
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+  </PropertyGroup>
+
+</Project>

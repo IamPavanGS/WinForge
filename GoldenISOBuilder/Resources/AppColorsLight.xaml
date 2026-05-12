@@ -1,0 +1,98 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         ARCTIC DAY — Pale blue-white + royal blue accent (light mode)
+         ═══════════════════════════════════════════════════════════════ -->
+
+    <!-- Background scale -->
+    <Color x:Key="BG0Color">#F0F4FF</Color>
+    <Color x:Key="BG1Color">#E5EDFF</Color>
+    <Color x:Key="BG2Color">#D8E4FF</Color>
+    <Color x:Key="BG3Color">#FFFFFF</Color>
+    <Color x:Key="BG4Color">#EEF3FF</Color>
+    <!-- LineColor was #BDD0F0 — too close to the page background, barely visible.
+         #98B0D0 gives enough contrast against both BG0 (#F0F4FF) and BG1 (#E5EDFF). -->
+    <Color x:Key="LineColor">#98B0D0</Color>
+    <Color x:Key="LineSoftColor">#BDD0F0</Color>
+
+    <!-- Foreground scale -->
+    <Color x:Key="FG0Color">#0C1530</Color>
+    <Color x:Key="FG1Color">#1E2E50</Color>
+    <Color x:Key="FG2Color">#445278</Color>
+    <Color x:Key="FG3Color">#7A8FB0</Color>
+
+    <!-- Royal blue accent -->
+    <Color x:Key="Gold1Color">#2563EB</Color>
+    <Color x:Key="Gold2Color">#3B82F6</Color>
+    <Color x:Key="Gold3Color">#1D4ED8</Color>
+    <Color x:Key="GoldGlowColor">#332563EB</Color>
+
+    <!-- Status -->
+    <Color x:Key="OkColor">#059669</Color>
+    <Color x:Key="WarnColor">#D97706</Color>
+    <Color x:Key="ErrColor">#DC2626</Color>
+    <Color x:Key="InfoColor">#2563EB</Color>
+
+    <!-- Solid brushes -->
+    <SolidColorBrush x:Key="BG0Brush"      Color="{StaticResource BG0Color}"/>
+    <SolidColorBrush x:Key="BG1Brush"      Color="{StaticResource BG1Color}"/>
+    <SolidColorBrush x:Key="BG2Brush"      Color="{StaticResource BG2Color}"/>
+    <SolidColorBrush x:Key="BG3Brush"      Color="{StaticResource BG3Color}"/>
+    <SolidColorBrush x:Key="BG4Brush"      Color="{StaticResource BG4Color}"/>
+    <SolidColorBrush x:Key="LineBrush"     Color="{StaticResource LineColor}"/>
+    <SolidColorBrush x:Key="LineSoftBrush" Color="{StaticResource LineSoftColor}"/>
+    <SolidColorBrush x:Key="FG0Brush"      Color="{StaticResource FG0Color}"/>
+    <SolidColorBrush x:Key="FG1Brush"      Color="{StaticResource FG1Color}"/>
+    <SolidColorBrush x:Key="FG2Brush"      Color="{StaticResource FG2Color}"/>
+    <SolidColorBrush x:Key="FG3Brush"      Color="{StaticResource FG3Color}"/>
+    <SolidColorBrush x:Key="Gold1Brush"    Color="{StaticResource Gold1Color}"/>
+    <SolidColorBrush x:Key="Gold2Brush"    Color="{StaticResource Gold2Color}"/>
+    <SolidColorBrush x:Key="Gold3Brush"    Color="{StaticResource Gold3Color}"/>
+    <SolidColorBrush x:Key="GoldGlowBrush" Color="{StaticResource GoldGlowColor}"/>
+    <SolidColorBrush x:Key="OkBrush"       Color="{StaticResource OkColor}"/>
+    <SolidColorBrush x:Key="WarnBrush"     Color="{StaticResource WarnColor}"/>
+    <SolidColorBrush x:Key="ErrBrush"      Color="{StaticResource ErrColor}"/>
+    <SolidColorBrush x:Key="InfoBrush"     Color="{StaticResource InfoColor}"/>
+
+    <!-- Scrollbar -->
+    <SolidColorBrush x:Key="ScrollThumbBrush"      Color="#9EB0D0"/>
+    <SolidColorBrush x:Key="ScrollThumbHoverBrush" Color="#7A96BC"/>
+
+    <!-- Status pill brushes -->
+    <SolidColorBrush x:Key="OkPillBgBrush"     Color="#D1FAE5"/>
+    <SolidColorBrush x:Key="OkPillLineBrush"   Color="#6EE7B7"/>
+    <SolidColorBrush x:Key="ErrPillBgBrush"    Color="#FEE2E2"/>
+    <SolidColorBrush x:Key="ErrPillLineBrush"  Color="#FCA5A5"/>
+    <SolidColorBrush x:Key="WarnPillBgBrush"   Color="#FEF3C7"/>
+    <SolidColorBrush x:Key="WarnPillLineBrush" Color="#FCD34D"/>
+    <SolidColorBrush x:Key="InfoPillBgBrush"   Color="#DBEAFE"/>
+    <SolidColorBrush x:Key="InfoPillLineBrush" Color="#93C5FD"/>
+
+    <!-- Row hover / interactive element tint -->
+    <SolidColorBrush x:Key="RowHoverBgBrush"   Color="#D8E4FF"/>
+
+    <!-- Page-specific gradients -->
+    <LinearGradientBrush x:Key="HeroCardBrush" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="#DDEAFF" Offset="0"/>
+        <GradientStop Color="#C8DAFF" Offset="1"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="NewBuildTileBrush" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#DBEAFE" Offset="0"/>
+        <GradientStop Color="#BFDBFE" Offset="1"/>
+    </LinearGradientBrush>
+
+    <!-- Gradient accent brushes -->
+    <LinearGradientBrush x:Key="GoldGradientBrush" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="{StaticResource Gold2Color}" Offset="0"/>
+        <GradientStop Color="{StaticResource Gold1Color}" Offset="1"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="GoldProgressBrush" StartPoint="0,0" EndPoint="1,0">
+        <GradientStop Color="{StaticResource Gold3Color}" Offset="0"/>
+        <GradientStop Color="{StaticResource Gold1Color}" Offset="0.5"/>
+        <GradientStop Color="{StaticResource Gold2Color}" Offset="1"/>
+    </LinearGradientBrush>
+
+    <SolidColorBrush x:Key="TransparentBrush" Color="Transparent"/>
+
+</ResourceDictionary>

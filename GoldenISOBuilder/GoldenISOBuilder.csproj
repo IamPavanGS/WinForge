@@ -1,0 +1,57 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <!-- 10.0.17763 = Windows 10 1809 — minimum required for WinRT toast API -->
+    <TargetFramework>net8.0-windows10.0.17763.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- Application icon — embedded in the exe; shown in Explorer and pinned taskbar -->
+    <ApplicationIcon>Resources\app.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <!--
+    Publish GIBFirstBoot as a self-contained single-file exe, then copy it
+    alongside GoldenISOBuilder so BuildEngine can find it at runtime.
+
+    Why dotnet publish instead of MSBuild Build:
+      PublishSingleFile only activates during 'publish', not 'build'.
+      A regular build with SelfContained=true produces a folder of DLLs;
+      only publish bundles everything (including the .NET 8 runtime) into
+      one ~120 MB exe that runs on any Windows machine without .NET installed.
+
+    Publish output path (with RuntimeIdentifier=win-x64 in csproj):
+      bin\x64\<Config>\net8.0-windows\win-x64\publish\GIBFirstBoot.exe
+  -->
+  <Target Name="PublishAndCopyGIBFirstBoot" AfterTargets="Build">
+    <Exec Command="dotnet publish &quot;$(MSBuildThisFileDirectory)..\GIBFirstBoot\GIBFirstBoot.csproj&quot; -c $(Configuration) -r win-x64 --self-contained true -p:PublishSingleFile=true --nologo -v quiet"
+          ConsoleToMSBuild="true"
+          ContinueOnError="true"/>
+    <!--
+      dotnet publish (without -p:Platform=x64) outputs to:
+        bin\Release\net8.0-windows\win-x64\publish\GIBFirstBoot.exe
+      Note: no x64 subfolder — that only appears when MSBuild builds with Platform=x64.
+    -->
+    <Copy SourceFiles="..\GIBFirstBoot\bin\$(Configuration)\net8.0-windows\win-x64\publish\GIBFirstBoot.exe"
+          DestinationFolder="$(OutputPath)"
+          SkipUnchangedFiles="false"
+          ContinueOnError="true"/>
+  </Target>
+
+  <!--
+    When running dotnet publish on GoldenISOBuilder, copy GIBFirstBoot.exe into
+    the publish output folder so BuildEngine can find it next to GoldenISOBuilder.exe.
+    Without this, publish produces GoldenISOBuilder.exe alone and the first-boot
+    launcher injection step fails at runtime with "GIBFirstBoot.exe not found".
+  -->
+  <Target Name="CopyGIBFirstBootToPublishDir" AfterTargets="Publish">
+    <Copy SourceFiles="..\GIBFirstBoot\bin\$(Configuration)\net8.0-windows\win-x64\publish\GIBFirstBoot.exe"
+          DestinationFolder="$(PublishDir)"
+          SkipUnchangedFiles="false"
+          ContinueOnError="true"/>
+    <Message Text="GIBFirstBoot.exe copied to publish output: $(PublishDir)" Importance="high"/>
+  </Target>
+
+</Project>

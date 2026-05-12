@@ -1,0 +1,280 @@
+<Window x:Class="GoldenISOBuilder.Views.ScheduledTaskDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        WindowStyle="None" AllowsTransparency="True" ResizeMode="NoResize"
+        ShowInTaskbar="False" SizeToContent="Height" Width="580"
+        WindowStartupLocation="CenterOwner"
+        Background="Transparent" Opacity="0"
+        FontFamily="Segoe UI">
+
+    <!-- Entrance animation -->
+    <Window.Triggers>
+        <EventTrigger RoutedEvent="Window.Loaded">
+            <BeginStoryboard>
+                <Storyboard>
+                    <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                     From="0" To="1" Duration="0:0:0.18"/>
+                    <DoubleAnimation Storyboard.TargetName="SlideTransform"
+                                     Storyboard.TargetProperty="Y"
+                                     From="14" To="0" Duration="0:0:0.22">
+                        <DoubleAnimation.EasingFunction>
+                            <CubicEase EasingMode="EaseOut"/>
+                        </DoubleAnimation.EasingFunction>
+                    </DoubleAnimation>
+                </Storyboard>
+            </BeginStoryboard>
+        </EventTrigger>
+    </Window.Triggers>
+
+    <Border Padding="16">
+        <Border x:Name="DialogRoot"
+                Background="{DynamicResource BG1Brush}"
+                BorderBrush="{DynamicResource LineBrush}" BorderThickness="1"
+                CornerRadius="10" Padding="28,24,28,20"
+                RenderTransformOrigin="0.5,0.5" MaxHeight="740">
+            <Border.RenderTransform>
+                <TranslateTransform x:Name="SlideTransform"/>
+            </Border.RenderTransform>
+            <Border.Effect>
+                <DropShadowEffect BlurRadius="24" ShadowDepth="3" Color="#000000" Opacity="0.18"/>
+            </Border.Effect>
+
+            <ScrollViewer VerticalScrollBarVisibility="Auto" Focusable="False">
+              <StackPanel>
+
+                <!-- Title bar -->
+                <Grid Margin="0,0,0,20">
+                    <StackPanel>
+                        <TextBlock x:Name="DialogTitle" Text="Add Scheduled Task"
+                                   Foreground="{DynamicResource FG0Brush}"
+                                   FontSize="16" FontWeight="SemiBold"/>
+                        <TextBlock Text="Configure a Windows Task Scheduler entry created on the deployed OS"
+                                   Foreground="{DynamicResource FG2Brush}" FontSize="12" Margin="0,3,0,0"/>
+                    </StackPanel>
+                    <Button Content="✕" HorizontalAlignment="Right" VerticalAlignment="Top"
+                            Style="{StaticResource GhostButtonStyle}" FontSize="14" Padding="8,2"
+                            Click="Cancel_Click" FocusVisualStyle="{x:Null}"/>
+                </Grid>
+
+                <!-- ══ Section 1: General ══════════════════════════════════════ -->
+                <TextBlock Text="GENERAL" Foreground="{DynamicResource Gold1Brush}"
+                           FontSize="10" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                <Border Background="{DynamicResource BG3Brush}" CornerRadius="6" Padding="16,14" Margin="0,0,0,16">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="16"/>
+                                <ColumnDefinition Width="160"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Task Name *" Foreground="{DynamicResource FG2Brush}"
+                                           FontSize="11" FontWeight="SemiBold" Margin="0,0,0,5"/>
+                                <TextBox x:Name="NameBox" Style="{StaticResource TextInputStyle}"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="Run As" Foreground="{DynamicResource FG2Brush}"
+                                           FontSize="11" FontWeight="SemiBold" Margin="0,0,0,5"/>
+                                <ComboBox x:Name="RunAsBox" Style="{StaticResource ComboBoxStyle}">
+                                    <ComboBoxItem Content="SYSTEM" Tag="SYSTEM" IsSelected="True"/>
+                                    <ComboBoxItem Content="Current User" Tag=""/>
+                                </ComboBox>
+                            </StackPanel>
+                        </Grid>
+                        <StackPanel>
+                            <TextBlock Text="Description (optional)" Foreground="{DynamicResource FG2Brush}"
+                                       FontSize="11" FontWeight="SemiBold" Margin="0,0,0,5"/>
+                            <TextBox x:Name="DescriptionBox" Style="{StaticResource TextInputStyle}"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- ══ Section 2: Trigger ══════════════════════════════════════ -->
+                <TextBlock Text="TRIGGER" Foreground="{DynamicResource Gold1Brush}"
+                           FontSize="10" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                <Border Background="{DynamicResource BG3Brush}" CornerRadius="6" Padding="16,14" Margin="0,0,0,16">
+                    <StackPanel>
+
+                        <!-- Trigger type pill buttons -->
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                            <Button x:Name="TrigOnce"      Content="Once"       Tag="Once"
+                                    Click="TriggerType_Click" Style="{StaticResource GhostButtonStyle}"
+                                    FontSize="12" Padding="14,6" Margin="0,0,4,0" FocusVisualStyle="{x:Null}"/>
+                            <Button x:Name="TrigDaily"     Content="Daily"      Tag="Daily"
+                                    Click="TriggerType_Click" Style="{StaticResource GhostButtonStyle}"
+                                    FontSize="12" Padding="14,6" Margin="0,0,4,0" FocusVisualStyle="{x:Null}"/>
+                            <Button x:Name="TrigWeekly"    Content="Weekly"     Tag="Weekly"
+                                    Click="TriggerType_Click" Style="{StaticResource GhostButtonStyle}"
+                                    FontSize="12" Padding="14,6" Margin="0,0,4,0" FocusVisualStyle="{x:Null}"/>
+                            <Button x:Name="TrigAtLogon"   Content="At Logon"   Tag="AtLogon"
+                                    Click="TriggerType_Click" Style="{StaticResource GhostButtonStyle}"
+                                    FontSize="12" Padding="14,6" Margin="0,0,4,0" FocusVisualStyle="{x:Null}"/>
+                            <Button x:Name="TrigAtStartup" Content="At Startup" Tag="AtStartup"
+                                    Click="TriggerType_Click" Style="{StaticResource GhostButtonStyle}"
+                                    FontSize="12" Padding="14,6" FocusVisualStyle="{x:Null}"/>
+                        </StackPanel>
+
+                        <!-- Date / Time — shown for Once / Daily / Weekly -->
+                        <StackPanel x:Name="DateTimePanel">
+                            <Grid Margin="0,0,0,10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="16"/>
+                                    <ColumnDefinition Width="110"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="Start Date (DD/MM/YYYY)" Foreground="{DynamicResource FG2Brush}"
+                                               FontSize="11" FontWeight="SemiBold" Margin="0,0,0,5"/>
+                                    <TextBox x:Name="StartDateBox" Style="{StaticResource MonoTextInputStyle}"
+                                             MaxLength="10"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Text="Time (HH:MM)" Foreground="{DynamicResource FG2Brush}"
+                                               FontSize="11" FontWeight="SemiBold" Margin="0,0,0,5"/>
+                                    <TextBox x:Name="StartTimeBox" Style="{StaticResource MonoTextInputStyle}"
+                                             Text="08:00" MaxLength="5"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <!-- Day-of-week selector — shown for Weekly only -->
+                            <StackPanel x:Name="WeekDayPanel" Visibility="Collapsed" Margin="0,0,0,4">
+                                <TextBlock Text="Days of the Week" Foreground="{DynamicResource FG2Brush}"
+                                           FontSize="11" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                                <StackPanel Orientation="Horizontal">
+                                    <CheckBox x:Name="DaySun" Content="Sun" Margin="0,0,10,0"
+                                              Foreground="{DynamicResource FG1Brush}"
+                                              Style="{StaticResource CustomCheckBoxStyle}"/>
+                                    <CheckBox x:Name="DayMon" Content="Mon" Margin="0,0,10,0" IsChecked="True"
+                                              Foreground="{DynamicResource FG1Brush}"
+                                              Style="{StaticResource CustomCheckBoxStyle}"/>
+                                    <CheckBox x:Name="DayTue" Content="Tue" Margin="0,0,10,0"
+                                              Foreground="{DynamicResource FG1Brush}"
+                                              Style="{StaticResource CustomCheckBoxStyle}"/>
+                                    <CheckBox x:Name="DayWed" Content="Wed" Margin="0,0,10,0"
+                                              Foreground="{DynamicResource FG1Brush}"
+                                              Style="{StaticResource CustomCheckBoxStyle}"/>
+                                    <CheckBox x:Name="DayThu" Content="Thu" Margin="0,0,10,0"
+                                              Foreground="{DynamicResource FG1Brush}"
+                                              Style="{StaticResource CustomCheckBoxStyle}"/>
+                                    <CheckBox x:Name="DayFri" Content="Fri" Margin="0,0,10,0"
+                                              Foreground="{DynamicResource FG1Brush}"
+                                              Style="{StaticResource CustomCheckBoxStyle}"/>
+                                    <CheckBox x:Name="DaySat" Content="Sat"
+                                              Foreground="{DynamicResource FG1Brush}"
+                                              Style="{StaticResource CustomCheckBoxStyle}"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- At Logon / At Startup info note -->
+                        <Border x:Name="TriggerInfoPanel" Visibility="Collapsed"
+                                Background="{DynamicResource BG1Brush}" CornerRadius="5" Padding="10,8">
+                            <TextBlock x:Name="TriggerInfoText"
+                                       Foreground="{DynamicResource FG2Brush}" FontSize="12"
+                                       TextWrapping="Wrap"/>
+                        </Border>
+                    </StackPanel>
+                </Border>
+
+                <!-- ══ Section 3: Action ═══════════════════════════════════════ -->
+                <TextBlock Text="ACTION" Foreground="{DynamicResource Gold1Brush}"
+                           FontSize="10" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                <Border Background="{DynamicResource BG3Brush}" CornerRadius="6" Padding="16,14" Margin="0,0,0,16">
+                    <StackPanel>
+                        <StackPanel Margin="0,0,0,10">
+                            <TextBlock Text="Program / Script Path *" Foreground="{DynamicResource FG2Brush}"
+                                       FontSize="11" FontWeight="SemiBold" Margin="0,0,0,5"/>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="8"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBox x:Name="ActionPathBox" Grid.Column="0"
+                                         Style="{StaticResource MonoTextInputStyle}"/>
+                                <Button Grid.Column="2" Content="Browse…"
+                                        Style="{StaticResource GhostButtonStyle}"
+                                        Padding="12,6" FontSize="12" FocusVisualStyle="{x:Null}"
+                                        Click="BrowseAction_Click"/>
+                            </Grid>
+                            <TextBlock Text="Path as it will exist on the deployed machine (e.g. C:\GIB\scripts\run.ps1)"
+                                       Foreground="{DynamicResource FG3Brush}" FontSize="11" Margin="0,4,0,0"/>
+                        </StackPanel>
+                        <StackPanel Margin="0,0,0,10">
+                            <TextBlock Text="Arguments (optional)" Foreground="{DynamicResource FG2Brush}"
+                                       FontSize="11" FontWeight="SemiBold" Margin="0,0,0,5"/>
+                            <TextBox x:Name="ActionArgsBox" Style="{StaticResource MonoTextInputStyle}"/>
+                        </StackPanel>
+                        <StackPanel>
+                            <TextBlock Text="Start In / Working Directory (optional)" Foreground="{DynamicResource FG2Brush}"
+                                       FontSize="11" FontWeight="SemiBold" Margin="0,0,0,5"/>
+                            <TextBox x:Name="StartInBox" Style="{StaticResource MonoTextInputStyle}"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- ══ Section 4: Conditions &amp; Settings ═════════════════════ -->
+                <TextBlock Text="CONDITIONS &amp; SETTINGS" Foreground="{DynamicResource Gold1Brush}"
+                           FontSize="10" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                <Border Background="{DynamicResource BG3Brush}" CornerRadius="6" Padding="16,14" Margin="0,0,0,20">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,10">
+                            <StackPanel>
+                                <TextBlock Text="Run with Highest Privileges"
+                                           Foreground="{DynamicResource FG0Brush}" FontSize="13"/>
+                                <TextBlock Text="Elevates the task — required for system-level operations"
+                                           Foreground="{DynamicResource FG2Brush}" FontSize="11"/>
+                            </StackPanel>
+                            <CheckBox x:Name="HighPrivToggle" HorizontalAlignment="Right"
+                                      IsChecked="True" Style="{StaticResource ToggleSwitchStyle}"/>
+                        </Grid>
+                        <Grid Margin="0,0,0,10">
+                            <StackPanel>
+                                <TextBlock Text="Run Once Then Delete"
+                                           Foreground="{DynamicResource FG0Brush}" FontSize="13"/>
+                                <TextBlock Text="Task Scheduler removes the task automatically after it completes (/Z flag)"
+                                           Foreground="{DynamicResource FG2Brush}" FontSize="11"/>
+                            </StackPanel>
+                            <CheckBox x:Name="DeleteAfterToggle" HorizontalAlignment="Right"
+                                      IsChecked="False" Style="{StaticResource ToggleSwitchStyle}"/>
+                        </Grid>
+                        <Grid Margin="0,0,0,10">
+                            <StackPanel>
+                                <TextBlock Text="Wake Computer to Run"
+                                           Foreground="{DynamicResource FG0Brush}" FontSize="13"/>
+                                <TextBlock Text="Wakes from sleep at the scheduled time if supported"
+                                           Foreground="{DynamicResource FG2Brush}" FontSize="11"/>
+                            </StackPanel>
+                            <CheckBox x:Name="WakeToggle" HorizontalAlignment="Right"
+                                      IsChecked="False" Style="{StaticResource ToggleSwitchStyle}"/>
+                        </Grid>
+                        <Grid>
+                            <StackPanel>
+                                <TextBlock Text="Run on Battery Power"
+                                           Foreground="{DynamicResource FG0Brush}" FontSize="13"/>
+                                <TextBlock Text="Allow task to run even when on battery (uncheck to skip on laptops)"
+                                           Foreground="{DynamicResource FG2Brush}" FontSize="11"/>
+                            </StackPanel>
+                            <CheckBox x:Name="BatteryToggle" HorizontalAlignment="Right"
+                                      IsChecked="True" Style="{StaticResource ToggleSwitchStyle}"/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <!-- Footer buttons -->
+                <Grid>
+                    <Button Content="Cancel" HorizontalAlignment="Left"
+                            Style="{StaticResource GhostButtonStyle}"
+                            Padding="18,8" FontSize="13" FocusVisualStyle="{x:Null}"
+                            Click="Cancel_Click"/>
+                    <Button x:Name="OkButton" Content="Add Task" HorizontalAlignment="Right"
+                            Style="{StaticResource PrimaryButtonStyle}"
+                            Padding="18,8" FontSize="13" FocusVisualStyle="{x:Null}"
+                            Click="Ok_Click"/>
+                </Grid>
+
+              </StackPanel>
+            </ScrollViewer>
+        </Border>
+    </Border>
+</Window>

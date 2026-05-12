@@ -1,0 +1,126 @@
+<Window x:Class="GIBFirstBoot.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="ALE Image Forge — First Boot Setup" Height="580" Width="720"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="NoResize"
+        Background="{StaticResource BG0Brush}"
+        FontFamily="Segoe UI"
+        Topmost="True">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>   <!-- Header -->
+            <RowDefinition Height="*"/>      <!-- App list -->
+            <RowDefinition Height="Auto"/>   <!-- Overall progress + status -->
+        </Grid.RowDefinitions>
+
+        <!-- ═══ Header ══════════════════════════════════════════════════════ -->
+        <Border Grid.Row="0" Background="{StaticResource BG1Brush}"
+                BorderBrush="{StaticResource LineBrush}" BorderThickness="0,0,0,1"
+                Padding="32,24,32,20">
+            <Grid>
+                <StackPanel>
+                    <TextBlock Text="ALE IMAGE FORGE · FIRST BOOT SETUP"
+                               Foreground="{StaticResource Gold1Brush}"
+                               FontSize="11" FontWeight="SemiBold"/>
+                    <TextBlock x:Name="HeaderTitle"
+                               Text="Setting up your workstation…"
+                               Foreground="{StaticResource FG0Brush}"
+                               FontSize="22" FontWeight="SemiBold" Margin="0,6,0,0"/>
+                    <TextBlock x:Name="HeaderSub"
+                               Text="Please keep the device powered on and connected to the network."
+                               Foreground="{StaticResource FG2Brush}"
+                               FontSize="13" Margin="0,4,0,0"/>
+                </StackPanel>
+
+                <!-- App count badge -->
+                <Border HorizontalAlignment="Right" VerticalAlignment="Center"
+                        Background="{StaticResource BG3Brush}"
+                        BorderBrush="{StaticResource LineBrush}" BorderThickness="1"
+                        CornerRadius="8" Padding="14,8">
+                    <StackPanel HorizontalAlignment="Center">
+                        <TextBlock x:Name="CountLabel" Text="0 / 0"
+                                   Foreground="{StaticResource FG0Brush}"
+                                   FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                        <TextBlock Text="apps installed"
+                                   Foreground="{StaticResource FG2Brush}"
+                                   FontSize="11" HorizontalAlignment="Center"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Border>
+
+        <!-- ═══ App list ═════════════════════════════════════════════════════ -->
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                      Focusable="False" Padding="32,20,32,8">
+            <StackPanel x:Name="AppListPanel" />
+        </ScrollViewer>
+
+        <!-- ═══ Footer ══════════════════════════════════════════════════════ -->
+        <Border Grid.Row="2" Background="{StaticResource BG1Brush}"
+                BorderBrush="{StaticResource LineBrush}" BorderThickness="0,1,0,0"
+                Padding="32,16,32,20">
+            <StackPanel>
+                <!-- Overall bar -->
+                <Grid Margin="0,0,0,8">
+                    <TextBlock x:Name="OverallLabel" Text="Overall progress"
+                               Foreground="{StaticResource FG2Brush}" FontSize="12"/>
+                    <TextBlock x:Name="OverallPct" HorizontalAlignment="Right"
+                               Foreground="{StaticResource Gold1Brush}" FontSize="12"/>
+                </Grid>
+                <ProgressBar x:Name="OverallBar" Style="{StaticResource GoldBar}"
+                             Height="8" Maximum="100" Value="0"/>
+
+                <!-- Status line + Close button (shown on completion) -->
+                <Grid Margin="0,14,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock x:Name="StatusLine" Grid.Column="0"
+                               Foreground="{StaticResource FG2Brush}" FontSize="12"
+                               VerticalAlignment="Center"
+                               TextWrapping="Wrap"
+                               Text="Initialising…"/>
+
+                    <!-- Close button — hidden until installation is complete.
+                         Stays on screen so a technician can confirm the result
+                         before the app cleans itself up. -->
+                    <Button x:Name="CloseBtn"
+                            Grid.Column="1"
+                            Content="Close Application"
+                            Visibility="Collapsed"
+                            Margin="20,0,0,0"
+                            Padding="22,10"
+                            FontSize="13" FontWeight="SemiBold"
+                            Cursor="Hand"
+                            Click="CloseBtn_Click">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border x:Name="BtnBorder"
+                                        Background="{StaticResource Gold1Brush}"
+                                        CornerRadius="6"
+                                        Padding="{TemplateBinding Padding}">
+                                    <ContentPresenter HorizontalAlignment="Center"
+                                                      VerticalAlignment="Center"
+                                                      TextElement.Foreground="#0F1015"
+                                                      TextElement.FontWeight="SemiBold"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="BtnBorder" Property="Background" Value="#DABC54"/>
+                                    </Trigger>
+                                    <Trigger Property="IsPressed" Value="True">
+                                        <Setter TargetName="BtnBorder" Property="Background" Value="#B8962A"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+                </Grid>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

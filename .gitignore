@@ -1,0 +1,31 @@
+# Build output
+bin/
+obj/
+publish/
+binRelease*/
+
+# .NET
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.vs/
+*.nupkg
+*.snupkg
+
+# Rider / JetBrains
+.idea/
+
+# VS Code
+.vscode/
+
+# Workspace temp files
+workspace/
+
+# Log and report files
+*.log
+ValidationReport_*.txt
+crash.log
+
+# Claude internal
+.claude/

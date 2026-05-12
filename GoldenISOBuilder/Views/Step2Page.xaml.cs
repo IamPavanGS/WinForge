@@ -1,0 +1,1311 @@
+using System.Diagnostics;
+using System.IO;
+using System.Text.RegularExpressions;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using System.Windows.Navigation;
+using GoldenISOBuilder.Models;
+using Microsoft.Win32;
+
+namespace GoldenISOBuilder.Views;
+
+public partial class Step2Page : UserControl
+{
+    public event Action<string, int>? NavigateRequested;
+
+    private readonly List<StagedApp>  _apps              = [];
+    private readonly List<StagedFile> _stagedFiles       = [];
+    private readonly List<string>    _languagePacks      = [];
+    private readonly List<string>    _driverFolders      = [];
+    private readonly List<DeploymentScript> _deploymentScripts = [];
+
+    // Language pack folder-scan state
+    private Dictionary<string, List<string>> _langGroupsScanned = new(StringComparer.OrdinalIgnoreCase);
+    private System.Windows.Threading.DispatcherTimer? _langPopupTimer;
+
+    // Human-readable display names for BCP-47 locale codes
+    private static readonly Dictionary<string, string> LangNames =
+        new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["af-za"]       = "Afrikaans (South Africa)",
+        ["ar-sa"]       = "Arabic (Saudi Arabia)",
+        ["bg-bg"]       = "Bulgarian (Bulgaria)",
+        ["ca-es"]       = "Catalan (Spain)",
+        ["cs-cz"]       = "Czech (Czech Republic)",
+        ["cy-gb"]       = "Welsh (United Kingdom)",
+        ["da-dk"]       = "Danish (Denmark)",
+        ["de-de"]       = "German (Germany)",
+        ["el-gr"]       = "Greek (Greece)",
+        ["en-gb"]       = "English (United Kingdom)",
+        ["en-us"]       = "English (United States)",
+        ["es-es"]       = "Spanish (Spain)",
+        ["es-mx"]       = "Spanish (Mexico)",
+        ["et-ee"]       = "Estonian (Estonia)",
+        ["eu-es"]       = "Basque (Spain)",
+        ["fi-fi"]       = "Finnish (Finland)",
+        ["fr-ca"]       = "French (Canada)",
+        ["fr-fr"]       = "French (France)",
+        ["gl-es"]       = "Galician (Spain)",
+        ["he-il"]       = "Hebrew (Israel)",
+        ["hr-hr"]       = "Croatian (Croatia)",
+        ["hu-hu"]       = "Hungarian (Hungary)",
+        ["id-id"]       = "Indonesian (Indonesia)",
+        ["it-it"]       = "Italian (Italy)",
+        ["ja-jp"]       = "Japanese (Japan)",
+        ["ko-kr"]       = "Korean (Korea)",
+        ["lt-lt"]       = "Lithuanian (Lithuania)",
+        ["lv-lv"]       = "Latvian (Latvia)",
+        ["ms-my"]       = "Malay (Malaysia)",
+        ["nb-no"]       = "Norwegian Bokmål (Norway)",
+        ["nl-nl"]       = "Dutch (Netherlands)",
+        ["pl-pl"]       = "Polish (Poland)",
+        ["pt-br"]       = "Portuguese (Brazil)",
+        ["pt-pt"]       = "Portuguese (Portugal)",
+        ["ro-ro"]       = "Romanian (Romania)",
+        ["ru-ru"]       = "Russian (Russia)",
+        ["sk-sk"]       = "Slovak (Slovakia)",
+        ["sl-si"]       = "Slovenian (Slovenia)",
+        ["sq-al"]       = "Albanian (Albania)",
+        ["sr-latn-rs"]  = "Serbian Latin (Serbia)",
+        ["sv-se"]       = "Swedish (Sweden)",
+        ["th-th"]       = "Thai (Thailand)",
+        ["tr-tr"]       = "Turkish (Turkey)",
+        ["uk-ua"]       = "Ukrainian (Ukraine)",
+        ["vi-vn"]       = "Vietnamese (Vietnam)",
+        ["zh-cn"]       = "Chinese Simplified (China)",
+        ["zh-tw"]       = "Chinese Traditional (Taiwan)",
+    };
+
+    public Step2Page()
+    {
+        InitializeComponent();
+        Loaded += OnLoaded;
+    }
+
+    private void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        // Restore state from BuildSession
+        var s = BuildSession.Current;
+
+        if (!string.IsNullOrEmpty(s.WallpaperPath) && File.Exists(s.WallpaperPath))
+            ApplyWallpaper(s.WallpaperPath);
+
+        foreach (var app in s.StagedApps)
+            _apps.Add(app);
+
+        // Backward-compat migration: old .gibprofile stored files in PublicDesktopFiles (List<string>).
+        // If StagedFiles is empty but PublicDesktopFiles has entries, promote them to StagedFiles
+        // with the default destination (Users\Public\Desktop) and clear the legacy list.
+        if (s.StagedFiles.Count == 0 && s.PublicDesktopFiles.Count > 0)
+        {
+            s.StagedFiles = s.PublicDesktopFiles
+                .Select(p => new StagedFile { SourcePath = p })
+                .ToList();
+            s.PublicDesktopFiles.Clear();
+        }
+
+        foreach (var sf in s.StagedFiles)
+            _stagedFiles.Add(sf);
+
+        foreach (var lp in s.LanguagePackPaths)
+            _languagePacks.Add(lp);
+
+        foreach (var d in s.DriverFolderPaths)
+            _driverFolders.Add(d);
+
+        IncludeDeploymentToggle.IsChecked = s.IncludeDeploymentScripts;
+
+        foreach (var sc in s.DeploymentScripts)
+            _deploymentScripts.Add(sc);
+
+        RefreshAppsPanel();
+        RefreshPublicFilesPanel();
+        RefreshLangPacksPanel();
+        RefreshDriversPanel();
+        RefreshDeploymentScriptsPanel();
+    }
+
+    // ── Wallpaper ─────────────────────────────────────────────────────────────
+
+    private void WallpaperDrop_Click(object sender, MouseButtonEventArgs e)
+        => BrowseWallpaper();
+
+    private void Wallpaper_DragOver(object sender, DragEventArgs e)
+    {
+        e.Effects = e.Data.GetDataPresent(DataFormats.FileDrop) ? DragDropEffects.Copy : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void Wallpaper_Drop(object sender, DragEventArgs e)
+    {
+        if (e.Data.GetData(DataFormats.FileDrop) is string[] files && files.Length > 0)
+            TrySetWallpaper(files[0]);
+    }
+
+    private void WallpaperClear_Click(object sender, RoutedEventArgs e)
+    {
+        BuildSession.Current.WallpaperPath = null;
+        WallpaperDropZone.Visibility  = Visibility.Visible;
+        WallpaperFileRow.Visibility   = Visibility.Collapsed;
+        WallpaperPreview.Visibility   = Visibility.Collapsed;
+        WallpaperPlaceholder.Visibility = Visibility.Visible;
+        WallpaperPreview.Source       = null;
+    }
+
+    private void BrowseWallpaper()
+    {
+        var dlg = new OpenFileDialog
+        {
+            Title  = "Select Wallpaper Image",
+            Filter = "Image files|*.jpg;*.jpeg;*.png;*.bmp|All files|*.*"
+        };
+        if (dlg.ShowDialog() == true)
+            TrySetWallpaper(dlg.FileName);
+    }
+
+    private void TrySetWallpaper(string path)
+    {
+        var ext = Path.GetExtension(path).ToLowerInvariant();
+        if (ext is not (".jpg" or ".jpeg" or ".png" or ".bmp"))
+        {
+            AppDialog.Alert(this, "Please select a JPG, PNG, or BMP image.", "Unsupported Format",
+                AppDialogIcon.Warning);
+            return;
+        }
+        if (!File.Exists(path)) return;
+        ApplyWallpaper(path);
+    }
+
+    private void ApplyWallpaper(string path)
+    {
+        BuildSession.Current.WallpaperPath = path;
+        WallpaperFileLabel.Text = Path.GetFileName(path);
+        WallpaperDropZone.Visibility    = Visibility.Collapsed;
+        WallpaperFileRow.Visibility     = Visibility.Visible;
+
+        try
+        {
+            var bmp = new BitmapImage();
+            bmp.BeginInit();
+            bmp.UriSource      = new Uri(path);
+            bmp.CacheOption    = BitmapCacheOption.OnLoad;
+            bmp.DecodePixelWidth = 192;
+            bmp.EndInit();
+            WallpaperPreview.Source = bmp;
+            WallpaperPreview.Visibility     = Visibility.Visible;
+            WallpaperPlaceholder.Visibility = Visibility.Collapsed;
+        }
+        catch
+        {
+            WallpaperPreview.Visibility     = Visibility.Collapsed;
+            WallpaperPlaceholder.Visibility = Visibility.Visible;
+        }
+    }
+
+    // ── Apps ──────────────────────────────────────────────────────────────────
+
+    private void AddApp_Click(object sender, RoutedEventArgs e)
+    {
+        var dlg = new OpenFileDialog
+        {
+            Title  = "Select Installer",
+            Filter = "Installer files|*.exe;*.msi|EXE files|*.exe|MSI packages|*.msi|All files|*.*"
+        };
+        if (dlg.ShowDialog() != true) return;
+
+        var path = dlg.FileName;
+        bool isMsi = Path.GetExtension(path).Equals(".msi", StringComparison.OrdinalIgnoreCase);
+        var app  = new StagedApp
+        {
+            Name     = Path.GetFileNameWithoutExtension(path),
+            FilePath = path,
+            Type     = isMsi ? "msi" : "exe",
+            // MSI: leave Args empty — GIBFirstBoot auto-adds /qn /norestart, user only adds extras.
+            // EXE: default to /S (NSIS/Inno) which works for most installers.
+            Args     = isMsi ? "" : "/S"
+        };
+
+        _apps.Add(app);
+        RefreshAppsPanel();
+        SaveAppsToSession();
+    }
+
+    private void RefreshAppsPanel()
+    {
+        AppsPanel.Children.Clear();
+        bool hasApps = _apps.Count > 0;
+        AppsEmptyHint.Visibility  = hasApps ? Visibility.Collapsed : Visibility.Visible;
+        AppsHeader.Visibility     = hasApps ? Visibility.Visible   : Visibility.Collapsed;
+        AppsArgsHint.Visibility   = hasApps ? Visibility.Visible   : Visibility.Collapsed;
+
+        for (int i = 0; i < _apps.Count; i++)
+        {
+            var row = BuildAppRow(_apps[i], i);
+            AppsPanel.Children.Add(row);
+        }
+    }
+
+    private UIElement BuildAppRow(StagedApp app, int index)
+    {
+        var row = new Border
+        {
+            CornerRadius    = new CornerRadius(6),
+            BorderThickness = new Thickness(1),
+            Padding         = new Thickness(10, 8, 10, 8)
+        };
+        row.SetResourceReference(Border.BackgroundProperty,   "BG2Brush");
+        row.SetResourceReference(Border.BorderBrushProperty,  "LineBrush");
+
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(160) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(130) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(70) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(32) });
+
+        // Name
+        var nameBox = new TextBox
+        {
+            Text            = app.Name,
+            Style           = (Style?)Application.Current.Resources["TextInputStyle"],
+            Margin          = new Thickness(0, 0, 8, 0),
+            VerticalContentAlignment = VerticalAlignment.Center
+        };
+        nameBox.TextChanged += (_, _) => { app.Name = nameBox.Text; SaveAppsToSession(); };
+        Grid.SetColumn(nameBox, 0);
+
+        // File path + browse, with optional MST transform chip below (MSI only)
+        var fileStack = new StackPanel { Margin = new Thickness(0, 0, 8, 0) };
+
+        var fileGrid = new Grid();
+        fileGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        fileGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var fileBox = new TextBox
+        {
+            Text     = string.IsNullOrEmpty(app.FilePath) ? "" : Path.GetFileName(app.FilePath),
+            ToolTip  = app.FilePath,
+            Style    = (Style?)Application.Current.Resources["TextInputStyle"],
+            IsReadOnly = true,
+            Margin   = new Thickness(0, 0, 4, 0),
+            VerticalContentAlignment = VerticalAlignment.Center
+        };
+        var browseBtn = new Button
+        {
+            Content = "…",
+            Style   = (Style?)Application.Current.Resources["DefaultButtonStyle"],
+            Padding = new Thickness(8, 4, 8, 4),
+            MinWidth = 32,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+
+        // ── MST transform line (only meaningful for MSI installers) ───────────────
+        // Layout: [chip TextBlock — click to add/change] [✕ clear button when set]
+        var mstLine = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Margin      = new Thickness(0, 4, 0, 0)
+        };
+        var mstChip = new TextBlock
+        {
+            FontSize          = 10.5,
+            Cursor            = System.Windows.Input.Cursors.Hand,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        var mstClearBtn = new Button
+        {
+            Content    = "✕",
+            FontSize   = 10,
+            Padding    = new Thickness(4, 0, 4, 0),
+            Margin     = new Thickness(6, 0, 0, 0),
+            MinWidth   = 0,
+            Style      = (Style?)Application.Current.Resources["GhostButtonStyle"],
+            Foreground = (Brush)Application.Current.Resources["ErrBrush"],
+            ToolTip    = "Remove MST transform",
+            VerticalAlignment = VerticalAlignment.Center
+        };
+
+        void RefreshMstChip()
+        {
+            bool isMsi = app.Type.Equals("msi", StringComparison.OrdinalIgnoreCase);
+            mstLine.Visibility = isMsi ? Visibility.Visible : Visibility.Collapsed;
+
+            if (!isMsi) return;
+
+            if (string.IsNullOrEmpty(app.MstPath))
+            {
+                mstChip.Text       = "+ Add MST transform (optional)";
+                mstChip.Foreground = (Brush)Application.Current.Resources["FG3Brush"];
+                mstChip.ToolTip    = "Click to attach a Windows Installer transform (.mst) file. " +
+                                     "msiexec will be invoked with TRANSFORMS=\"<path>\".";
+                mstClearBtn.Visibility = Visibility.Collapsed;
+            }
+            else
+            {
+                mstChip.Text       = $"📎 {Path.GetFileName(app.MstPath)}";
+                mstChip.Foreground = (Brush)Application.Current.Resources["Gold1Brush"];
+                mstChip.ToolTip    = app.MstPath + "  (click to change)";
+                mstClearBtn.Visibility = Visibility.Visible;
+            }
+        }
+
+        mstChip.MouseLeftButtonUp += (_, _) =>
+        {
+            if (!app.Type.Equals("msi", StringComparison.OrdinalIgnoreCase)) return;
+            var dlg = new OpenFileDialog
+            {
+                Title    = "Select MST Transform",
+                Filter   = "MSI Transforms (*.mst)|*.mst|All files|*.*",
+                FileName = app.MstPath ?? ""
+            };
+            if (dlg.ShowDialog() != true) return;
+            app.MstPath = dlg.FileName;
+            RefreshMstChip();
+            SaveAppsToSession();
+        };
+        mstClearBtn.Click += (_, _) =>
+        {
+            app.MstPath = null;
+            RefreshMstChip();
+            SaveAppsToSession();
+        };
+        mstLine.Children.Add(mstChip);
+        mstLine.Children.Add(mstClearBtn);
+
+        browseBtn.Click += (_, _) =>
+        {
+            var dlg = new OpenFileDialog
+            {
+                Title  = "Select Installer",
+                Filter = "Installer files|*.exe;*.msi|All files|*.*",
+                FileName = app.FilePath
+            };
+            if (dlg.ShowDialog() != true) return;
+            app.FilePath  = dlg.FileName;
+            fileBox.Text  = Path.GetFileName(dlg.FileName);
+            fileBox.ToolTip = dlg.FileName;
+            string newType = Path.GetExtension(dlg.FileName).Equals(".msi", StringComparison.OrdinalIgnoreCase) ? "msi" : "exe";
+            // Switching away from MSI clears any previously-attached MST
+            if (newType != "msi") app.MstPath = null;
+            app.Type = newType;
+            RefreshMstChip();
+            SaveAppsToSession();
+        };
+        Grid.SetColumn(fileBox,   0);
+        Grid.SetColumn(browseBtn, 1);
+        fileGrid.Children.Add(fileBox);
+        fileGrid.Children.Add(browseBtn);
+
+        fileStack.Children.Add(fileGrid);
+        fileStack.Children.Add(mstLine);
+        RefreshMstChip();
+        Grid.SetColumn(fileStack, 1);
+
+        // Args
+        var argsBox = new TextBox
+        {
+            Text       = app.Args,
+            Style      = (Style?)Application.Current.Resources["MonoTextInputStyle"],
+            Margin     = new Thickness(0, 0, 8, 0),
+            ToolTip    = "Space-separated flags — no commas, no quotes around the whole string.\n" +
+                         "Just type them exactly as you would on a command line.\n\n" +
+                         "── MSI installers ──\n" +
+                         "GIBFirstBoot adds /qn /norestart automatically — leave this BLANK for a\n" +
+                         "standard silent install. Only add EXTRA flags here, e.g.:\n" +
+                         "  REBOOT=ReallySuppress       suppress all reboot logic\n" +
+                         "  ALLUSERS=1                  install for all users\n" +
+                         "  ADDLOCAL=Feature1,Feature2  feature selection\n" +
+                         "  /lv* C:\\install.log         verbose log\n\n" +
+                         "── EXE installers ──\n" +
+                         "  /S              silent (NSIS / Inno Setup)\n" +
+                         "  /silent         silent (some installers)\n" +
+                         "  /VERYSILENT     Inno Setup truly silent\n" +
+                         "  /norestart      suppress reboot",
+            VerticalContentAlignment = VerticalAlignment.Center
+        };
+        argsBox.TextChanged += (_, _) => { app.Args = argsBox.Text; SaveAppsToSession(); };
+        Grid.SetColumn(argsBox, 2);
+
+        // Type pill
+        var typeCombo = new ComboBox
+        {
+            Style         = (Style?)Application.Current.Resources["ComboBoxStyle"],
+            SelectedIndex = app.Type.Equals("msi", StringComparison.OrdinalIgnoreCase) ? 1 : 0,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        typeCombo.Items.Add("exe");
+        typeCombo.Items.Add("msi");
+        typeCombo.SelectionChanged += (_, _) =>
+        {
+            app.Type = typeCombo.SelectedIndex == 1 ? "msi" : "exe";
+            // Switching to EXE clears any previously-attached MST (it's MSI-only)
+            if (app.Type != "msi") app.MstPath = null;
+            RefreshMstChip();
+            SaveAppsToSession();
+        };
+        Grid.SetColumn(typeCombo, 3);
+
+        // Remove button
+        var removeBtn = new Button
+        {
+            Content           = "✕",
+            Style             = (Style?)Application.Current.Resources["GhostButtonStyle"],
+            FontSize          = 12,
+            Foreground        = (Brush)Application.Current.Resources["ErrBrush"],
+            Padding           = new Thickness(4),
+            VerticalAlignment = VerticalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Center
+        };
+        var capturedApp = app;
+        removeBtn.Click += (_, _) =>
+        {
+            _apps.Remove(capturedApp);
+            RefreshAppsPanel();
+            SaveAppsToSession();
+        };
+        Grid.SetColumn(removeBtn, 4);
+
+        grid.Children.Add(nameBox);
+        grid.Children.Add(fileStack);
+        grid.Children.Add(argsBox);
+        grid.Children.Add(typeCombo);
+        grid.Children.Add(removeBtn);
+        row.Child = grid;
+        return row;
+    }
+
+    private void SaveAppsToSession()
+        => BuildSession.Current.StagedApps = [.. _apps];
+
+    // ── Staged Image Files ────────────────────────────────────────────────────
+
+    private void AddStagedFile_Click(object sender, RoutedEventArgs e)
+    {
+        var dlg = new OpenFileDialog
+        {
+            Title       = "Select File(s) to Stage into the Image",
+            Filter      = "All files|*.*",
+            Multiselect = true
+        };
+        if (dlg.ShowDialog() != true) return;
+
+        foreach (var f in dlg.FileNames)
+            if (!_stagedFiles.Any(sf => sf.SourcePath.Equals(f, StringComparison.OrdinalIgnoreCase)))
+                _stagedFiles.Add(new StagedFile { SourcePath = f });
+
+        RefreshPublicFilesPanel();
+        BuildSession.Current.StagedFiles = [.. _stagedFiles];
+    }
+
+    private void RefreshPublicFilesPanel()
+    {
+        PublicFilesPanel.Children.Clear();
+        bool hasFiles = _stagedFiles.Count > 0;
+        PublicFilesEmptyHint.Visibility  = hasFiles ? Visibility.Collapsed : Visibility.Visible;
+        StagedFilesHeader.Visibility     = hasFiles ? Visibility.Visible   : Visibility.Collapsed;
+
+        foreach (var sf in _stagedFiles.ToList())
+            PublicFilesPanel.Children.Add(BuildStagedFileRow(sf));
+    }
+
+    private UIElement BuildStagedFileRow(StagedFile sf)
+    {
+        var row = new Border
+        {
+            CornerRadius    = new CornerRadius(6),
+            BorderThickness = new Thickness(1),
+            Padding         = new Thickness(12, 8, 10, 8)
+        };
+        row.SetResourceReference(Border.BackgroundProperty,  "BG2Brush");
+        row.SetResourceReference(Border.BorderBrushProperty, "LineBrush");
+
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });                        // bullet
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });   // source filename
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(210) });                    // destination TextBox
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });                        // remove button
+
+        // Bullet
+        var dot = new TextBlock
+        {
+            Text              = "•",
+            FontSize          = 16,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin            = new Thickness(0, 0, 10, 0)
+        };
+        dot.SetResourceReference(TextBlock.ForegroundProperty, "Gold1Brush");
+        Grid.SetColumn(dot, 0);
+
+        // Source filename (display only; full path shown in tooltip)
+        var nameLabel = new TextBlock
+        {
+            Text              = Path.GetFileName(sf.SourcePath),
+            ToolTip           = sf.SourcePath,
+            FontSize          = 13,
+            VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming      = TextTrimming.CharacterEllipsis,
+            Margin            = new Thickness(0, 0, 10, 0)
+        };
+        nameLabel.SetResourceReference(TextBlock.ForegroundProperty, "FG0Brush");
+        Grid.SetColumn(nameLabel, 1);
+
+        // Destination folder TextBox — editable, relative path inside the image
+        var destBox = new TextBox
+        {
+            Text                     = sf.DestinationFolder,
+            Style                    = (Style?)Application.Current.Resources["MonoTextInputStyle"],
+            VerticalContentAlignment = VerticalAlignment.Center,
+            Margin                   = new Thickness(0, 0, 8, 0),
+            ToolTip                  = "Folder path INSIDE the image (relative, no leading backslash).\n" +
+                                       "Examples:\n" +
+                                       "  Users\\Public\\Desktop\n" +
+                                       "  Windows\\System32\n" +
+                                       "  ProgramData\\MyCompany\\Config"
+        };
+        destBox.TextChanged += (_, _) =>
+        {
+            sf.DestinationFolder = destBox.Text.Trim().TrimStart('\\', '/');
+            BuildSession.Current.StagedFiles = [.. _stagedFiles];
+        };
+        Grid.SetColumn(destBox, 2);
+
+        // Remove button
+        var removeBtn = new Button
+        {
+            Content           = "✕",
+            Style             = (Style?)Application.Current.Resources["GhostButtonStyle"],
+            FontSize          = 11,
+            Foreground        = (Brush)Application.Current.Resources["ErrBrush"],
+            Padding           = new Thickness(4),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        var captured = sf;
+        removeBtn.Click += (_, _) =>
+        {
+            _stagedFiles.Remove(captured);
+            RefreshPublicFilesPanel();
+            BuildSession.Current.StagedFiles = [.. _stagedFiles];
+        };
+        Grid.SetColumn(removeBtn, 3);
+
+        grid.Children.Add(dot);
+        grid.Children.Add(nameLabel);
+        grid.Children.Add(destBox);
+        grid.Children.Add(removeBtn);
+        row.Child = grid;
+        return row;
+    }
+
+    // ── Language Pack Injection ───────────────────────────────────────────────
+
+    private void AddLanguagePack_Click(object sender, RoutedEventArgs e)
+    {
+        var dlg = new OpenFolderDialog
+        {
+            Title = "Select Language Pack Folder (e.g. LanguagesAndOptionalFeatures\\)"
+        };
+        if (dlg.ShowDialog() != true) return;
+        ScanLanguagePackFolder(dlg.FolderName);
+    }
+
+    // ── Whitelist patterns — only real LP files match, all FoD noise is ignored ──
+    //
+    // Pattern A — Core LP, underscore format (this ISO):
+    //   Microsoft-Windows-Client-Language-Pack_x64_fr-fr.cab
+    //
+    // Pattern B — Core LP, tilde format (other ISOs / older builds):
+    //   Microsoft-Windows-Client-LanguagePack-Package~31bf…~amd64~fr-FR~10.0.x.cab
+    //
+    // Pattern C — Language Features (Basic / Handwriting / OCR / Speech / TTS):
+    //   Microsoft-Windows-LanguageFeatures-Basic-fr-fr-Package~31bf…~amd64~~.cab
+    //
+    private static readonly Regex[] _lpPatterns =
+    [
+        // A: underscore Core LP   — locale is last segment before .cab
+        new Regex(@"^Microsoft-Windows-Client-Language-Pack_[^_]+_([a-z]{2}[_\-][a-z]{2,}(?:[_\-][a-z]{2,})?)\.cab$",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled),
+
+        // B: tilde Core LP   — locale is 4th tilde-segment
+        new Regex(@"^Microsoft-Windows-Client-LanguagePack-Package~[^~]+~[^~]+~([a-z]{2}[_\-][a-z]{2,}(?:[_\-][a-z]{2,})?)~",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled),
+
+        // C: LanguageFeatures (Basic|Handwriting|OCR|Speech|TextToSpeech)
+        new Regex(@"^Microsoft-Windows-LanguageFeatures-(?:Basic|Handwriting|OCR|Speech|TextToSpeech)-([a-z]{2}[_\-][a-z]{2,}(?:[_\-][a-z]{2,})?)-Package~",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled),
+    ];
+
+    private void ScanLanguagePackFolder(string folder)
+    {
+        _langGroupsScanned.Clear();
+        LangGroupsPanel.Children.Clear();
+
+        string[] cabs;
+        try
+        {
+            cabs = Directory.GetFiles(folder, "*.cab", SearchOption.AllDirectories);
+        }
+        catch (Exception ex)
+        {
+            AppDialog.Alert(this, $"Could not read folder:\n{ex.Message}", "Folder Error",
+                AppDialogIcon.Warning);
+            return;
+        }
+
+        foreach (var cab in cabs)
+        {
+            var filename = Path.GetFileName(cab);
+            string? code = null;
+
+            // Try each whitelist pattern in order — first match wins
+            foreach (var pattern in _lpPatterns)
+            {
+                var m = pattern.Match(filename);
+                if (!m.Success) continue;
+                // Normalise: uppercase separators → lowercase hyphens (fr_FR → fr-fr)
+                code = m.Groups[1].Value.Replace('_', '-').ToLowerInvariant();
+                break;
+            }
+
+            if (code is null) continue;  // not a real LP file — skip
+
+            if (!_langGroupsScanned.TryGetValue(code, out var list))
+            {
+                list = [];
+                _langGroupsScanned[code] = list;
+            }
+            list.Add(cab);
+        }
+
+        if (_langGroupsScanned.Count == 0)
+        {
+            AppDialog.Alert(this,
+                "No language pack CAB files were detected in that folder.\n\n" +
+                "Make sure you selected the LanguagesAndOptionalFeatures\\ folder " +
+                "from the mounted LP ISO.",
+                "No Language Packs Found", AppDialogIcon.Info);
+            return;
+        }
+
+        // Reset the search filter for the new scan result
+        LangSearchBox.Text = "";
+        LangSearchPlaceholder.Visibility = Visibility.Visible;
+
+        // Build one row per language, sorted alphabetically by display name
+        foreach (var kvp in _langGroupsScanned
+            .OrderBy(k => LangNames.TryGetValue(k.Key, out var n) ? n : k.Key))
+        {
+            LangGroupsPanel.Children.Add(BuildLangGroupRow(kvp.Key, kvp.Value));
+        }
+
+        var count = _langGroupsScanned.Count;
+        LangScanSourceLabel.Text =
+            $"Found {count} language{(count == 1 ? "" : "s")} in:  " +
+            Path.GetFileName(folder.TrimEnd('\\', '/'));
+        LangScanResultPanel.Visibility = Visibility.Visible;
+    }
+
+    private UIElement BuildLangGroupRow(string langCode, List<string> cabs)
+    {
+        // Row outer border — doubles as the clickable hit-test area
+        var outerBorder = new Border
+        {
+            CornerRadius    = new CornerRadius(6),
+            BorderThickness = new Thickness(1),
+            Padding         = new Thickness(10, 8, 10, 8),
+            Cursor          = Cursors.Hand,
+            // Tag stores (langCode, cabs, isChecked)
+            Tag = (langCode, cabs, true)
+        };
+
+        // Local helper — updates all visuals atomically.
+        // Unchecked state uses SetResourceReference so colours follow theme switches.
+        // Checked state uses a semi-transparent accent tint (works in both themes).
+        void ApplyVisual(bool chk)
+        {
+            if (chk)
+            {
+                var g1 = (Color)Application.Current.Resources["Gold1Color"];
+                outerBorder.Background = new SolidColorBrush(Color.FromArgb(0x18, g1.R, g1.G, g1.B));
+                outerBorder.SetResourceReference(Border.BorderBrushProperty, "Gold1Brush");
+            }
+            else
+            {
+                outerBorder.SetResourceReference(Border.BackgroundProperty,  "BG2Brush");
+                outerBorder.SetResourceReference(Border.BorderBrushProperty, "LineBrush");
+            }
+
+            if (outerBorder.Child is Grid g && g.Children[0] is Border chkBorder)
+            {
+                if (chk)
+                    chkBorder.SetResourceReference(Border.BackgroundProperty, "Gold1Brush");
+                else
+                    chkBorder.SetResourceReference(Border.BackgroundProperty, "BG3Brush");
+
+                if (chkBorder.Child is System.Windows.Shapes.Path p)
+                    p.Opacity = chk ? 1.0 : 0.0;
+            }
+
+            outerBorder.Tag = (langCode, cabs, chk);
+        }
+
+        // ── Layout: [checkbox]  [text] ──────────────────────────────────────
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        // Rounded checkbox
+        var chkMark = new System.Windows.Shapes.Path
+        {
+            Data              = Geometry.Parse("M 3,10 L 8,15 L 17,4"),
+            Stroke            = Brushes.White,
+            StrokeThickness   = 1.8,
+            StrokeStartLineCap = System.Windows.Media.PenLineCap.Round,
+            StrokeEndLineCap   = System.Windows.Media.PenLineCap.Round,
+            StrokeLineJoin     = System.Windows.Media.PenLineJoin.Round,
+            Stretch             = Stretch.None,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment   = VerticalAlignment.Center,
+            Opacity             = 1.0
+        };
+        var chkBox = new Border
+        {
+            Width             = 20,
+            Height            = 20,
+            CornerRadius      = new CornerRadius(4),
+            BorderThickness   = new Thickness(1.5),
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin            = new Thickness(0, 0, 12, 0),
+            Child             = chkMark
+        };
+        Grid.SetColumn(chkBox, 0);
+
+        // Language name (line 1) + locale code + component summary (line 2)
+        var displayName = LangNames.TryGetValue(langCode, out var humanName)
+            ? humanName
+            : langCode.ToUpperInvariant();
+
+        var nameText = new TextBlock
+        {
+            Text       = displayName,
+            FontSize   = 13,
+            FontWeight = FontWeights.SemiBold
+        };
+        nameText.SetResourceReference(TextBlock.ForegroundProperty, "FG0Brush");
+
+        var detailText = new TextBlock
+        {
+            Text       = $"{langCode.ToLowerInvariant()}  ·  " +
+                         $"{cabs.Count} file{(cabs.Count == 1 ? "" : "s")}  ·  " +
+                         SummariseComponents(cabs),
+            FontSize   = 11,
+            FontFamily = new FontFamily("Consolas"),
+            Margin     = new Thickness(0, 2, 0, 0)
+        };
+        detailText.SetResourceReference(TextBlock.ForegroundProperty, "FG2Brush");
+
+        var textStack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        textStack.Children.Add(nameText);
+        textStack.Children.Add(detailText);
+        Grid.SetColumn(textStack, 1);
+
+        grid.Children.Add(chkBox);
+        grid.Children.Add(textStack);
+        outerBorder.Child = grid;
+
+        // Apply initial (checked) visual
+        ApplyVisual(true);
+
+        // Toggle on click anywhere in the row
+        outerBorder.MouseLeftButtonUp += (_, _) =>
+        {
+            var (_, _, currentlyChecked) = ((string, List<string>, bool))outerBorder.Tag;
+            ApplyVisual(!currentlyChecked);
+        };
+
+        return outerBorder;
+    }
+
+    private static string SummariseComponents(List<string> cabs)
+    {
+        var parts = new List<string>();
+
+        bool has(string kw) => cabs.Any(c =>
+            Path.GetFileName(c).Contains(kw, StringComparison.OrdinalIgnoreCase));
+
+        // Core LP — matches both underscore format (Language-Pack_x64_) and tilde format (LanguagePack-Package~)
+        if (cabs.Any(c =>
+        {
+            var n = Path.GetFileName(c);
+            return n.StartsWith("Microsoft-Windows-Client-Language", StringComparison.OrdinalIgnoreCase);
+        })) parts.Add("Core LP");
+
+        if (has("LanguageFeatures-Basic"))        parts.Add("Basic");
+        if (has("LanguageFeatures-Handwriting"))  parts.Add("Handwriting");
+        if (has("LanguageFeatures-OCR"))          parts.Add("OCR");
+        if (has("LanguageFeatures-Speech"))       parts.Add("Speech");
+        if (has("LanguageFeatures-TextToSpeech")) parts.Add("TTS");
+
+        return parts.Count > 0
+            ? string.Join(" · ", parts)
+            : $"{cabs.Count} CAB files";
+    }
+
+    // ── Language search filter ────────────────────────────────────────────────
+
+    private void LangSearch_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        var query = LangSearchBox.Text.Trim();
+
+        // Show / hide placeholder
+        LangSearchPlaceholder.Visibility =
+            string.IsNullOrEmpty(LangSearchBox.Text)
+                ? Visibility.Visible : Visibility.Collapsed;
+
+        // If no query show everything; otherwise filter by display name or code
+        foreach (var child in LangGroupsPanel.Children.OfType<Border>())
+        {
+            if (string.IsNullOrEmpty(query))
+            {
+                child.Visibility = Visibility.Visible;
+                continue;
+            }
+
+            // The tag carries (langCode, cabs, isChecked)
+            if (child.Tag is not ValueTuple<string, List<string>, bool> t)
+                continue;
+
+            var (code, _, _) = t;
+            var displayName  = LangNames.TryGetValue(code, out var n) ? n : code;
+
+            child.Visibility =
+                displayName.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                code.Contains(query,        StringComparison.OrdinalIgnoreCase)
+                    ? Visibility.Visible : Visibility.Collapsed;
+        }
+    }
+
+    // ── Scan result toolbar ───────────────────────────────────────────────────
+
+    private void LangSelectAll_Click(object sender, RoutedEventArgs e)
+    {
+        foreach (var child in LangGroupsPanel.Children.OfType<Border>())
+            SetLangRowChecked(child, true);
+    }
+
+    private void LangSelectNone_Click(object sender, RoutedEventArgs e)
+    {
+        foreach (var child in LangGroupsPanel.Children.OfType<Border>())
+            SetLangRowChecked(child, false);
+    }
+
+    private static void SetLangRowChecked(Border row, bool chk)
+    {
+        if (row.Tag is not ValueTuple<string, List<string>, bool> t) return;
+        var (code, cabs, _) = t;
+
+        // Mirror the same theme-aware logic used in ApplyVisual inside BuildLangGroupRow
+        if (chk)
+        {
+            var g1 = (Color)Application.Current.Resources["Gold1Color"];
+            row.Background = new SolidColorBrush(Color.FromArgb(0x18, g1.R, g1.G, g1.B));
+            row.SetResourceReference(Border.BorderBrushProperty, "Gold1Brush");
+        }
+        else
+        {
+            row.SetResourceReference(Border.BackgroundProperty,  "BG2Brush");
+            row.SetResourceReference(Border.BorderBrushProperty, "LineBrush");
+        }
+
+        if (row.Child is Grid g && g.Children[0] is Border chkBorder)
+        {
+            if (chk)
+                chkBorder.SetResourceReference(Border.BackgroundProperty, "Gold1Brush");
+            else
+                chkBorder.SetResourceReference(Border.BackgroundProperty, "BG3Brush");
+
+            if (chkBorder.Child is System.Windows.Shapes.Path p)
+                p.Opacity = chk ? 1.0 : 0.0;
+        }
+
+        row.Tag = (code, cabs, chk);
+    }
+
+    private void LangAddSelected_Click(object sender, RoutedEventArgs e)
+    {
+        int added = 0;
+
+        foreach (var child in LangGroupsPanel.Children.OfType<Border>())
+        {
+            if (child.Tag is not ValueTuple<string, List<string>, bool> t) continue;
+            var (_, cabs, chk) = t;
+            if (!chk) continue;
+
+            foreach (var cab in OrderLangPackCabs(cabs))
+            {
+                if (!_languagePacks.Contains(cab, StringComparer.OrdinalIgnoreCase))
+                {
+                    _languagePacks.Add(cab);
+                    added++;
+                }
+            }
+        }
+
+        if (added == 0)
+        {
+            AppDialog.Alert(this,
+                "No languages are currently selected.\n" +
+                "Tick at least one language then click Add Selected.",
+                "Nothing Selected", AppDialogIcon.Info);
+            return;
+        }
+
+        // Collapse scan panel and clear transient state
+        LangScanResultPanel.Visibility = Visibility.Collapsed;
+        LangGroupsPanel.Children.Clear();
+        _langGroupsScanned.Clear();
+
+        RefreshLangPacksPanel();
+        BuildSession.Current.LanguagePackPaths = [.. _languagePacks];
+    }
+
+    /// <summary>
+    /// Returns CAB files sorted in DISM install order:
+    ///   Core LP (0) → Basic (1) → Handwriting (2) → OCR (3) → Speech (4) → TextToSpeech (5)
+    /// </summary>
+    private static List<string> OrderLangPackCabs(List<string> cabs)
+    {
+        static int Priority(string path)
+        {
+            var n = Path.GetFileName(path).ToLowerInvariant();
+            if (n.Contains("texttospeech"))  return 5;
+            if (n.Contains("speech"))        return 4;
+            if (n.Contains("ocr"))           return 3;
+            if (n.Contains("handwriting"))   return 2;
+            if (n.Contains("basic"))         return 1;
+            return 0;  // Core LP
+        }
+        return [.. cabs.OrderBy(Priority)];
+    }
+
+    private void RefreshLangPacksPanel()
+    {
+        LangPacksPanel.Children.Clear();
+        LangPacksEmptyHint.Visibility = _languagePacks.Count == 0
+            ? Visibility.Visible : Visibility.Collapsed;
+
+        foreach (var path in _languagePacks.ToList())
+            LangPacksPanel.Children.Add(BuildSimpleFileRow(path,
+                () =>
+                {
+                    _languagePacks.Remove(path);
+                    RefreshLangPacksPanel();
+                    BuildSession.Current.LanguagePackPaths = [.. _languagePacks];
+                }));
+    }
+
+    // ── Info popup hover handlers ─────────────────────────────────────────────
+
+    private void LangInfoTrigger_MouseEnter(object sender, MouseEventArgs e)
+    {
+        _langPopupTimer?.Stop();
+        LangInfoPopup.IsOpen = true;
+    }
+
+    private void LangInfoTrigger_MouseLeave(object sender, MouseEventArgs e)
+        => StartClosePopupTimer();
+
+    private void LangInfoPopup_MouseEnter(object sender, MouseEventArgs e)
+        => _langPopupTimer?.Stop();
+
+    private void LangInfoPopup_MouseLeave(object sender, MouseEventArgs e)
+        => StartClosePopupTimer();
+
+    private void StartClosePopupTimer()
+    {
+        if (_langPopupTimer is null)
+        {
+            _langPopupTimer = new System.Windows.Threading.DispatcherTimer
+            {
+                Interval = TimeSpan.FromMilliseconds(300)
+            };
+            _langPopupTimer.Tick += (_, _) =>
+            {
+                _langPopupTimer.Stop();
+                LangInfoPopup.IsOpen = false;
+            };
+        }
+        _langPopupTimer.Stop();
+        _langPopupTimer.Start();
+    }
+
+    private void LangPackLink_RequestNavigate(object sender, RequestNavigateEventArgs e)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true });
+        }
+        catch { /* ignore – browser may not be available */ }
+        e.Handled = true;
+    }
+
+    // ── Driver Injection ──────────────────────────────────────────────────────
+
+    private void AddDriverFolder_Click(object sender, RoutedEventArgs e)
+    {
+        var dlg = new OpenFolderDialog { Title = "Select Driver Folder" };
+        if (dlg.ShowDialog() != true) return;
+
+        if (!_driverFolders.Contains(dlg.FolderName, StringComparer.OrdinalIgnoreCase))
+            _driverFolders.Add(dlg.FolderName);
+
+        RefreshDriversPanel();
+        BuildSession.Current.DriverFolderPaths = [.. _driverFolders];
+    }
+
+    private void RefreshDriversPanel()
+    {
+        DriversPanel.Children.Clear();
+        DriversEmptyHint.Visibility = _driverFolders.Count == 0
+            ? Visibility.Visible : Visibility.Collapsed;
+
+        foreach (var path in _driverFolders.ToList())
+            DriversPanel.Children.Add(BuildSimpleFileRow(path,
+                () => { _driverFolders.Remove(path); RefreshDriversPanel(); BuildSession.Current.DriverFolderPaths = [.. _driverFolders]; }));
+    }
+
+    /// <summary>Shared row builder for LP and Driver lists (path + remove button).</summary>
+    private UIElement BuildSimpleFileRow(string path, Action onRemove)
+    {
+        var row = new Border
+        {
+            CornerRadius    = new CornerRadius(6),
+            BorderThickness = new Thickness(1),
+            Padding         = new Thickness(12, 8, 10, 8)
+        };
+        row.SetResourceReference(Border.BackgroundProperty,  "BG2Brush");
+        row.SetResourceReference(Border.BorderBrushProperty, "LineBrush");
+
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var dot = new TextBlock
+        {
+            Text              = "•",
+            FontSize          = 16,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin            = new Thickness(0, 0, 10, 0)
+        };
+        dot.SetResourceReference(TextBlock.ForegroundProperty, "Gold1Brush");
+        Grid.SetColumn(dot, 0);
+
+        var nameLabel = new TextBlock
+        {
+            Text              = Path.GetFileName(path.TrimEnd('\\', '/')),
+            ToolTip           = path,
+            FontSize          = 13,
+            VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming      = TextTrimming.CharacterEllipsis
+        };
+        nameLabel.SetResourceReference(TextBlock.ForegroundProperty, "FG0Brush");
+
+        var subLabel = new TextBlock
+        {
+            Text              = path,
+            FontSize          = 10,
+            TextTrimming      = TextTrimming.CharacterEllipsis
+        };
+        subLabel.SetResourceReference(TextBlock.ForegroundProperty, "FG2Brush");
+        var nameStack = new StackPanel();
+        nameStack.Children.Add(nameLabel);
+        nameStack.Children.Add(subLabel);
+        Grid.SetColumn(nameStack, 1);
+
+        var removeBtn = new Button
+        {
+            Content             = "✕",
+            Style               = (Style?)Application.Current.Resources["GhostButtonStyle"],
+            FontSize            = 11,
+            Foreground          = (Brush)Application.Current.Resources["ErrBrush"],
+            Padding             = new Thickness(4),
+            VerticalAlignment   = VerticalAlignment.Center
+        };
+        removeBtn.Click += (_, _) => onRemove();
+        Grid.SetColumn(removeBtn, 2);
+
+        grid.Children.Add(dot);
+        grid.Children.Add(nameStack);
+        grid.Children.Add(removeBtn);
+        row.Child = grid;
+        return row;
+    }
+
+    // ── Deployment Scripts ────────────────────────────────────────────────────
+
+    private void DeploymentToggle_Changed(object sender, RoutedEventArgs e)
+    {
+        if (!IsLoaded) return;
+        BuildSession.Current.IncludeDeploymentScripts = IncludeDeploymentToggle.IsChecked == true;
+        RefreshDeploymentScriptsPanel();
+    }
+
+    private void AddDeploymentScript_Click(object sender, RoutedEventArgs e)
+    {
+        var dlg = new OpenFileDialog
+        {
+            Title       = "Select Script(s) to Deploy",
+            Filter      = "Scripts|*.ps1;*.bat;*.cmd;*.vbs;*.py|All files|*.*",
+            Multiselect = true
+        };
+        if (dlg.ShowDialog() != true) return;
+
+        foreach (var f in dlg.FileNames)
+            if (!_deploymentScripts.Any(s => s.Path.Equals(f, StringComparison.OrdinalIgnoreCase)))
+                _deploymentScripts.Add(new DeploymentScript { Path = f });
+
+        RefreshDeploymentScriptsPanel();
+        BuildSession.Current.DeploymentScripts = [.. _deploymentScripts];
+    }
+
+    private void RefreshDeploymentScriptsPanel()
+    {
+        bool enabled = IncludeDeploymentToggle.IsChecked == true;
+
+        DeploymentScriptsPanel.Children.Clear();
+
+        // All content below the header collapses when the section is disabled
+        var contentVis = enabled ? Visibility.Visible : Visibility.Collapsed;
+        DeploymentScriptsPanel.Visibility    = contentVis;
+        DeploymentScriptsInfoNote.Visibility = contentVis;
+
+        // Empty hint only shows when enabled AND list is empty
+        DeploymentScriptsEmptyHint.Visibility =
+            enabled && _deploymentScripts.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+
+        if (!enabled) return;
+
+        foreach (var script in _deploymentScripts.ToList())
+            DeploymentScriptsPanel.Children.Add(BuildDeploymentScriptRow(script));
+    }
+
+    private Border BuildDeploymentScriptRow(DeploymentScript script)
+    {
+        var row = new Border
+        {
+            Background      = (Brush?)Application.Current.Resources["BG3Brush"],
+            CornerRadius    = new CornerRadius(6),
+            BorderBrush     = (Brush?)Application.Current.Resources["LineBrush"],
+            BorderThickness = new Thickness(1),
+            Padding         = new Thickness(10, 6, 10, 6)
+        };
+
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(20) });            // bullet
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); // filename
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(140) });           // trigger
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });               // remove
+
+        // ── Bullet ────────────────────────────────────────────────────────────
+        var dot = new TextBlock
+        {
+            Text              = "•",
+            FontSize          = 16,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin            = new Thickness(0, 0, 10, 0)
+        };
+        dot.SetResourceReference(TextBlock.ForegroundProperty, "Gold1Brush");
+        Grid.SetColumn(dot, 0);
+
+        // ── Filename ──────────────────────────────────────────────────────────
+        var nameLabel = new TextBlock
+        {
+            Text              = System.IO.Path.GetFileName(script.Path),
+            ToolTip           = script.Path,
+            FontSize          = 13,
+            VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming      = TextTrimming.CharacterEllipsis,
+            Margin            = new Thickness(0, 0, 10, 0)
+        };
+        nameLabel.SetResourceReference(TextBlock.ForegroundProperty, "FG0Brush");
+        Grid.SetColumn(nameLabel, 1);
+
+        // ── Trigger ComboBox ──────────────────────────────────────────────────
+        var combo = new ComboBox
+        {
+            Style             = (Style?)Application.Current.Resources["ComboBoxStyle"],
+            Width             = 130,
+            Height            = 30,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin            = new Thickness(0, 0, 8, 0)
+        };
+
+        foreach (var (val, label) in DeploymentTrigger.All)
+        {
+            var item = new ComboBoxItem { Content = label, Tag = val };
+            combo.Items.Add(item);
+            if (val == script.Trigger) combo.SelectedItem = item;
+        }
+        // Default to first item if nothing matched (e.g. old profile with unknown trigger)
+        if (combo.SelectedItem == null && combo.Items.Count > 0)
+            combo.SelectedIndex = 0;
+
+        combo.SelectionChanged += (_, _) =>
+        {
+            if (combo.SelectedItem is ComboBoxItem selected)
+            {
+                script.Trigger = (string)selected.Tag!;
+                BuildSession.Current.DeploymentScripts = [.. _deploymentScripts];
+            }
+        };
+        Grid.SetColumn(combo, 2);
+
+        // ── Remove button ─────────────────────────────────────────────────────
+        var removeBtn = new Button
+        {
+            Content           = "✕",
+            Style             = (Style?)Application.Current.Resources["GhostButtonStyle"],
+            FontSize          = 11,
+            Foreground        = (Brush)Application.Current.Resources["ErrBrush"],
+            Padding           = new Thickness(4),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        var captured = script;
+        removeBtn.Click += (_, _) =>
+        {
+            _deploymentScripts.Remove(captured);
+            RefreshDeploymentScriptsPanel();
+            BuildSession.Current.DeploymentScripts = [.. _deploymentScripts];
+        };
+        Grid.SetColumn(removeBtn, 3);
+
+        grid.Children.Add(dot);
+        grid.Children.Add(nameLabel);
+        grid.Children.Add(combo);
+        grid.Children.Add(removeBtn);
+        row.Child = grid;
+        return row;
+    }
+
+    // ── Navigation ────────────────────────────────────────────────────────────
+
+    private void Back_Click(object sender, RoutedEventArgs e)
+        => NavigateRequested?.Invoke("wizard", 0);
+
+    private void Continue_Click(object sender, RoutedEventArgs e)
+    {
+        // Persist final state
+        var s = BuildSession.Current;
+        s.StagedApps              = [.. _apps];
+        s.StagedFiles             = [.. _stagedFiles];
+        s.LanguagePackPaths       = [.. _languagePacks];
+        s.DriverFolderPaths       = [.. _driverFolders];
+        s.DeploymentScripts        = [.. _deploymentScripts];
+        s.IncludeDeploymentScripts = IncludeDeploymentToggle.IsChecked == true;
+
+        NavigateRequested?.Invoke("wizard", 2);
+    }
+}

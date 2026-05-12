@@ -1,0 +1,1360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ALE Image Forge — Technical Guide</title>
+<style>
+@page {
+  size: A4;
+  margin: 20mm 18mm 22mm 18mm;
+  @bottom-center {
+    content: "ALE Image Forge — Technical Guide  ·  Page " counter(page) " of " counter(pages);
+    font-family: 'Segoe UI', sans-serif;
+    font-size: 9pt;
+    color: #888;
+  }
+}
+@page :first { margin: 0; @bottom-center { content: none; } }
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  font-size: 10.5pt;
+  line-height: 1.55;
+  color: #1A2230;
+  background: #FFFFFF;
+}
+
+/* ───────── COVER PAGE ───────── */
+.cover {
+  height: 297mm;
+  background: linear-gradient(135deg, #0A1628 0%, #122440 50%, #0A1628 100%);
+  color: #EDF1F8;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0 25mm;
+  page-break-after: always;
+  position: relative;
+  overflow: hidden;
+}
+.cover::before {
+  content: '';
+  position: absolute;
+  top: -100mm; right: -100mm;
+  width: 250mm; height: 250mm;
+  background: radial-gradient(circle, rgba(201,164,42,0.15) 0%, transparent 60%);
+  pointer-events: none;
+}
+.cover::after {
+  content: '';
+  position: absolute;
+  bottom: -80mm; left: -80mm;
+  width: 200mm; height: 200mm;
+  background: radial-gradient(circle, rgba(34,197,139,0.08) 0%, transparent 60%);
+  pointer-events: none;
+}
+.cover-logo {
+  width: 80px; height: 80px;
+  background: linear-gradient(135deg, #C9A42A 0%, #E8C040 100%);
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 42px;
+  font-weight: 900;
+  color: #0A1628;
+  box-shadow: 0 4px 24px rgba(201,164,42,0.4);
+  margin-bottom: 32px;
+  position: relative; z-index: 2;
+}
+.cover-eyebrow {
+  font-size: 11pt;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: #C9A42A;
+  font-weight: 700;
+  margin-bottom: 14px;
+  position: relative; z-index: 2;
+}
+.cover-title {
+  font-size: 44pt;
+  font-weight: 800;
+  line-height: 1.1;
+  margin-bottom: 16px;
+  letter-spacing: -1px;
+  position: relative; z-index: 2;
+}
+.cover-subtitle {
+  font-size: 16pt;
+  color: #B0BFD0;
+  font-weight: 400;
+  margin-bottom: 60px;
+  max-width: 600px;
+  position: relative; z-index: 2;
+}
+.cover-meta {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  margin-top: 40px;
+  position: relative; z-index: 2;
+}
+.cover-meta-item label {
+  display: block;
+  font-size: 9pt;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: #6B7A94;
+  margin-bottom: 4px;
+}
+.cover-meta-item span {
+  font-size: 12pt;
+  color: #EDF1F8;
+  font-weight: 500;
+}
+.cover-footer {
+  position: absolute;
+  bottom: 25mm; left: 25mm; right: 25mm;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  font-size: 9pt;
+  color: #6B7A94;
+  letter-spacing: 0.5px;
+  z-index: 2;
+}
+
+/* ───────── CONTENT ───────── */
+.content {
+  padding: 0;
+}
+
+h1 {
+  font-size: 22pt;
+  font-weight: 800;
+  color: #0A1628;
+  border-bottom: 3px solid #C9A42A;
+  padding-bottom: 10px;
+  margin-top: 32pt;
+  margin-bottom: 16pt;
+  letter-spacing: -0.5px;
+  page-break-before: always;
+  page-break-after: avoid;
+}
+h1:first-of-type { page-break-before: avoid; margin-top: 0; }
+
+h2 {
+  font-size: 15pt;
+  font-weight: 700;
+  color: #122440;
+  margin-top: 22pt;
+  margin-bottom: 10pt;
+  page-break-after: avoid;
+}
+
+h3 {
+  font-size: 12pt;
+  font-weight: 700;
+  color: #1A2230;
+  margin-top: 16pt;
+  margin-bottom: 6pt;
+  page-break-after: avoid;
+}
+
+h4 {
+  font-size: 11pt;
+  font-weight: 600;
+  color: #2B3548;
+  margin-top: 12pt;
+  margin-bottom: 4pt;
+  page-break-after: avoid;
+}
+
+p {
+  margin-bottom: 8pt;
+  text-align: justify;
+}
+
+strong { color: #0A1628; font-weight: 700; }
+em { color: #2B3548; }
+
+a {
+  color: #0E5BB0;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(14,91,176,0.3);
+}
+
+ul, ol {
+  margin-left: 22px;
+  margin-bottom: 10pt;
+}
+li { margin-bottom: 3pt; }
+
+/* ───────── TABLES ───────── */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12pt 0;
+  font-size: 10pt;
+  page-break-inside: avoid;
+}
+table thead {
+  background: linear-gradient(135deg, #0A1628 0%, #122440 100%);
+  color: #EDF1F8;
+}
+table th {
+  text-align: left;
+  padding: 9px 12px;
+  font-weight: 600;
+  font-size: 9.5pt;
+  letter-spacing: 0.3px;
+  border: none;
+}
+table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid #E5E9EF;
+  vertical-align: top;
+}
+table tr:nth-child(even) td { background: #F8FAFC; }
+table tr:hover td { background: #FFF6D9; }
+table code {
+  background: rgba(0,0,0,0.05);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 9.5pt;
+}
+
+/* ───────── CODE ───────── */
+code {
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 9.5pt;
+  background: #F1F3F7;
+  padding: 1px 6px;
+  border-radius: 3px;
+  color: #B0226B;
+}
+pre {
+  background: #0F1828;
+  color: #E5E9EF;
+  padding: 12px 16px;
+  border-radius: 6px;
+  border-left: 3px solid #C9A42A;
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 9.5pt;
+  line-height: 1.5;
+  overflow-x: auto;
+  margin: 10pt 0;
+  page-break-inside: avoid;
+}
+pre code {
+  background: transparent;
+  color: #E5E9EF;
+  padding: 0;
+}
+
+/* ───────── CALLOUTS ───────── */
+.callout {
+  border-left: 4px solid #C9A42A;
+  background: #FFFCF2;
+  padding: 12px 16px;
+  margin: 12pt 0;
+  border-radius: 0 6px 6px 0;
+  page-break-inside: avoid;
+}
+.callout.info { border-left-color: #0E5BB0; background: #F0F6FC; }
+.callout.success { border-left-color: #1EC98A; background: #F0FBF6; }
+.callout.warn { border-left-color: #F5A623; background: #FFFBEF; }
+.callout.danger { border-left-color: #F05060; background: #FFF4F5; }
+.callout p:last-child { margin-bottom: 0; }
+.callout strong { color: inherit; }
+
+/* ───────── USE CASE CARDS ───────── */
+.usecase {
+  background: #F8FAFC;
+  border-left: 4px solid #0E5BB0;
+  padding: 14px 18px;
+  margin: 14pt 0;
+  border-radius: 0 8px 8px 0;
+  page-break-inside: avoid;
+}
+.usecase h3 {
+  margin-top: 0;
+  color: #0E5BB0;
+}
+.usecase-label {
+  font-size: 8.5pt;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #607080;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+/* ───────── CATEGORY HEADER ───────── */
+.uc-category {
+  margin-top: 24pt;
+  margin-bottom: 14pt;
+  padding: 14px 20px;
+  background: linear-gradient(135deg, #122440 0%, #0A1628 100%);
+  color: #EDF1F8;
+  border-radius: 6px;
+  border-left: 5px solid #C9A42A;
+  page-break-after: avoid;
+  page-break-before: auto;
+}
+.uc-category .uc-cat-eyebrow {
+  font-size: 8.5pt;
+  color: #C9A42A;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+.uc-category .uc-cat-title {
+  font-size: 13pt;
+  color: #EDF1F8;
+  font-weight: 700;
+  margin: 0;
+}
+.uc-category .uc-cat-desc {
+  font-size: 10pt;
+  color: #B0BFD0;
+  margin-top: 4px;
+  font-style: italic;
+}
+
+/* ───────── BADGES ───────── */
+.badge {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 10px;
+  font-size: 8.5pt;
+  font-weight: 600;
+  vertical-align: middle;
+}
+.badge-step { background: #E8EEF8; color: #0E5BB0; }
+.badge-pass { background: #DFF7E9; color: #1EC98A; }
+.badge-warn { background: #FFF1D6; color: #B7780E; }
+.badge-fail { background: #FFE3E5; color: #C53848; }
+
+/* ───────── SECTION DIVIDER ───────── */
+.divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #C9A42A, transparent);
+  margin: 20pt 0;
+}
+
+/* ───────── TOC ───────── */
+.toc {
+  background: #F8FAFC;
+  border: 1px solid #E5E9EF;
+  border-radius: 8px;
+  padding: 20px 24px;
+  margin: 16pt 0;
+}
+.toc h2 {
+  margin-top: 0;
+  font-size: 14pt;
+  color: #0A1628;
+  border-bottom: 2px solid #C9A42A;
+  padding-bottom: 8px;
+  margin-bottom: 12px;
+}
+.toc ol {
+  margin-left: 0;
+  list-style: none;
+  counter-reset: tocitem;
+}
+.toc ol li {
+  counter-increment: tocitem;
+  padding: 4px 0;
+  font-size: 10.5pt;
+  display: flex;
+  align-items: center;
+}
+.toc ol li::before {
+  content: counter(tocitem) ".";
+  display: inline-block;
+  width: 28px;
+  color: #C9A42A;
+  font-weight: 700;
+}
+.toc ol li::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px dotted #C0C8D0;
+  margin: 0 8px;
+  align-self: flex-end;
+  margin-bottom: 4px;
+}
+.toc ol li span.page {
+  color: #607080;
+  font-weight: 500;
+  font-size: 10pt;
+}
+
+.outcome {
+  margin-top: 8pt;
+  padding-top: 8pt;
+  border-top: 1px dashed #C0C8D0;
+}
+.outcome strong { color: #1EC98A; }
+
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════ COVER PAGE ═══════════════════════ -->
+<div class="cover">
+  <div class="cover-logo">G</div>
+  <div class="cover-eyebrow">ALCATEL-LUCENT ENTERPRISE</div>
+  <h1 class="cover-title" style="border:none;padding:0;color:#EDF1F8;page-break-before:auto;">ALE Image Forge</h1>
+  <div class="cover-subtitle">Technical Guide for Building Customised Windows 11 Enterprise ISOs with Zero-Touch Deployment</div>
+  <div class="cover-meta">
+    <div class="cover-meta-item"><label>Version</label><span>2.4.1</span></div>
+    <div class="cover-meta-item"><label>Audience</label><span>IT Engineers</span></div>
+    <div class="cover-meta-item"><label>Document Type</label><span>Reference Guide</span></div>
+  </div>
+  <div class="cover-footer">
+    <div>ALE Internal Engineering Documentation</div>
+    <div>Generated 9 May 2026</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ TOC ═══════════════════════ -->
+<div class="content">
+
+<div class="toc">
+  <h2>Table of Contents</h2>
+  <ol>
+    <li>Overview &amp; Architecture <span class="page">3</span></li>
+    <li>Features <span class="page">5</span></li>
+    <li>The 8-Step Wizard <span class="page">14</span></li>
+    <li>Use Cases <span class="page">15</span></li>
+    <li>Validation Report Interpretation <span class="page">21</span></li>
+    <li>Quick Reference — Key File Locations <span class="page">22</span></li>
+    <li>Troubleshooting Checklist <span class="page">23</span></li>
+    <li>Build Commands <span class="page">24</span></li>
+    <li>Runtime Requirements <span class="page">24</span></li>
+  </ol>
+</div>
+
+<!-- ═══════════════════════ 1. OVERVIEW ═══════════════════════ -->
+<h1>1. Overview &amp; Architecture</h1>
+
+<p>ALE Image Forge is a Windows WPF application that takes a stock Windows 11 ISO and produces a <strong>fully customised, bootable enterprise ISO</strong> with:</p>
+
+<ul>
+  <li>A zero-touch unattended installation (no clicks, no prompts)</li>
+  <li>Pre-installed applications via a first-boot launcher</li>
+  <li>Pre-configured registry, group policies, BitLocker, and security baseline</li>
+  <li>Custom wallpaper, drivers, language packs, and deployment scripts</li>
+  <li>An auto-generated validation report (TXT + interactive HTML) before the ISO is committed</li>
+</ul>
+
+<p>The output is a single <code>.iso</code> file that boots on any Windows 11–capable hardware (with hardware-bypass for TPM/SecureBoot/RAM checks built in) and produces a fully configured, branded, application-loaded machine without any human interaction.</p>
+
+<h2>Architecture</h2>
+
+<table>
+  <thead><tr><th style="width:30%">Component</th><th>What it does</th></tr></thead>
+  <tbody>
+    <tr><td><code>GoldenISOBuilder.exe</code></td><td>The build tool itself — WPF wizard that customises the ISO.</td></tr>
+    <tr><td><code>GIBFirstBoot.exe</code></td><td>A self-contained installer copied into the ISO. Runs on the deployed machine's first login. Installs the bundled apps.</td></tr>
+    <tr><td><code>Autounattend.xml</code></td><td>Generated XML that drives Windows Setup automatically — no user input.</td></tr>
+    <tr><td><code>SetupComplete.cmd</code></td><td>Runs as SYSTEM after Windows install completes — handles password, BitLocker scheduling, computer rename, registry tweaks.</td></tr>
+    <tr><td><code>Enable-BitLocker.ps1</code></td><td>Scheduled task script that enables BitLocker after the TPM stack is ready.</td></tr>
+  </tbody>
+</table>
+
+<h2>Build Pipeline</h2>
+
+<p>Executed by the engine on click of "Build" in Step 8:</p>
+
+<ol>
+  <li>Validate prerequisites (admin rights, DISM, oscdimg)</li>
+  <li>Clean workspace</li>
+  <li>Extract source ISO</li>
+  <li>Export the selected edition to a single-edition WIM</li>
+  <li>Mount the WIM</li>
+  <li>Inject language packs</li>
+  <li>Inject driver folders</li>
+  <li>Replace wallpaper images (with 4K variants)</li>
+  <li>Inject GIBFirstBoot launcher</li>
+  <li>Stage files for Public Desktop and other locations</li>
+  <li>Stage deployment scripts (with EveryLogin or RunOnce trigger)</li>
+  <li>Remove bloatware (provisioned AppX packages)</li>
+  <li>Enable/disable Windows optional features</li>
+  <li>Apply registry tweaks and group policies via offline hive</li>
+  <li>Generate <code>Autounattend.xml</code> + <code>SetupComplete.cmd</code> + <code>Enable-BitLocker.ps1</code></li>
+  <li><strong>Pre-commit validation</strong> — fails the build if any critical check fails</li>
+  <li>Unmount and commit the WIM</li>
+  <li>Rebuild the ISO with <code>oscdimg</code> (UEFI + BIOS bootable)</li>
+  <li>Verify SHA-256 of the output</li>
+</ol>
+
+<!-- ═══════════════════════ 2. FEATURES ═══════════════════════ -->
+<h1>2. Features</h1>
+
+<h3>2.1 ISO Source with Auto-Detection</h3>
+<p><strong>What:</strong> Drop or browse for a Windows 11 ISO. The app analyses it to extract the available editions, supported architectures, and the boot.wim language.</p>
+<p><strong>Advantage:</strong> No need to manually know what's in the ISO — the app reads <code>sources\lang.ini</code> from the mounted ISO to detect the boot language and automatically narrows the language picker to only languages that exist in the ISO. Prevents the <code>0x8007000D</code> boot error caused by language mismatch.</p>
+
+<h3>2.2 ISO Boot Language vs Target OS Language</h3>
+<p><strong>What:</strong> Two separate language pickers in Step 1.</p>
+<table>
+  <thead><tr><th>Setting</th><th>Drives</th><th>Why it matters</th></tr></thead>
+  <tbody>
+    <tr><td>ISO Boot Language</td><td>windowsPE / WinPE — what language Setup itself runs in</td><td>Must match the boot.wim language pack. Auto-detected.</td></tr>
+    <tr><td>Target OS Language</td><td>oobeSystem — what language the <strong>deployed Windows</strong> runs in</td><td>The locale that users actually see after install.</td></tr>
+  </tbody>
+</table>
+<p><strong>Advantage:</strong> Deploy an English Windows from a French ISO (or any other combination). Prevents the <code>0x8007000D</code> boot crash that happens when these are confused with each other.</p>
+
+<h3>2.3 Edition Selection</h3>
+<p><strong>What:</strong> After ISO scan, the app shows every edition inside the WIM with size info (Pro, Home, Enterprise, Education, etc.). Select one radio button to lock the build to that edition.</p>
+<p><strong>Advantage:</strong> Output ISO contains only the chosen edition — smaller file, faster install, no prompt to "Select edition" during Setup. The KMS client key for the selected edition is auto-applied unless an explicit product key is supplied in Step 6.</p>
+
+<h3>2.4 Wallpaper Replacement</h3>
+<p><strong>What:</strong> Drop a JPG/PNG. The engine takes ownership of <code>Windows\Web\Wallpaper\Windows\img0.jpg</code>, <code>img19.jpg</code>, <code>img20.jpg</code> (and their 4K variants) and replaces them with the new image.</p>
+<p><strong>Advantage:</strong> Corporate branding on every deployed desktop without group policy or per-user customisation.</p>
+
+<h3>2.5 Staged Apps (First-Boot Installation)</h3>
+<p><strong>What:</strong> Add <code>.msi</code> or <code>.exe</code> installers with their command-line arguments. The app bundles them into the ISO under <code>C:\GIB\Installers\</code>. On the deployed machine's first login, <code>GIBFirstBoot.exe</code> reads <code>apps.json</code>, installs each app in sequence, tracks progress in <code>state.json</code>, and removes itself when complete.</p>
+<p><strong>Advantages:</strong></p>
+<ul>
+  <li><strong>Resume-on-reboot:</strong> if the user reboots mid-install, installation continues from where it left off (never re-installs already-completed apps).</li>
+  <li>Configurable timeout per app (default 60 minutes, clamped 5–240).</li>
+  <li>Configurable accepted exit codes (default <code>0, 1641, 3010</code> — 1641 and 3010 are "soft reboot required" codes that aren't real failures).</li>
+  <li>No domain join, no MDM enrolment required — apps are baked into the image.</li>
+</ul>
+
+<h3>2.6 Staged Files</h3>
+<p><strong>What:</strong> Add arbitrary files with their destination paths in the image (e.g. drop <code>fr_fr_files.txt</code> to <code>Users\Public\Desktop\</code>).</p>
+<p><strong>Advantage:</strong> Pre-load licence files, configs, shortcuts, helper documents — anything that needs to be on every deployed machine.</p>
+
+<h3>2.7 Deployment Scripts</h3>
+<p><strong>What:</strong> PowerShell scripts staged into <code>C:\Users\Public\Documents\</code> with two trigger modes:</p>
+<table>
+  <thead><tr><th>Trigger</th><th>Behaviour</th></tr></thead>
+  <tbody>
+    <tr><td>EveryLogin</td><td>Runs at every user logon via the Startup folder</td></tr>
+    <tr><td>RunOnce</td><td>Runs once per user via the RunOnce registry key</td></tr>
+  </tbody>
+</table>
+<p><strong>Advantage:</strong> Per-user configuration (keyboard layout, mapped drives, default printer) that runs without admin rights. The script is in <code>Public\Documents</code> so it survives roaming-profile resets.</p>
+
+<h3>2.8 Language Packs (.cab)</h3>
+<p><strong>What:</strong> Add downloaded <code>.cab</code> files from Microsoft. The engine injects each one with <code>DISM /Add-Package</code> while the WIM is mounted.</p>
+<p><strong>Advantage:</strong> Multi-language deployment from a single ISO. Users can switch language in Settings without a separate download.</p>
+
+<h3>2.9 Driver Injection</h3>
+<p><strong>What:</strong> Point to one or more folders containing <code>.inf</code> files. Engine injects them all with <code>DISM /Add-Driver /Recurse</code>.</p>
+<p><strong>Advantage:</strong> Hardware-specific drivers (NIC, GPU, chipset, dock) are pre-installed — no out-of-box driver hunt on the deployed machine, no network dependency for initial connectivity.</p>
+
+<h3>2.10 Bloatware Removal</h3>
+<p><strong>What:</strong> Tick the provisioned AppX packages you want removed (Candy Crush, Xbox, Bing Weather, Solitaire, etc.). Engine runs <code>DISM /Remove-ProvisionedAppxPackage</code> per item.</p>
+<p><strong>Advantage:</strong> Cleaner Start menu for end users, smaller disk footprint, no compliance issues from non-business apps. Removed BEFORE install, so they never appear for any user.</p>
+
+<h3>2.11 BitLocker Auto-Enable</h3>
+<p><strong>What:</strong> Toggle on BitLocker. Choose the drive letter (default <code>C:</code>) and whether to save the recovery key (and to what folder).</p>
+<p><strong>How it works:</strong></p>
+<ul>
+  <li><code>Enable-BitLocker.ps1</code> is staged into the image.</li>
+  <li><code>SetupComplete.cmd</code> registers a scheduled task to run it on the NEXT system startup (+2 minute delay) under SYSTEM with highest privileges.</li>
+  <li>The script waits for the TPM stack to be ready (up to 5 minutes), then runs <code>Enable-BitLocker</code> with <code>-UsedSpaceOnly -SkipHardwareTest -RecoveryPasswordProtector</code>.</li>
+  <li>Recovery key is saved as <code>BitlockerPassword_L&lt;MachineSerial&gt;.txt</code> in the configured folder.</li>
+  <li>A run-once marker prevents re-execution on subsequent boots.</li>
+</ul>
+<p><strong>Advantage:</strong> Full-disk encryption without IT intervention. Recovery key location is dynamic — save it to a shared network path (mapped post-deploy by GPO), to <code>C:\</code> for collection by an inventory script, or skip saving entirely for air-gapped environments.</p>
+
+<h3>2.12 Defender ATP and SMBv1</h3>
+<p><strong>What:</strong> Two switches: enable Microsoft Defender / disable SMBv1.</p>
+<p><strong>Advantage:</strong> Security baseline applied without group policy. SMBv1 disablement closes the WannaCry attack surface that's still enabled by default on stock Windows 11.</p>
+
+<h3>2.13 System Defaults</h3>
+<table>
+  <thead><tr><th>Setting</th><th>What it does</th></tr></thead>
+  <tbody>
+    <tr><td>Dark Mode</td><td>Sets system + apps theme to dark</td></tr>
+    <tr><td>Show File Extensions</td><td>Disables Explorer's hide-known-extensions</td></tr>
+    <tr><td>Show Hidden Files</td><td>Off by default</td></tr>
+    <tr><td>Disable Telemetry</td><td>Sets <code>AllowTelemetry=0</code> in offline hive</td></tr>
+    <tr><td>Enable Hyper-V</td><td>Enables the Hyper-V optional feature</td></tr>
+  </tbody>
+</table>
+<p><strong>Advantage:</strong> Each toggle is one click but maps to multiple registry keys or DISM operations. Applied to the default user template, so EVERY new user gets these settings.</p>
+
+<h3>2.14 Admin Account</h3>
+<p><strong>What:</strong> Set admin username, password, password-never-expires toggle, auto-login toggle. A real-time login preview shows what the OOBE login screen will look like with the wallpaper.</p>
+<p><strong>Advantages:</strong></p>
+<ul>
+  <li>Password is <strong>base64-encoded</strong> in <code>SetupComplete.cmd</code> (never plain-text in the XML or script files).</li>
+  <li>Auto-login uses <code>LogonCount=1</code> (fires exactly once during OOBE, then self-disables).</li>
+  <li>Live password strength meter (4 bars: Very Weak / Weak / Good / Strong) and confirm-password mismatch warning.</li>
+</ul>
+
+<h3>2.15 Custom Registry Entries</h3>
+<p><strong>What:</strong> Add arbitrary registry SET or DELETE operations targeting <code>HKLM\SOFTWARE</code>, <code>HKLM\SYSTEM</code>, or <code>HKCU\Software</code>. Engine writes them via <code>reg.exe</code> while the offline hives are loaded.</p>
+<p><strong>Advantage:</strong> Apply settings that don't have GUI toggles. HKCU writes target the default-user template, so they apply to every new user.</p>
+
+<h3>2.16 Group Policies (ADMX-based)</h3>
+<p><strong>What:</strong> Browse the ADMX library and pick policies (Enabled / Disabled / Not Configured) with values. Engine resolves the registry mapping and writes to the offline hive.</p>
+<p><strong>Advantage:</strong> Apply enterprise policies without joining a domain. Useful for golden images delivered to non-domain machines or for compliance baselines applied before the machine reaches the domain.</p>
+
+<h3>2.17 OOBE Skip Toggle</h3>
+<p><strong>What:</strong> When enabled (default), generates <code>Autounattend.xml</code> for zero-touch install. When disabled, no XML is generated — Windows shows the standard first-boot wizard.</p>
+<p><strong>Advantage:</strong> Build the same ISO for both unattended bulk deployment and interactive single-machine deployment without changing the rest of the configuration.</p>
+
+<h3>2.18 Hardware Compatibility Bypass</h3>
+<p><strong>What:</strong> Built into the windowsPE pass of every generated <code>Autounattend.xml</code>:</p>
+<pre><code>HKLM\SYSTEM\Setup\LabConfig\BypassTPMCheck        = 1
+HKLM\SYSTEM\Setup\LabConfig\BypassSecureBootCheck = 1
+HKLM\SYSTEM\Setup\LabConfig\BypassRAMCheck        = 1</code></pre>
+<p><strong>Advantage:</strong> Windows 11 installs on machines that don't meet the official minimum requirements — older corporate hardware, lab machines, VMs, etc.</p>
+
+<h3>2.19 Upgrade Detection Suppression</h3>
+<p><strong>What:</strong> Adds <code>&lt;UpgradeData&gt;&lt;Upgrade&gt;false&lt;/Upgrade&gt;&lt;WillShowUI&gt;Never&lt;/WillShowUI&gt;&lt;/UpgradeData&gt;</code> to the XML, plus sets <code>DiskConfiguration WillShowUI=Never</code>.</p>
+<p><strong>Advantage:</strong> No "Do you want to upgrade?" prompt when re-deploying a machine that already has Windows. Critical for zero-touch on machines being rebuilt.</p>
+
+<h3>2.20 BypassNRO (No Microsoft Account)</h3>
+<p><strong>What:</strong> The specialize pass runs:</p>
+<pre><code>reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\OOBE" /v BypassNRO /d 1</code></pre>
+<p><strong>Advantage:</strong> OOBE doesn't force the user to sign in with a Microsoft account on an offline machine. Critical for enterprise local-admin-only setups.</p>
+
+<h3>2.21 Computer Rename</h3>
+<p><strong>What:</strong> Set a computer prefix (e.g. <code>LAPTOP-</code>) in Step 6. <code>SetupComplete.cmd</code> runs <code>Rename-Computer</code> using the prefix + the BIOS serial number, then triggers a single reboot to apply the new name.</p>
+<p><strong>Advantage:</strong> Every deployed machine ends up with a unique, deterministic, serial-based name — no manual rename, no random GUIDs, easy asset tracking.</p>
+
+<h3>2.22 Organization Name and Registered Owner</h3>
+<p><strong>What:</strong> Step 6. Written to <code>HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\RegisteredOrganization</code> and <code>\RegisteredOwner</code>.</p>
+<p><strong>Advantage:</strong> Shows in <code>winver.exe</code> and system properties — useful for inventory, software licensing audits.</p>
+
+<h3>2.23 Product Key</h3>
+<p><strong>What:</strong> Optional explicit Windows product key in Step 6. If left blank, the generic KMS client key for the selected edition is used.</p>
+<p><strong>Advantage:</strong> Suppresses the product-key entry screen during install. KMS keys don't activate Windows — OEM UEFI firmware handles activation on devices with embedded keys, or a KMS server activates them on the corporate network.</p>
+
+<h3>2.24 Power Plan, Timezone, OEM Branding</h3>
+<p><strong>What:</strong> Set power plan (Balanced / High Performance), timezone (full Windows timezone list), OEM manufacturer / model / support URL.</p>
+<p><strong>Advantage:</strong> Pre-configured before first user login. The OEM fields appear in Settings → About → Device specifications and Control Panel's System dialog — useful for branding and tying machines to the asset management system.</p>
+
+<h3>2.25 Scheduled Tasks</h3>
+<p><strong>What:</strong> Define tasks with action, trigger (Once / Daily / Weekly / AtLogon / AtStartup), run-as account, highest privileges flag. Engine emits a <code>schtasks /Create</code> command for each into <code>SetupComplete.cmd</code>.</p>
+<p><strong>Advantage:</strong> Bundle ongoing maintenance (log cleanup, certificate renewal, weekly defrag) into the image without separate deployment.</p>
+
+<h3>2.26 Pre-Commit Validation</h3>
+<p><strong>What:</strong> Before the WIM is committed, the engine runs approximately 60 checks across 7 categories (SESSION, AUTOUNATTEND, SETUPCOMPLETE, STAGED FILES, BITLOCKER, DEPLOYMENT SCRIPTS, REGISTRY). Saves both a plain-text and an interactive HTML report to the Output folder. Any FAIL halts the build with the WIM still mounted so the engineer can investigate.</p>
+<p><strong>Advantages:</strong></p>
+<ul>
+  <li>Catches misconfigurations BEFORE the 5–10-minute ISO rebuild.</li>
+  <li>HTML report has an animated donut chart, plain-English section names ("Drive Encryption" instead of "BITLOCKER"), expandable sections, and a clear "Ready to Deploy" verdict.</li>
+  <li>Suitable for handing to managers or auditors who aren't deep-technical.</li>
+</ul>
+
+<h3>2.27 Profile Save/Load</h3>
+<p><strong>What:</strong> Save the full Step 1–6 configuration to a <code>.gibprofile</code> JSON file. Reload it later to reproduce the exact same build.</p>
+<p><strong>Advantage:</strong> Standardise builds across the team. Version-control the profile file in Git. Roll back to an older build configuration in seconds.</p>
+
+<h3>2.28 Build History</h3>
+<p><strong>What:</strong> Sidebar shows previous builds with date, edition, and success/failure colour dot.</p>
+<p><strong>Advantage:</strong> Click a previous build to inspect what was used. Reproduce or troubleshoot historical deployments.</p>
+
+<h3>2.29 GIBFirstBoot Resume-on-Reboot</h3>
+<p><strong>What:</strong> GIBFirstBoot writes itself to the <code>RunOnce</code> registry key BEFORE starting any install. Tracks completed apps in <code>state.json</code>. On reboot, reads <code>state.json</code>, skips completed apps, resumes from where it left off. Only removes itself from <code>RunOnce</code> when ALL apps are confirmed done.</p>
+<p><strong>Advantage:</strong> Hard reboot, power cut, BSOD during install — none of these break the deployment. The machine resumes correctly on next login.</p>
+
+<h3>2.30 Build Settings Persistence</h3>
+<p><strong>What:</strong> Default output and workspace paths, ISO verification, post-build cleanup, WIM compression, sound notifications — saved to <code>%LOCALAPPDATA%\GoldenISOBuilder\settings.json</code>.</p>
+<p><strong>Advantage:</strong> Engineer's preferences persist across app launches and machines (settings file can be copied between workstations).</p>
+
+<h3>2.31 First-Boot UI</h3>
+<p><strong>What:</strong> GIBFirstBoot shows a dark-themed window with one row per app, real-time status (Pending / Installing / Done / Failed), and a status bar. On the deployed machine, the technician sees exactly what's happening — no black screen of mystery.</p>
+<p><strong>Advantage:</strong> During deployment validation, you can watch each app install in real time. Failed apps are visible immediately.</p>
+
+<!-- ═══════════════════════ 3. WIZARD ═══════════════════════ -->
+<h1>3. The 8-Step Wizard</h1>
+
+<table>
+  <thead><tr><th style="width:60px">Step</th><th>Page</th><th>What you configure</th></tr></thead>
+  <tbody>
+    <tr><td><span class="badge badge-step">1</span></td><td>Source &amp; Output</td><td>Source ISO, ISO boot language (auto-detected), target OS language, Windows edition, architecture, output path, workspace path, output filename pattern</td></tr>
+    <tr><td><span class="badge badge-step">2</span></td><td>Assets</td><td>Wallpaper, staged apps (MSI/EXE installers), staged files, language packs (.cab), drivers (folders of .inf), deployment scripts (.ps1)</td></tr>
+    <tr><td><span class="badge badge-step">3</span></td><td>Customizations</td><td>Bloatware checklist, BitLocker, Defender ATP, SMBv1, Dark Mode, Show file extensions, Hidden files, Disable telemetry, Hyper-V, group policies</td></tr>
+    <tr><td><span class="badge badge-step">4</span></td><td>Admin Account</td><td>Username, password (with strength meter), confirm, auto-login toggle, password-never-expires toggle, live login preview</td></tr>
+    <tr><td><span class="badge badge-step">5</span></td><td>Registry Changes</td><td>Custom registry SET/DELETE entries (HKLM\SOFTWARE, HKLM\SYSTEM, HKCU\Software)</td></tr>
+    <tr><td><span class="badge badge-step">6</span></td><td>Advanced Options</td><td>Org name, registered owner, computer prefix, product key, Skip OOBE toggle, auto-logon count, power plan, timezone, OEM branding, optional features, scheduled tasks</td></tr>
+    <tr><td><span class="badge badge-step">7</span></td><td>Review</td><td>Final summary of the configuration. Read-only.</td></tr>
+    <tr><td><span class="badge badge-step">8</span></td><td>Build</td><td>Run the pipeline. Live log + per-step progress. Build report at the end.</td></tr>
+  </tbody>
+</table>
+
+<!-- ═══════════════════════ 4. USE CASES ═══════════════════════ -->
+<h1>4. Use Cases</h1>
+
+<p>Each use case below is presented as a real-world scenario you would encounter as an IT engineer. Follow the steps in the wizard, then verify the outcome. Use cases are grouped by deployment category — start at the one closest to your scenario and adapt.</p>
+
+<div class="uc-category">
+  <div class="uc-cat-eyebrow">Category 4.1</div>
+  <h2 class="uc-cat-title">Standard Enterprise Deployments</h2>
+  <div class="uc-cat-desc">General-purpose office/corporate machines, the bread-and-butter of any IT deployment team.</div>
+</div>
+
+<div class="usecase">
+<div class="usecase-label">Use Case 1</div>
+<h3>Standard Enterprise Deployment (en-GB ISO → en-US Windows)</h3>
+<p><strong>Scenario:</strong> Bulk-deploy 200 corporate laptops. ALE uses the Microsoft EnglishInternational ISO (en-GB boot) but the end-user OS must be en-US.</p>
+
+<h4>Steps</h4>
+<ol>
+  <li><strong>Step 1:</strong> Drop <code>Win11_25H2_EnglishInternational_x64_v2.iso</code><br>
+    ISO Boot Language: <strong>en-GB</strong> (auto-detected) — Target OS Language: <strong>en-US</strong> — Edition: <strong>Windows 11 Pro</strong></li>
+  <li><strong>Step 2:</strong> Add wallpaper, corporate apps, drivers if needed</li>
+  <li><strong>Step 3:</strong> Tick bloatware to remove, enable BitLocker, disable SMBv1</li>
+  <li><strong>Step 4:</strong> Username <code>Administrator</code>, strong password, auto-login enabled</li>
+  <li><strong>Step 5:</strong> Optional custom registry tweaks</li>
+  <li><strong>Step 6:</strong> Org name <code>Alcatel Lucent</code>, computer prefix <code>L</code>, timezone <code>India Standard Time</code>, leave product key blank</li>
+  <li><strong>Step 7:</strong> Review → <strong>Step 8:</strong> Build → flash to USB → deploy</li>
+</ol>
+
+<div class="outcome">
+<p><strong>Outcome:</strong> Boots through Windows Setup with no prompts. First login: Administrator auto-logs in, machine renames to <code>L&lt;SerialNumber&gt;</code>, reboots once to apply the name, BitLocker schedules itself to run on the next boot, apps install via GIBFirstBoot, machine ends up at the desktop fully configured.</p>
+<p><strong>PowerShell needed:</strong> None. Engine generates all required scripts.</p>
+</div>
+</div>
+
+<div class="usecase">
+<div class="usecase-label">Use Case 2</div>
+<h3>Multi-Language Workforce (FR + CN + EN keyboards, EN display default)</h3>
+<p><strong>Scenario:</strong> ALE has French, Chinese, and Indian staff. Each user needs their preferred keyboard layout, but the default display language must be English so IT support can read error messages.</p>
+
+<h4>PowerShell Script — Save as <code>Keyboard_layout.ps1</code></h4>
+<pre><code>$list    = Get-WinUserLanguageList
+$changed = $false
+
+foreach ($tag in @('fr-FR', 'zh-CN')) {
+    if (-not ($list | Where-Object { $_.LanguageTag -eq $tag })) {
+        $list.Add($tag)
+        $changed = $true
+    }
+}
+
+if ($changed) {
+    Set-WinUserLanguageList $list -Force -Confirm:$false
+    Set-WinUILanguageOverride -Language en-US
+}</code></pre>
+
+<h4>Steps</h4>
+<ol>
+  <li><strong>Step 2 → Deployment Scripts:</strong> Add <code>Keyboard_layout.ps1</code>, trigger = <strong>EveryLogin</strong></li>
+  <li>Build and deploy as Use Case 1</li>
+</ol>
+
+<div class="outcome">
+<p><strong>Outcome:</strong></p>
+<ul>
+  <li>All users get <strong>English Windows</strong> by default</li>
+  <li>French users open Settings → Time &amp; language → Language → change display language to <strong>Français (France)</strong> → reboot → permanently French (script doesn't override on subsequent runs)</li>
+  <li>Chinese users do the same with <strong>Chinese (Simplified)</strong></li>
+  <li>Indian users keep English</li>
+  <li>Any user can switch keyboards instantly with Win+Space</li>
+</ul>
+<p><strong>Why the override is needed:</strong> Windows promotes any language with a full pack (fr-FR, zh-CN) over en-US (basic pack only) to the display language position. Without <code>Set-WinUILanguageOverride</code>, every machine ends up in French by default.</p>
+</div>
+</div>
+
+<div class="usecase">
+<div class="usecase-label">Use Case 3</div>
+<h3>BitLocker with Network Key Backup</h3>
+<p><strong>Scenario:</strong> Compliance requires drive encryption with recovery keys archived to a corporate share. The image is deployed offline; keys must be saved locally then copied to the share by a follow-up inventory script.</p>
+
+<h4>Steps</h4>
+<ol>
+  <li><strong>Step 3 → BitLocker:</strong> Toggle ON — Drive letter: <code>C:</code> — Save recovery key: ✓ — Save folder: <code>C:\</code></li>
+  <li>Build and deploy</li>
+</ol>
+
+<h4>Follow-up PowerShell (your inventory script)</h4>
+<pre><code>$serial  = (Get-CimInstance Win32_BIOS).SerialNumber.Trim()
+$keyFile = "C:\BitlockerPassword_L$serial.txt"
+if (Test-Path $keyFile) {
+    Copy-Item $keyFile -Destination "\\corp-share\bitlocker-keys\" -Force
+    Remove-Item $keyFile -Force   # remove local copy after archival
+}</code></pre>
+
+<div class="outcome">
+<p><strong>Outcome:</strong> ~5 minutes after first boot, the scheduled task <code>EnableBitlocker</code> fires as SYSTEM with highest privileges. Script waits for TPM ready, enables BitLocker (used-space-only — fast on fresh install), saves the recovery key as <code>C:\BitlockerPassword_L&lt;Serial&gt;.txt</code>, creates a marker file, deletes the task, and self-removes. Your follow-up script archives the key to the network share.</p>
+</div>
+</div>
+
+<div class="usecase">
+<div class="usecase-label">Use Case 4</div>
+<h3>Image with Pre-Installed Corporate Apps</h3>
+<p><strong>Scenario:</strong> Deploy machines with Acronis Backup, WithSecure AV, Zscaler client, Firefox ESR, Chrome Enterprise, 7-Zip — all installed silently before the user logs in for the first time.</p>
+
+<h4>Steps</h4>
+<p><strong>Step 2 → Staged Apps:</strong> Add each app:</p>
+<table>
+  <thead><tr><th>App</th><th>Type</th><th>Args</th><th>Timeout / Codes</th></tr></thead>
+  <tbody>
+    <tr><td>ABR8.7Workstation.msi</td><td>MSI</td><td><code>/qn /norestart</code></td><td>30 min</td></tr>
+    <tr><td>WithSecureOfflineInstaller.msi</td><td>MSI</td><td><code>/qn /norestart</code></td><td>45 min</td></tr>
+    <tr><td>Zscaler-windows-4.5.0.296-installer-x64.msi</td><td>MSI</td><td><code>/qn /norestart ENROLL=token</code></td><td>20 min</td></tr>
+    <tr><td>Firefox Setup 140.10.1esr.msi</td><td>MSI</td><td><code>/qn /norestart</code></td><td>Exit: 0,3010</td></tr>
+    <tr><td>googlechromestandaloneenterprise64.msi</td><td>MSI</td><td><code>/qn /norestart</code></td><td>15 min</td></tr>
+    <tr><td>7z2601-x64.exe</td><td>EXE</td><td><code>/S</code></td><td>10 min</td></tr>
+  </tbody>
+</table>
+
+<div class="outcome">
+<p><strong>Outcome:</strong> First login: GIBFirstBoot window appears showing all 6 apps as "Pending". Each app installs in sequence with live status updates. Progress tracked in <code>C:\GIB\state.json</code>. If user reboots mid-install, GIBFirstBoot resumes from where it left off. When done, GIBFirstBoot removes itself from RunOnce, schedules <code>C:\GIB\</code> deletion, and closes. Subsequent logins: never runs again. Pre-commit validation confirms all 6 installers are present in <code>WIM\GIB\Installers\</code> before the ISO is built.</p>
+</div>
+</div>
+
+<div class="usecase">
+<div class="usecase-label">Use Case 5</div>
+<h3>Security and Compliance Baseline</h3>
+<p><strong>Scenario:</strong> STIG / corporate security policy requires telemetry off, SMBv1 disabled, Defender enabled, specific group policies applied, registry-level Spotlight ads disabled.</p>
+
+<h4>Steps</h4>
+<ol>
+  <li><strong>Step 3 → Customizations:</strong> ✓ Disable telemetry — ✓ Disable SMBv1 — ✓ Enable Defender ATP</li>
+  <li><strong>Step 3 → Group Policies:</strong> Add ADMX policies:
+    <ul>
+      <li><code>Turn off all Windows spotlight features</code> → Enabled</li>
+      <li><code>Turn off Spotlight collection on Desktop</code> → Enabled</li>
+    </ul>
+  </li>
+  <li><strong>Step 5 → Registry Changes:</strong> Add custom entries:
+    <ul>
+      <li><code>HKCU\Software\Policies\Microsoft\Windows\CloudContent\DisableSpotlightCollectionOnDesktop</code> = DWORD 1</li>
+      <li><code>HKCU\Software\Policies\Microsoft\Windows\CloudContent\DisableWindowsSpotlightFeatures</code> = DWORD 1</li>
+    </ul>
+  </li>
+  <li>Build</li>
+</ol>
+
+<div class="outcome">
+<p><strong>Outcome:</strong> Pre-commit validation confirms every registry value is present in the offline hive. HTML report shows each policy in the "System Settings" section with a green tick. Deployed machines comply with the baseline from first boot — no policy-deployment wait.</p>
+</div>
+</div>
+
+<div class="usecase">
+<div class="usecase-label">Use Case 6</div>
+<h3>OEM Branded Deployment</h3>
+<p><strong>Scenario:</strong> Customer wants Alcatel-Lucent Enterprise branding on every machine — wallpaper, OEM info, and registered organisation.</p>
+
+<h4>Steps</h4>
+<ol>
+  <li><strong>Step 2 → Wallpaper:</strong> Drop the ALE 4K wallpaper (auto-applied to all variants)</li>
+  <li><strong>Step 6 → Advanced:</strong>
+    <ul>
+      <li>Org name: <code>Alcatel-Lucent Enterprise</code></li>
+      <li>Registered owner: <code>IT Department</code></li>
+      <li>OEM Manufacturer: <code>Alcatel-Lucent Enterprise</code></li>
+      <li>OEM Model: <code>Corporate Workstation</code></li>
+      <li>OEM Support URL: <code>https://support.al-enterprise.com</code></li>
+    </ul>
+  </li>
+</ol>
+
+<div class="outcome">
+<p><strong>Outcome:</strong> Wallpaper applied to lock screen + desktop on all monitors (4K-aware). <code>winver.exe</code> shows the org name. Settings → About shows ALE as the OEM. Control Panel → System shows OEM logo (if you also bundle <code>OemLogo.bmp</code> as a staged file).</p>
+</div>
+</div>
+
+<div class="usecase">
+<div class="usecase-label">Use Case 7</div>
+<h3>Hardware Bypass for Older Machines</h3>
+<p><strong>Scenario:</strong> Re-image old corporate laptops that lack TPM 2.0 or have only 4 GB RAM. Standard Windows 11 setup refuses to install.</p>
+
+<h4>Steps</h4>
+<ol>
+  <li>No action needed — TPM, SecureBoot, and RAM checks are bypassed by default in every Autounattend.xml generated by the app</li>
+  <li>Build and deploy normally</li>
+</ol>
+
+<div class="outcome">
+<p><strong>Outcome:</strong> The three <code>LabConfig</code> registry values are written at the start of WinPE. Setup proceeds without the "This PC can't run Windows 11" message. Same image works on TPM 2.0 and non-TPM hardware.</p>
+</div>
+</div>
+
+<div class="usecase">
+<div class="usecase-label">Use Case 8</div>
+<h3>Reusable Build Profile</h3>
+<p><strong>Scenario:</strong> The same Pro configuration is built monthly with the latest ISO + latest app installers. Want to ensure consistency.</p>
+
+<h4>Steps</h4>
+<ol>
+  <li>First build: Configure Steps 1–6, save as <code>ALE_Pro_Monthly.gibprofile</code> via the Save Profile button</li>
+  <li>Next month: Click Load Profile, select the file → all settings restored</li>
+  <li>Update the ISO path and any new app versions</li>
+  <li>Build</li>
+</ol>
+
+<div class="outcome">
+<p><strong>Outcome:</strong> Identical build output every month, parameters version-controllable in Git, no risk of forgotten settings.</p>
+</div>
+</div>
+
+<div class="usecase">
+<div class="usecase-label">Use Case 9</div>
+<h3>Single-Machine Interactive Deployment</h3>
+<p><strong>Scenario:</strong> A standalone test machine where IT wants to manually configure the user account at first boot.</p>
+
+<h4>Steps</h4>
+<ol>
+  <li><strong>Step 6 → Advanced:</strong> Toggle <strong>Skip OOBE = OFF</strong></li>
+  <li>Build</li>
+</ol>
+
+<div class="outcome">
+<p><strong>Outcome:</strong> No Autounattend.xml is generated. The deployed machine runs the standard Windows 11 OOBE wizard — language, region, keyboard, account creation — all asked interactively. All other customisations (apps, wallpaper, drivers, BitLocker) still apply.</p>
+</div>
+</div>
+
+<div class="usecase">
+<div class="usecase-label">Use Case 10</div>
+<h3>Driver Pre-Loading for Specialised Hardware</h3>
+<p><strong>Scenario:</strong> Deployment on a Lenovo dock with a USB Ethernet adapter that Windows doesn't recognise out-of-the-box, breaking network at first boot.</p>
+
+<h4>Steps</h4>
+<ol>
+  <li>Download the Lenovo driver pack — extract to <code>D:\Drivers\LenovoDock\</code></li>
+  <li><strong>Step 2 → Drivers:</strong> Add the folder</li>
+  <li>Build</li>
+</ol>
+
+<div class="outcome">
+<p><strong>Outcome:</strong> Engine runs <code>DISM /Add-Driver /Driver:"D:\Drivers\LenovoDock" /Recurse</code> against the WIM. All <code>.inf</code> files are injected. After deployment, the dock works the moment Windows boots — network up, GIBFirstBoot can reach licence servers, etc.</p>
+</div>
+</div>
+
+<div class="usecase">
+<div class="usecase-label">Use Case 11</div>
+<h3>Scheduled Maintenance Task</h3>
+<p><strong>Scenario:</strong> Every Friday at 22:00, machines should run a temp-file cleanup script.</p>
+
+<h4>Steps</h4>
+<ol>
+  <li><strong>Step 6 → Scheduled Tasks:</strong> Add a task:
+    <ul>
+      <li>Name: <code>Friday Cleanup</code></li>
+      <li>Action path: <code>C:\ProgramData\Scripts\cleanup.ps1</code></li>
+      <li>Trigger type: Weekly — Days: Friday — Start time: 22:00</li>
+      <li>Run as: SYSTEM — Run with highest privileges: ✓</li>
+    </ul>
+  </li>
+  <li><strong>Step 2 → Staged Files:</strong> Add <code>cleanup.ps1</code> to <code>C:\ProgramData\Scripts\</code></li>
+  <li>Build</li>
+</ol>
+
+<div class="outcome">
+<p><strong>Outcome:</strong> Task is registered by <code>SetupComplete.cmd</code> on every deployed machine. Cleanup runs unattended every Friday night.</p>
+</div>
+</div>
+
+<!-- ─────────────── CATEGORY 4.2 ─────────────── -->
+<div class="uc-category">
+  <div class="uc-cat-eyebrow">Category 4.2</div>
+  <h2 class="uc-cat-title">Apps, Hardware &amp; Branding</h2>
+  <div class="uc-cat-desc">Images that go beyond defaults — pre-loading specific software stacks, injecting hardware drivers, and stamping corporate identity directly into the OS.</div>
+</div>
+
+<div class="usecase">
+<div class="usecase-label">Use Case 12</div>
+<h3>Developer Workstation — Code-Ready Out of the Box</h3>
+<p><strong>Scenario:</strong> The software engineering team receives new Dell XPS laptops. Each machine must arrive with VS Code, Git, Docker Desktop, Windows Terminal, and WSL2 enabled — fully configured and licence-free — before the developer even logs in.</p>
+
+<h4>Steps</h4>
+<ol>
+  <li><strong>Step 2 — Assets:</strong> Add the EXE/MSI installers for VS Code (user-level install with <code>/VERYSILENT /MERGETASKS=addcontextmenufiles,addcontextmenufolders</code>), Git (<code>/SILENT /NORESTART</code>), and Docker Desktop (<code>--quiet --accept-license</code>). Add Windows Terminal from the bundled MSIX.</li>
+  <li><strong>Step 2 — Features:</strong> Enable <code>Microsoft-Windows-Subsystem-Linux</code> and <code>VirtualMachinePlatform</code> optional features.</li>
+  <li><strong>Step 3 — Registry:</strong> Set <code>HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced → HideFileExt = 0</code> and <code>ShowHidden = 1</code> (dev-friendly Explorer defaults).</li>
+  <li><strong>Step 4 — Admin Account:</strong> Set a temporary build admin password; developers will reset via IT on first login.</li>
+  <li><strong>Step 6 — Build:</strong> Run the pipeline.</li>
+</ol>
+
+<h4>PowerShell snippet — VS Code silent install (used as custom args)</h4>
+<pre><code>VSCodeSetup-x64.exe /VERYSILENT /NORESTART /MERGETASKS="!runcode,addcontextmenufiles,addcontextmenufolders,associatewithfiles,addtopath"</code></pre>
+
+<p><strong>Outcome:</strong> Developer unboxes the laptop, logs in, opens Windows Terminal — Git, VS Code, and Docker Desktop are already on the PATH. WSL2 is ready to install a distro with one command. Zero IT desk visits.</p>
+</div>
+</div>
+
+<div class="usecase">
+<div class="usecase-label">Use Case 13</div>
+<h3>Corporate Wallpaper &amp; OEM Branding Lock-Down</h3>
+<p><strong>Scenario:</strong> The marketing team requires that all company laptops display the official corporate wallpaper and show "Alcatel-Lucent Enterprise" as the manufacturer in System Properties, with the support portal URL. End-users must not be able to replace the wallpaper.</p>
+
+<h4>Steps</h4>
+<ol>
+  <li><strong>Step 2 — Wallpaper:</strong> Browse to the approved 4K JPEG brand wallpaper. The engine will overwrite <code>img0.jpg</code>, <code>img19.jpg</code>, <code>img20.jpg</code>, and the 4K variant in the WIM automatically.</li>
+  <li><strong>Step 5 — Advanced:</strong> Fill in OEM Manufacturer = <code>Alcatel-Lucent Enterprise</code>, OEM Model = <code>Enterprise Workstation</code>, Support URL = <code>https://support.al-enterprise.com</code>.</li>
+  <li><strong>Step 4 — Registry (custom entries):</strong> Add <code>HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System → Wallpaper = C:\Windows\Web\Wallpaper\Windows\img0.jpg</code> and <code>WallpaperStyle = 10</code> to prevent users changing the wallpaper via Settings.</li>
+  <li><strong>Step 6 — Build.</strong></li>
+</ol>
+
+<p><strong>Outcome:</strong> Every deployed machine shows the brand wallpaper, "Alcatel-Lucent Enterprise" appears in System Properties, and the wallpaper Settings panel is locked. Consistent corporate identity from day one.</p>
+</div>
+</div>
+
+<!-- ─────────────── CATEGORY 4.3 ─────────────── -->
+<div class="uc-category">
+  <div class="uc-cat-eyebrow">Category 4.3</div>
+  <h2 class="uc-cat-title">Security &amp; Compliance</h2>
+  <div class="uc-cat-desc">Images built to satisfy auditors — CIS Benchmark hardening, mandatory BitLocker, USB lockdown, air-gapped offline deployments, and HIPAA/ISO-27001-aligned baselines.</div>
+</div>
+
+<div class="usecase">
+<div class="usecase-label">Use Case 14</div>
+<h3>Finance Department — Compliance Hardened Image</h3>
+<p><strong>Scenario:</strong> The finance team handles payment data. The security team requires CIS Benchmark Level 1 settings, SMBv1 disabled, telemetry blocked at OS level, BitLocker mandatory, and USB mass storage blocked — all enforced before the user even creates a password.</p>
+
+<h4>Steps</h4>
+<ol>
+  <li><strong>Step 3 — Security:</strong> Enable <em>Disable SMBv1</em>, <em>Disable Telemetry</em>, and <em>Enable Windows Defender ATP</em> toggles.</li>
+  <li><strong>Step 3 — Bloatware:</strong> Remove all consumer apps (Xbox, Solitaire, Weather, etc.) — reduces attack surface.</li>
+  <li><strong>Step 3 — Group Policy:</strong> Add Computer policy <code>HKLM\SYSTEM\CurrentControlSet\Services\USBSTOR → Start = 4</code> (disables USB mass storage driver).</li>
+  <li><strong>Step 3 — Group Policy:</strong> Add <code>HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU → NoAutoUpdate = 0, AUOptions = 4</code> (auto-download and schedule install).</li>
+  <li><strong>Step 5 — Advanced:</strong> Enable BitLocker. Set the recovery key save path to a secure network share (<code>\\fileserver\BitLockerKeys\</code>).</li>
+  <li><strong>Step 6 — Build.</strong></li>
+</ol>
+
+<p><strong>Outcome:</strong> Every finance machine encrypts its drive at first boot, USB sticks are silently blocked at OS level, and all CIS-aligned registry settings are baked in before first login. Compliance audit evidence is the BitLocker recovery key log and the validation report.</p>
+</div>
+</div>
+
+<div class="usecase">
+<div class="usecase-label">Use Case 15</div>
+<h3>Air-Gapped / Offline-Only Deployment</h3>
+<p><strong>Scenario:</strong> A secure R&amp;D lab has no internet access. All software must be bundled inside the ISO. The machine must never attempt Windows Update, must not phone home, and must have all required tools ready without ever touching the network.</p>
+
+<h4>Steps</h4>
+<ol>
+  <li><strong>Step 2 — Assets:</strong> Add every required installer as a staged app. Because there is no internet, include offline redistributables (VC++ Redist, .NET Desktop Runtime) that would normally download silently.</li>
+  <li><strong>Step 3 — Security:</strong> Enable <em>Disable Telemetry</em>. This sets the telemetry registry to Security (0) — minimum allowed.</li>
+  <li><strong>Step 3 — Group Policy:</strong> Add <code>HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU → NoAutoUpdate = 1</code> (completely disables Windows Update).</li>
+  <li><strong>Step 3 — Group Policy:</strong> Add <code>HKLM\SOFTWARE\Policies\Microsoft\Windows\DataCollection → AllowTelemetry = 0</code>.</li>
+  <li><strong>Step 5 — OOBE:</strong> Enable Skip OOBE, disable auto-logon (the lab has dedicated user accounts). Set timezone to the lab's local timezone.</li>
+  <li><strong>Step 6 — Build.</strong></li>
+</ol>
+
+<p><strong>Outcome:</strong> Machines in the air-gapped lab boot, install all software from the bundled ISO, and never attempt to reach the internet. Windows Update and telemetry are silenced at policy level — even if a user manually visits Settings, the options are greyed out.</p>
+</div>
+</div>
+
+<!-- ─────────────── CATEGORY 4.4 ─────────────── -->
+<div class="uc-category">
+  <div class="uc-cat-eyebrow">Category 4.4</div>
+  <h2 class="uc-cat-title">Specialised Role Images</h2>
+  <div class="uc-cat-desc">Tailored builds for specific job functions — helpdesk agents, CI/CD build servers, reception desks — where the OS configuration is part of the role, not an afterthought.</div>
+</div>
+
+<div class="usecase">
+<div class="usecase-label">Use Case 16</div>
+<h3>Helpdesk Agent Workstation</h3>
+<p><strong>Scenario:</strong> Tier-1 support agents need a standard desktop pre-loaded with remote support tools (TeamViewer Host, AnyDesk, Sysinternals Suite), a custom wallpaper showing the internal helpdesk extension, and shortcuts to the ticketing portal on the Public Desktop.</p>
+
+<h4>Steps</h4>
+<ol>
+  <li><strong>Step 2 — Wallpaper:</strong> Use a branded wallpaper with the IT Helpdesk phone number and portal URL embedded as text in the image (created in Photoshop beforehand).</li>
+  <li><strong>Step 2 — Apps:</strong> Stage TeamViewer Host, AnyDesk, and Sysinternals Suite installer. For Sysinternals (a ZIP), use a deployment script to unzip and add to PATH instead of the app stage.</li>
+  <li><strong>Step 2 — Public Desktop:</strong> Add a <code>Helpdesk Portal.url</code> shortcut file pointing to the ticketing system URL — it lands on every user's desktop on first login.</li>
+  <li><strong>Step 2 — Deployment Scripts:</strong> Add a script that pins the ticketing portal to the taskbar and sets the default browser to the approved browser.</li>
+  <li><strong>Step 6 — Build.</strong></li>
+</ol>
+
+<p><strong>Outcome:</strong> A helpdesk agent sits at any machine built from this ISO and immediately has all their tools, the ticketing portal one click away, and the support number visible on the wallpaper — no manual setup required.</p>
+</div>
+</div>
+
+<div class="usecase">
+<div class="usecase-label">Use Case 17</div>
+<h3>CI/CD Build Server Image</h3>
+<p><strong>Scenario:</strong> DevOps needs Windows build agents for Azure Pipelines. Each server must have the Windows SDK, .NET 8 SDK, Git, Node.js, and the Azure Pipelines agent installed — and must be configured for optimal performance (no screensaver, high-performance power plan, pagefile on a dedicated drive).</p>
+
+<h4>Steps</h4>
+<ol>
+  <li><strong>Step 2 — Apps:</strong> Stage .NET 8 SDK (<code>/quiet /norestart</code>), Git (<code>/SILENT</code>), Node.js (<code>/qn /norestart</code>), and the Azure Pipelines agent ZIP (handled by a deployment script).</li>
+  <li><strong>Step 2 — Features:</strong> Enable <code>NetFx3</code> (some SDK tools require .NET Framework 3.5).</li>
+  <li><strong>Step 3 — Bloatware:</strong> Remove all consumer / UWP apps — a build server has no interactive users.</li>
+  <li><strong>Step 3 — Group Policy:</strong> Add <code>HKLM\SYSTEM\CurrentControlSet\Control\Power → HibernateEnabled = 0</code>.</li>
+  <li><strong>Step 5 — Power Plan:</strong> Select <em>High Performance</em>.</li>
+  <li><strong>Step 4 — Auto-Logon:</strong> Enable auto-logon with the build agent service account so the agent starts on boot without human intervention.</li>
+  <li><strong>Step 2 — Deployment Script:</strong> Add <code>Register-PipelinesAgent.ps1</code> that unzips the agent, configures the service with the PAT token, and starts the service.</li>
+  <li><strong>Step 6 — Build.</strong></li>
+</ol>
+
+<p><strong>Outcome:</strong> Spin up a VM from this ISO, it auto-logs in, the deployment script registers the Azure Pipelines agent, and within 5 minutes the machine appears online in the Azure DevOps agent pool — ready to accept build jobs. No RDP, no manual steps.</p>
+</div>
+</div>
+
+<!-- ─────────────── CATEGORY 4.5 ─────────────── -->
+<div class="uc-category">
+  <div class="uc-cat-eyebrow">Category 4.5</div>
+  <h2 class="uc-cat-title">Shared &amp; Industry-Specific Deployments</h2>
+  <div class="uc-cat-desc">Multi-user, kiosk, and vertical-market scenarios — manufacturing floors, education labs, public libraries, and demo machines — where the OS must be opinionated about who can do what.</div>
+</div>
+
+<div class="usecase">
+<div class="usecase-label">Use Case 18</div>
+<h3>Manufacturing Floor Terminal</h3>
+<p><strong>Scenario:</strong> Industrial PCs on a production line run a bespoke MES (Manufacturing Execution System) application. The OS must auto-log in to a <code>LineOperator</code> account, launch the MES on startup, prevent access to anything else, and display the plant manager's OEM branding in System Properties.</p>
+
+<h4>Steps</h4>
+<ol>
+  <li><strong>Step 4 — Admin Account:</strong> Username <code>LineOperator</code>, strong password, auto-logon enabled, password never expires.</li>
+  <li><strong>Step 2 — Apps:</strong> Stage the MES client installer (<code>/S /NORESTART</code>).</li>
+  <li><strong>Step 2 — Deployment Script:</strong> Add a startup script that launches the MES in kiosk mode and blocks Task Manager via Group Policy.</li>
+  <li><strong>Step 3 — Group Policy:</strong> Add <code>HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System → DisableTaskMgr = 1</code> to prevent operator access to the desktop.</li>
+  <li><strong>Step 5 — OEM Branding:</strong> Set Manufacturer to the plant name, Model to the machine station ID, Support URL to the internal maintenance portal.</li>
+  <li><strong>Step 5 — Power Plan:</strong> High Performance. Also add a registry entry to disable screen lock: <code>HKCU\Control Panel\Desktop → ScreenSaveActive = 0</code>.</li>
+  <li><strong>Step 6 — Build.</strong></li>
+</ol>
+
+<p><strong>Outcome:</strong> The terminal boots directly into the MES application. The operator cannot exit to the desktop or access Task Manager. If the machine needs maintenance, the plant manager can identify it via the OEM branding in System Properties.</p>
+</div>
+</div>
+
+<div class="usecase">
+<div class="usecase-label">Use Case 19</div>
+<h3>University / Education Lab</h3>
+<p><strong>Scenario:</strong> A university computer lab used by students from 40 countries needs Windows in English as the display language, but with French, Chinese, Arabic, and Spanish available as selectable keyboard layouts. Lab-specific apps (MATLAB, AutoCAD LT, SPSS) must be pre-installed, and students must not be able to install software.</p>
+
+<h4>Steps</h4>
+<ol>
+  <li><strong>Step 1 — ISO Language:</strong> Select an <em>en-GB</em> source ISO. Set Target OS Language to <em>en-GB</em>.</li>
+  <li><strong>Step 2 — Apps:</strong> Stage MATLAB Runtime installer, AutoCAD LT (<code>/qn TRANSFORMS=acad.mst</code>), and SPSS Statistics (<code>/s /v/qn</code>).</li>
+  <li><strong>Step 2 — Deployment Scripts:</strong> Add the <code>Keyboard_layout.ps1</code> script (set as a logon script) that adds fr-FR, zh-CN, ar-SA, and es-ES keyboard options without changing the display language.</li>
+  <li><strong>Step 3 — Group Policy:</strong> Add <code>HKLM\SOFTWARE\Policies\Microsoft\Windows\Installer → DisableMSI = 1</code> to prevent student software installs.</li>
+  <li><strong>Step 3 — Bloatware:</strong> Remove gaming and entertainment apps.</li>
+  <li><strong>Step 6 — Build.</strong></li>
+</ol>
+
+<p><strong>Outcome:</strong> Students sit down at any lab PC, see Windows in English, and can switch to their preferred keyboard layout from the system tray. MATLAB, AutoCAD, and SPSS are already installed. Students cannot install anything new. Language switches survive reboot.</p>
+</div>
+</div>
+
+<div class="usecase">
+<div class="usecase-label">Use Case 20</div>
+<h3>Public Library / Shared Kiosk</h3>
+<p><strong>Scenario:</strong> A public library needs 30 PCs that reset to a clean state between patrons. The machine must auto-log in to a restricted <code>LibraryGuest</code> account with no password, only allow approved websites, and look professional with the library's branding. Any files saved to the desktop must be wiped on logout.</p>
+
+<h4>Steps</h4>
+<ol>
+  <li><strong>Step 4 — Admin Account:</strong> Username <code>LibraryAdmin</code>, strong admin password. Auto-logon to <code>LibraryGuest</code> is handled by a separate local account (set up via deployment script on first boot).</li>
+  <li><strong>Step 2 — Wallpaper:</strong> Library branded wallpaper.</li>
+  <li><strong>Step 2 — Deployment Scripts:</strong> Add <code>CreateGuestAccount.ps1</code> — creates a passwordless <code>LibraryGuest</code> account, sets auto-logon to it, and schedules a <code>CleanupOnLogoff.ps1</code> task that clears Desktop, Downloads, and Temp on every logoff.</li>
+  <li><strong>Step 3 — Group Policy:</strong> Add <code>HKCU\SOFTWARE\Policies\Microsoft\Edge → RestrictSigninToPattern</code> and <code>ManagedSearchEngines</code> to lock the browser to approved sites.</li>
+  <li><strong>Step 3 — Bloatware:</strong> Remove all non-browser apps. Leave only Edge.</li>
+  <li><strong>Step 6 — Build.</strong></li>
+</ol>
+
+<p><strong>Outcome:</strong> The library PC boots, auto-logs into the guest account, and shows a clean branded desktop with only the browser. When the patron closes their session, all files are automatically cleaned up. The library IT team can always log in as <code>LibraryAdmin</code> for maintenance.</p>
+</div>
+</div>
+
+<!-- ─────────────── CATEGORY 4.6 ─────────────── -->
+<div class="uc-category">
+  <div class="uc-cat-eyebrow">Category 4.6</div>
+  <h2 class="uc-cat-title">Localisation, Virtual &amp; Automation</h2>
+  <div class="uc-cat-desc">Advanced scenarios — VDI master images, multi-language international rollouts, multi-edition pipelines, and demo environments — that leverage the full automation depth of the platform.</div>
+</div>
+
+<div class="usecase">
+<div class="usecase-label">Use Case 21</div>
+<h3>VDI Master Image (Citrix / VMware Horizon)</h3>
+<p><strong>Scenario:</strong> The virtualisation team needs a Windows 11 master image for Citrix Virtual Apps &amp; Desktops. The image must be stripped of all unnecessary services and animations to minimise CPU/RAM per session, have the pagefile set to a fixed size, and include the Citrix VDA agent pre-installed.</p>
+
+<h4>Steps</h4>
+<ol>
+  <li><strong>Step 3 — Bloatware:</strong> Remove all UWP apps — virtual desktop users access apps via published desktops, not the Start menu.</li>
+  <li><strong>Step 3 — Features:</strong> Disable <code>WindowsMediaPlayer</code>, <code>PrintToPDFServices</code>, and <code>XPS-Viewer</code>.</li>
+  <li><strong>Step 3 — Registry (VDI optimisations):</strong> Add the following entries:
+    <ul>
+      <li><code>HKLM\SYSTEM\CurrentControlSet\Services\WSearch → Start = 4</code> (disable Windows Search indexer)</li>
+      <li><code>HKLM\SYSTEM\CurrentControlSet\Services\SysMain → Start = 4</code> (disable Superfetch)</li>
+      <li><code>HKLM\SYSTEM\CurrentControlSet\Services\DiagTrack → Start = 4</code> (disable Connected User Experiences)</li>
+      <li><code>HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects → VisualFXSetting = 2</code> (adjust for best performance)</li>
+    </ul>
+  </li>
+  <li><strong>Step 2 — Apps:</strong> Stage Citrix VDA installer (<code>/quiet /norestart /components VDA /controllers "ddc.corp.local" /enable_hdx_ports /optimize</code>).</li>
+  <li><strong>Step 5 — Power Plan:</strong> High Performance.</li>
+  <li><strong>Step 5 — Advanced:</strong> Set a fixed pagefile size via deployment script to avoid dynamic expansion under load.</li>
+  <li><strong>Step 6 — Build.</strong></li>
+</ol>
+
+<p><strong>Outcome:</strong> The VDI master image hosts 15–20% more concurrent sessions than an unoptimised baseline. Citrix VDA registers automatically on first boot. The Citrix administrator can immediately take a snapshot and publish it as a machine catalogue.</p>
+</div>
+</div>
+
+<div class="usecase">
+<div class="usecase-label">Use Case 22</div>
+<h3>Multi-Language International Office Rollout</h3>
+<p><strong>Scenario:</strong> A global rollout covering the UK office (English), Paris office (French display language), and Shanghai office (Chinese display language). The IT team wants one base process, three ISOs — built from the same wizard profile but with different Target OS Language settings each time.</p>
+
+<h4>Steps (repeated 3 times, changing only the language setting)</h4>
+<ol>
+  <li><strong>Step 1 — ISO Boot Language:</strong> Use the same <em>en-GB</em> multi-language source ISO (contains en-GB, fr-FR, zh-CN language packs).</li>
+  <li><strong>Step 1 — Target OS Language:</strong> Set to <em>en-GB</em> for UK, <em>fr-FR</em> for Paris, <em>zh-CN</em> for Shanghai.</li>
+  <li><strong>Step 2–5:</strong> Identical settings (apps, security, admin account) across all three — load the same <code>.gibprofile</code> each time and change only the Target OS Language.</li>
+  <li><strong>Step 5 — Timezone:</strong> <em>GMT Standard Time</em> for UK, <em>Romance Standard Time</em> for Paris, <em>China Standard Time</em> for Shanghai.</li>
+  <li><strong>Step 5 — Output Filename:</strong> Use a descriptive name such as <code>GoldenImage_Pro_en-GB</code>, <code>GoldenImage_Pro_fr-FR</code>, <code>GoldenImage_Pro_zh-CN</code>.</li>
+  <li><strong>Step 6 — Build</strong> each variant.</li>
+</ol>
+
+<p><strong>Outcome:</strong> Three ISOs — each identical in apps and security posture, but with the right display language and timezone for each office. Machines in Paris boot in French; in Shanghai, in Chinese. One profile, three builds, zero manual language configuration after deployment.</p>
+</div>
+</div>
+
+<div class="usecase">
+<div class="usecase-label">Use Case 23</div>
+<h3>Product Demo Machine — Always-Ready Showcase</h3>
+<p><strong>Scenario:</strong> The pre-sales team takes demo laptops to customer meetings. The machine must boot to a polished desktop showing the product demo environment, with all demo apps open at startup, a clean brand wallpaper, no distracting notifications or update prompts, and a demo user account with a blank memorable password.</p>
+
+<h4>Steps</h4>
+<ol>
+  <li><strong>Step 4 — Admin Account:</strong> Username <code>Demo</code>, password <code>demo1234</code> (memorable for the sales team), auto-logon enabled, password never expires.</li>
+  <li><strong>Step 2 — Wallpaper:</strong> High-resolution product marketing wallpaper.</li>
+  <li><strong>Step 2 — Apps:</strong> Stage all demo application installers.</li>
+  <li><strong>Step 2 — Deployment Scripts:</strong> Add <code>SetupDemoEnv.ps1</code> that pins demo apps to the taskbar, disables Action Center, and adds demo apps to the Startup folder.</li>
+  <li><strong>Step 3 — Security:</strong> Enable <em>Disable Telemetry</em> (no pop-ups about data collection). Disable Windows Update via Group Policy to prevent mid-demo update reboots.</li>
+  <li><strong>Step 3 — Bloatware:</strong> Remove all non-demo apps to keep the Start menu clean.</li>
+  <li><strong>Step 5 — OOBE:</strong> Skip OOBE, enable auto-logon.</li>
+  <li><strong>Step 6 — Build.</strong></li>
+</ol>
+
+<p><strong>Outcome:</strong> The sales engineer powers on the laptop, it boots directly to a polished desktop with all demo apps ready, no update nags, no telemetry consent dialogs. The customer sees a professional, product-focused environment within 60 seconds of power-on.</p>
+</div>
+</div>
+
+<div class="usecase">
+<div class="usecase-label">Use Case 24</div>
+<h3>Automated Multi-Edition Pipeline (Home / Pro / Enterprise)</h3>
+<p><strong>Scenario:</strong> A large organisation licences Windows in three tiers: Home for frontline workers, Pro for knowledge workers, and Enterprise for power users and IT staff. The IT team needs three ISO variants from the same source, each exporting a different edition, but sharing the same hardening, apps, and admin configuration.</p>
+
+<h4>Steps (one saved profile, three runs)</h4>
+<ol>
+  <li>Build the full wizard configuration once — security, apps, registry, admin account, all shared settings.</li>
+  <li>Save the profile as <code>Base_Config.gibprofile</code> using <em>File → Save Profile</em>.</li>
+  <li><strong>Run 1 — Home:</strong> Load <code>Base_Config.gibprofile</code>. Step 1 → Target Edition = <em>Home</em>. Step 5 → Output filename = <code>GoldenImage_Home_v1</code>. Build.</li>
+  <li><strong>Run 2 — Pro:</strong> Load <code>Base_Config.gibprofile</code>. Step 1 → Target Edition = <em>Pro</em>. Step 5 → Output filename = <code>GoldenImage_Pro_v1</code>. Build.</li>
+  <li><strong>Run 3 — Enterprise:</strong> Load <code>Base_Config.gibprofile</code>. Step 1 → Target Edition = <em>Education</em> or <em>Enterprise</em>. Step 5 → Output filename = <code>GoldenImage_Ent_v1</code>. Add additional Enterprise-only group policies (AppLocker, DirectAccess) before building.</li>
+</ol>
+
+<h4>Pro tip</h4>
+<p>Use the <em>Quick Build</em> button on the Home page between runs — it re-runs the last profile without going through all 8 wizard steps. Change only the edition and filename, then click Build.</p>
+
+<p><strong>Outcome:</strong> Three ISO files, one source, one IT team. Each edition inherits the full security baseline and app stack. Home machines get standard hardening; Enterprise machines get additional policies on top. Consistent, auditable, and fast to re-build when the base config changes.</p>
+</div>
+</div>
+
+<!-- ═══════════════════════ 5. VALIDATION ═══════════════════════ -->
+<h1>5. Validation Report Interpretation</h1>
+
+<p>After every build, two reports are saved to your output folder:</p>
+<ul>
+  <li><code>ValidationReport_&lt;timestamp&gt;.txt</code> — plain text for archives or pasting into tickets</li>
+  <li><code>ValidationReport_&lt;timestamp&gt;.html</code> — interactive HTML with donut chart, expandable sections, colour-coded status</li>
+</ul>
+
+<h3>Reading the HTML report</h3>
+<table>
+  <thead><tr><th>Element</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td>Health Score (gold ring)</td><td>% of checks that passed. 100% = nothing to action.</td></tr>
+    <tr><td>Stat cards (green/amber/red)</td><td>Pass / Warn / Fail counts</td></tr>
+    <tr><td>Verdict banner</td><td>"Ready to Deploy" (green) / warnings (amber) / "Build Halted" (red, pulsing)</td></tr>
+    <tr><td>Section cards</td><td>Plain English names: "Windows Setup Script", "Drive Encryption", "Bundled Software &amp; Files", etc.</td></tr>
+    <tr><td>Each row</td><td>Green ✓ / Amber ! / Red ✕ with the technical detail underneath in monospace</td></tr>
+  </tbody>
+</table>
+
+<p>Sections with failures or warnings expand automatically; passed sections are collapsed for brevity. Click a section header to toggle.</p>
+
+<h3>Common warnings that are safe to ignore</h3>
+<table>
+  <thead><tr><th>Warning</th><th>Why it's safe</th></tr></thead>
+  <tbody>
+    <tr><td><code>Keyboard_layout.ps1 referenced</code> / <code>not in Startup folder</code></td><td>By design — the script runs from <code>Public\Documents</code> via EveryLogin trigger</td></tr>
+    <tr><td><code>Custom SET ... data check inconclusive</code></td><td>The registry key IS present (value confirmed in the output) — validator just can't compare because the expected value was empty string</td></tr>
+    <tr><td><code>img20.jpg not present in this Windows build, skipping</code></td><td>Not all Win11 builds ship every wallpaper variant — <code>img0.jpg</code> and <code>img19.jpg</code> were replaced successfully</td></tr>
+  </tbody>
+</table>
+
+<!-- ═══════════════════════ 6. QUICK REFERENCE ═══════════════════════ -->
+<h1>6. Quick Reference — Key File Locations</h1>
+
+<table>
+  <thead><tr><th style="width:35%">What</th><th>Where</th></tr></thead>
+  <tbody>
+    <tr><td>Application</td><td><code>...\GoldenISOBuilder\bin\x64\Release\net8.0-windows10.0.17763.0\GoldenISOBuilder.exe</code></td></tr>
+    <tr><td>App settings</td><td><code>%LOCALAPPDATA%\GoldenISOBuilder\settings.json</code></td></tr>
+    <tr><td>Crash log</td><td><code>%LOCALAPPDATA%\GoldenISOBuilder\crash.log</code></td></tr>
+    <tr><td>Build log (per build)</td><td><code>&lt;OutputPath&gt;\build-&lt;timestamp&gt;.log</code></td></tr>
+    <tr><td>Validation reports</td><td><code>&lt;OutputPath&gt;\ValidationReport_&lt;timestamp&gt;.txt</code> and <code>.html</code></td></tr>
+    <tr><td>GIBFirstBoot on deployed machine</td><td><code>C:\GIB\GIBFirstBoot.exe</code></td></tr>
+    <tr><td>App manifest</td><td><code>C:\GIB\apps.json</code></td></tr>
+    <tr><td>Install state</td><td><code>C:\GIB\state.json</code></td></tr>
+    <tr><td>BitLocker script</td><td><code>C:\Windows\Setup\Scripts\Enable-BitLocker.ps1</code></td></tr>
+    <tr><td>BitLocker log</td><td><code>C:\Windows\Setup\Logs\Bitlocker.log</code></td></tr>
+    <tr><td>BitLocker recovery key</td><td><code>&lt;configured folder&gt;\BitlockerPassword_L&lt;Serial&gt;.txt</code></td></tr>
+    <tr><td>Deployment scripts</td><td><code>C:\Users\Public\Documents\*.ps1</code></td></tr>
+    <tr><td>Autounattend (on ISO root)</td><td><code>&lt;ISO&gt;\Autounattend.xml</code></td></tr>
+    <tr><td>Unattend (inside WIM)</td><td><code>&lt;C:&gt;\Windows\Panther\unattend.xml</code></td></tr>
+    <tr><td>SetupComplete log</td><td><code>C:\Windows\Setup\Scripts\setupcomplete.log</code></td></tr>
+  </tbody>
+</table>
+
+<!-- ═══════════════════════ 7. TROUBLESHOOTING ═══════════════════════ -->
+<h1>7. Troubleshooting Checklist</h1>
+
+<table>
+  <thead><tr><th style="width:38%">Symptom</th><th>First check</th></tr></thead>
+  <tbody>
+    <tr><td><code>0x8007000D</code> at boot</td><td>Step 1 ISO Boot Language ≠ ISO's boot.wim language. Should be auto-detected — verify the banner shows "Auto-detected from ISO".</td></tr>
+    <tr><td>"Did you try to upgrade?" prompt</td><td>Already suppressed in current builds via <code>&lt;UpgradeData&gt;</code> + <code>DiskConfiguration WillShowUI=Never</code>. If still appearing, the ISO was built with an older version — rebuild.</td></tr>
+    <tr><td>BitLocker scheduled task never runs</td><td>Check <code>/DELAY</code> value — must be <code>0000:02</code> (HHHH:MM = 2 minutes), not <code>0002:00</code> (= 2 hours). Already correct in current builds.</td></tr>
+    <tr><td>BitLocker recovery key missing</td><td>Check <code>C:\Windows\Setup\Logs\Bitlocker.log</code> on the deployed machine. TPM may not have become ready within 5 minutes.</td></tr>
+    <tr><td>Apps not installing on first boot</td><td>Verify <code>C:\GIB\GIBFirstBoot.exe</code> exists and <code>apps.json</code> lists the apps. Check <code>C:\GIB\state.json</code> for <code>Failed[]</code> entries.</td></tr>
+    <tr><td>GIBFirstBoot didn't run after a mid-install reboot</td><td>Check <code>HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce\GIBFirstBoot</code>. If absent, the previous run was killed before re-registering — already fixed in current builds (registers at start, removes only on full completion).</td></tr>
+    <tr><td>Display language becomes French unexpectedly</td><td>The keyboard deployment script must include <code>Set-WinUILanguageOverride -Language en-US</code> when adding languages — see Use Case 2.</td></tr>
+    <tr><td>Build halts with "GIBFirstBoot.exe not found"</td><td>The MSBuild target <code>PublishAndCopyGIBFirstBoot</code> didn't run. Re-publish the app.</td></tr>
+  </tbody>
+</table>
+
+<!-- ═══════════════════════ 8. BUILD COMMANDS ═══════════════════════ -->
+<h1>8. Build Commands (for Developers)</h1>
+
+<p>Working directory: <code>C:\Users\&lt;user&gt;\Downloads\ALE ISO Creator\GoldenISOBuilder\</code></p>
+
+<h3>Build only — produces framework-dependent output</h3>
+<pre><code>dotnet build -c Release -p:Platform=x64 --nologo</code></pre>
+
+<h3>Publish — produces single-file self-contained exe for distribution</h3>
+<pre><code>dotnet publish -c Release -p:Platform=x64 -r win-x64 --self-contained true -p:PublishSingleFile=true --nologo</code></pre>
+
+<p>Build folder requires .NET 8 installed on the machine. Publish folder is self-contained (~174 MB), bundles the full .NET 8 runtime, runs on any Windows machine without .NET.</p>
+
+<!-- ═══════════════════════ 9. RUNTIME ═══════════════════════ -->
+<h1>9. Runtime Requirements</h1>
+
+<table>
+  <thead><tr><th style="width:25%">Where</th><th>What's needed</th></tr></thead>
+  <tbody>
+    <tr><td>Build machine</td><td>Windows 10/11, .NET 8 SDK (for dev) or .NET 8 runtime (for using the published exe), Windows ADK Deployment Tools (for <code>oscdimg.exe</code>), administrator rights, ~25 GB free disk for workspace</td></tr>
+    <tr><td>Deployed machine</td><td>Any Windows 11–capable hardware (TPM/SecureBoot/RAM bypassed automatically). For the BitLocker scheduled task: TPM 2.0 must be present and enabled in firmware.</td></tr>
+  </tbody>
+</table>
+
+<div class="divider"></div>
+
+<p style="text-align:center;color:#607080;font-size:9pt;margin-top:24pt;">
+<em>Generated for ALE Image Forge v2.4.1 — Engineering Documentation</em>
+</p>
+
+</div> <!-- /content -->
+</body>
+</html>

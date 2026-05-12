@@ -1,0 +1,173 @@
+<Window x:Class="GoldenISOBuilder.SplashWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="ALE Image Forge"
+        Width="560" Height="320"
+        WindowStartupLocation="CenterScreen"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Opacity="0"
+        ShowInTaskbar="False"
+        Topmost="True">
+
+    <!-- Outer border — rounded corners + drop shadow give the Office-style "floating" look -->
+    <Border CornerRadius="12" ClipToBounds="False">
+        <Border.Effect>
+            <DropShadowEffect Color="#000000" Opacity="0.55" BlurRadius="28"
+                              ShadowDepth="6" Direction="270"/>
+        </Border.Effect>
+        <Border CornerRadius="12" ClipToBounds="True">
+            <Border.Background>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                    <GradientStop Color="#0A1628" Offset="0"/>
+                    <GradientStop Color="#122440" Offset="0.55"/>
+                    <GradientStop Color="#0A1628" Offset="1"/>
+                </LinearGradientBrush>
+            </Border.Background>
+
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <!-- ── Decorative background glows ─────────────────────────────── -->
+                <Canvas Grid.RowSpan="2" IsHitTestVisible="False">
+                    <!-- Gold glow — top-right -->
+                    <Ellipse Canvas.Right="-70" Canvas.Top="-70"
+                             Width="240" Height="240" IsHitTestVisible="False">
+                        <Ellipse.Fill>
+                            <RadialGradientBrush>
+                                <GradientStop Color="#33C9A42A" Offset="0"/>
+                                <GradientStop Color="Transparent"  Offset="1"/>
+                            </RadialGradientBrush>
+                        </Ellipse.Fill>
+                    </Ellipse>
+                    <!-- Teal glow — bottom-left -->
+                    <Ellipse Canvas.Left="-60" Canvas.Bottom="-60"
+                             Width="200" Height="200" IsHitTestVisible="False">
+                        <Ellipse.Fill>
+                            <RadialGradientBrush>
+                                <GradientStop Color="#1522C58C" Offset="0"/>
+                                <GradientStop Color="Transparent"  Offset="1"/>
+                            </RadialGradientBrush>
+                        </Ellipse.Fill>
+                    </Ellipse>
+                    <!-- Subtle centre bloom -->
+                    <Ellipse Canvas.Left="180" Canvas.Top="60"
+                             Width="200" Height="200" IsHitTestVisible="False">
+                        <Ellipse.Fill>
+                            <RadialGradientBrush>
+                                <GradientStop Color="#0DC9A42A" Offset="0"/>
+                                <GradientStop Color="Transparent" Offset="1"/>
+                            </RadialGradientBrush>
+                        </Ellipse.Fill>
+                    </Ellipse>
+                </Canvas>
+
+                <!-- ── Centre brand content ────────────────────────────────────── -->
+                <StackPanel Grid.Row="0" VerticalAlignment="Center"
+                            HorizontalAlignment="Center">
+
+                    <!-- Logo badge — mirrors the title-bar icon but scaled up -->
+                    <Border Width="72" Height="72" CornerRadius="16"
+                            HorizontalAlignment="Center" Margin="0,0,0,20">
+                        <Border.Background>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                <GradientStop Color="#C9A42A" Offset="0"/>
+                                <GradientStop Color="#E8C040" Offset="1"/>
+                            </LinearGradientBrush>
+                        </Border.Background>
+                        <Border.Effect>
+                            <DropShadowEffect Color="#C9A42A" Opacity="0.45"
+                                              BlurRadius="18" ShadowDepth="0"/>
+                        </Border.Effect>
+                        <TextBlock Text="A" FontSize="38" FontWeight="Black"
+                                   Foreground="#0A1628"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"/>
+                    </Border>
+
+                    <!-- App name -->
+                    <TextBlock Text="ALE Image Forge"
+                               FontFamily="Segoe UI" FontSize="28" FontWeight="Bold"
+                               Foreground="#EDF1F8"
+                               HorizontalAlignment="Center"
+                               TextOptions.TextFormattingMode="Display"/>
+
+                    <!-- Subtitle -->
+                    <TextBlock Text="Enterprise  ·  Windows 11 Image Builder"
+                               FontFamily="Segoe UI" FontSize="12.5"
+                               Foreground="#C9A42A"
+                               HorizontalAlignment="Center"
+                               Margin="0,7,0,0"/>
+                </StackPanel>
+
+                <!-- ── Bottom status + progress bar ───────────────────────────── -->
+                <StackPanel Grid.Row="1" Margin="36,0,36,26">
+
+                    <!-- Status text + version on same row -->
+                    <Grid Margin="0,0,0,8">
+                        <TextBlock x:Name="StatusText"
+                                   Text="Initialising…"
+                                   FontFamily="Segoe UI" FontSize="11"
+                                   Foreground="#5A7A9A"
+                                   HorizontalAlignment="Left"
+                                   VerticalAlignment="Center"/>
+                        <TextBlock Text="v2.4.1"
+                                   FontFamily="Segoe UI" FontSize="10"
+                                   Foreground="#3A5A78"
+                                   HorizontalAlignment="Right"
+                                   VerticalAlignment="Center"/>
+                    </Grid>
+
+                    <!-- Scanning gold progress bar -->
+                    <Grid Height="3" Background="#0D2A4A">
+                        <Grid.Clip>
+                            <RectangleGeometry x:Name="ScanClip" Rect="0,0,488,3"/>
+                        </Grid.Clip>
+
+                        <!-- Animated scanning highlight -->
+                        <Rectangle x:Name="ScanBar" Width="120" Height="3"
+                                   HorizontalAlignment="Left">
+                            <Rectangle.Fill>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                    <GradientStop Color="Transparent" Offset="0"/>
+                                    <GradientStop Color="#C9A42A"    Offset="0.5"/>
+                                    <GradientStop Color="Transparent" Offset="1"/>
+                                </LinearGradientBrush>
+                            </Rectangle.Fill>
+                            <Rectangle.RenderTransform>
+                                <TranslateTransform x:Name="ScanTranslate" X="-120"/>
+                            </Rectangle.RenderTransform>
+                            <Rectangle.Triggers>
+                                <EventTrigger RoutedEvent="Rectangle.Loaded">
+                                    <BeginStoryboard>
+                                        <Storyboard RepeatBehavior="Forever">
+                                            <DoubleAnimation
+                                                Storyboard.TargetName="ScanTranslate"
+                                                Storyboard.TargetProperty="X"
+                                                From="-120" To="608"
+                                                Duration="0:0:1.8"
+                                                RepeatBehavior="Forever"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </EventTrigger>
+                            </Rectangle.Triggers>
+                        </Rectangle>
+                    </Grid>
+
+                    <!-- Author credit -->
+                    <TextBlock Text="Created by Pavan G S"
+                               FontFamily="Segoe UI" FontSize="9.5"
+                               Foreground="#2A4A68"
+                               HorizontalAlignment="Right"
+                               Margin="0,7,0,0"/>
+                </StackPanel>
+
+            </Grid>
+        </Border>
+    </Border>
+</Window>

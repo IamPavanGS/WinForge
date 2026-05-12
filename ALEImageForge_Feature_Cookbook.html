@@ -1,0 +1,1102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ALE Image Forge — Feature Cookbook</title>
+<style>
+@page {
+  size: A4;
+  margin: 18mm 16mm 20mm 16mm;
+  @bottom-center {
+    content: "ALE Image Forge · Feature Cookbook  ·  Page " counter(page) " of " counter(pages);
+    font-family: 'Segoe UI', sans-serif; font-size: 8.5pt; color: #888;
+  }
+}
+@page :first { margin: 0; @bottom-center { content: none; } }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  font-size: 10pt; line-height: 1.55; color: #1A2230; background: #fff;
+}
+
+/* ── COVER ── */
+.cover {
+  height: 297mm;
+  background: linear-gradient(135deg, #0A1628 0%, #122440 55%, #0A1628 100%);
+  color: #EDF1F8;
+  display: flex; flex-direction: column; justify-content: center;
+  padding: 0 24mm; page-break-after: always; position: relative; overflow: hidden;
+}
+.cover::before {
+  content:''; position:absolute; top:-80mm; right:-80mm;
+  width:220mm; height:220mm;
+  background:radial-gradient(circle,rgba(201,164,42,.18) 0%,transparent 60%);
+  pointer-events:none;
+}
+.cover::after {
+  content:''; position:absolute; bottom:-60mm; left:-60mm;
+  width:180mm; height:180mm;
+  background:radial-gradient(circle,rgba(34,197,139,.08) 0%,transparent 60%);
+  pointer-events:none;
+}
+.cover-badge {
+  width:72px; height:72px;
+  background:linear-gradient(135deg,#C9A42A,#E8C040);
+  border-radius:14px; display:flex; align-items:center; justify-content:center;
+  font-size:38px; font-weight:900; color:#0A1628;
+  box-shadow:0 4px 20px rgba(201,164,42,.4);
+  margin-bottom:28px; position:relative; z-index:2;
+}
+.cover-eye  { font-size:10pt; letter-spacing:4px; text-transform:uppercase; color:#C9A42A; font-weight:700; margin-bottom:12px; position:relative; z-index:2; }
+.cover-title{ font-size:34pt; font-weight:800; color:#EDF1F8; margin-bottom:10px; line-height:1.1; position:relative; z-index:2; }
+.cover-sub  { font-size:13pt; color:#C9A42A; font-weight:600; margin-bottom:20px; position:relative; z-index:2; }
+.cover-desc { font-size:11pt; color:#A0B8D0; max-width:140mm; line-height:1.6; position:relative; z-index:2; }
+.cover-footer { position:absolute; bottom:18mm; left:24mm; right:24mm; display:flex; justify-content:space-between; align-items:center; z-index:2; border-top:1px solid rgba(201,164,42,.25); padding-top:10px; }
+.cover-footer-text { font-size:9pt; color:#5A7A9A; }
+.cover-version { font-size:9pt; color:#C9A42A; font-weight:600; }
+
+/* ── BODY ── */
+h1 { font-size:16pt; font-weight:800; color:#0A1628; margin:28pt 0 8pt; padding-bottom:8px; border-bottom:3px solid #C9A42A; page-break-after:avoid; }
+h1:first-of-type { page-break-before: avoid; }
+.step-intro { font-size:10.5pt; color:#4A6080; margin-bottom:14pt; line-height:1.6; }
+
+/* ── FEATURE CARD ── */
+.feature {
+  background:#F7F9FC; border:1px solid #DDE4EE; border-radius:8px;
+  margin-bottom:14pt; page-break-inside:avoid; overflow:hidden;
+}
+.feature-header {
+  background:linear-gradient(90deg,#0A1628 0%,#122440 100%);
+  padding:10px 16px; display:flex; justify-content:space-between; align-items:center;
+}
+.feature-name { font-size:11.5pt; font-weight:700; color:#EDF1F8; }
+.step-tag {
+  font-size:8pt; font-weight:700; letter-spacing:1px; text-transform:uppercase;
+  background:rgba(201,164,42,.2); color:#C9A42A;
+  padding:3px 9px; border-radius:12px; border:1px solid rgba(201,164,42,.4);
+  white-space:nowrap;
+}
+.feature-body { padding:12px 16px; }
+
+.feature-row { display:grid; grid-template-columns:110px 1fr; gap:4px 12px; margin-bottom:8px; }
+.feature-label { font-size:8.5pt; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:#7A9AB8; padding-top:2px; }
+.feature-value { font-size:10pt; color:#1A2230; line-height:1.5; }
+
+/* scenario box */
+.scenario {
+  background:#EFF6FF; border-left:4px solid #3B82F6;
+  border-radius:0 6px 6px 0; padding:9px 13px; margin:8px 0;
+}
+.scenario-label { font-size:8pt; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:#2563EB; margin-bottom:4px; }
+.scenario p { font-size:9.5pt; color:#1E3A5F; line-height:1.55; }
+
+/* example outcome box */
+.outcome {
+  background:#F0FBF5; border-left:4px solid #22C58C;
+  border-radius:0 6px 6px 0; padding:9px 13px; margin:8px 0;
+}
+.outcome-label { font-size:8pt; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:#16A06E; margin-bottom:4px; }
+.outcome p { font-size:9.5pt; color:#0F3828; line-height:1.55; }
+
+/* combo pills */
+.combo-row { display:flex; flex-wrap:wrap; gap:5px; margin-top:6px; align-items:center; }
+.combo-label { font-size:8.5pt; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:#7A9AB8; margin-right:4px; }
+.pill {
+  font-size:8pt; font-weight:600; padding:2px 9px; border-radius:10px;
+  background:#EDF2FF; color:#3B4DB8; border:1px solid #BCC8F8;
+  white-space:nowrap;
+}
+.pill.gold  { background:#FDF6E3; color:#92700A; border-color:#E8D48A; }
+.pill.green { background:#EDFBF4; color:#15714F; border-color:#9ADFC2; }
+.pill.red   { background:#FFF0F0; color:#A02020; border-color:#F0AAAA; }
+
+/* code snippet */
+pre {
+  background:#0E1E32; color:#A8D0F0; font-family:Consolas,'Courier New',monospace;
+  font-size:8.5pt; padding:9px 12px; border-radius:5px; margin:8px 0;
+  white-space:pre-wrap; word-break:break-all; line-height:1.5;
+}
+code { font-family:Consolas,'Courier New',monospace; font-size:9pt; background:#EEF2F8; padding:1px 4px; border-radius:3px; color:#2A4A78; }
+
+/* step divider */
+.step-bar {
+  display:flex; align-items:center; gap:10px;
+  margin:22pt 0 10pt; page-break-after:avoid;
+}
+.step-number {
+  min-width:36px; height:36px; border-radius:8px;
+  background:linear-gradient(135deg,#C9A42A,#E8C040);
+  display:flex; align-items:center; justify-content:center;
+  font-size:14pt; font-weight:900; color:#0A1628;
+}
+.step-title { font-size:14pt; font-weight:800; color:#0A1628; }
+
+ul { padding-left:16px; margin:4px 0; }
+ul li { font-size:9.5pt; color:#1A2230; margin-bottom:2px; line-height:1.5; }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════ COVER ══════════════════════════ -->
+<div class="cover">
+  <div class="cover-badge">A</div>
+  <div class="cover-eye">ALE Image Forge · Enterprise</div>
+  <div class="cover-title">Feature<br>Cookbook</div>
+  <div class="cover-sub">Practical Scenarios &amp; Power Combinations</div>
+  <div class="cover-desc">
+    A feature-by-feature reference for IT technicians. Each section explains
+    what the feature does, a real-world scenario where you need it, and which
+    other features to combine with it to build powerful, fully automated
+    Windows 11 deployments — all from a single application.
+  </div>
+  <div class="cover-footer">
+    <span class="cover-footer-text">Created by Pavan G S &nbsp;·&nbsp; ALE International</span>
+    <span class="cover-version">v2.4.1</span>
+  </div>
+</div>
+
+<!-- ══════════════════════════ HOW TO USE ══════════════════════════ -->
+<h1>How to Use This Guide</h1>
+<p class="step-intro">
+  Every feature in ALE Image Forge is useful on its own — but real automation power comes from
+  combining features. This guide presents each feature as a recipe: what it does, when to reach
+  for it, and which other features to wire up alongside it to get the full result. Work through
+  the sections that match your deployment goal and cross-reference the <strong>Combine with</strong>
+  pills to build your configuration step by step.
+</p>
+
+<!-- ══════════════════════════ STEP 1 ══════════════════════════ -->
+<div class="step-bar">
+  <div class="step-number">1</div>
+  <div class="step-title">Source &amp; Output</div>
+</div>
+
+<div class="feature">
+  <div class="feature-header">
+    <span class="feature-name">Source ISO + Windows Edition</span>
+    <span class="step-tag">Step 1</span>
+  </div>
+  <div class="feature-body">
+    <div class="feature-row">
+      <span class="feature-label">What it does</span>
+      <span class="feature-value">Mounts the source Windows 11 ISO, reads the available editions (Home, Pro, Enterprise, Education), and lets you pick which one to extract into the golden image.</span>
+    </div>
+    <div class="scenario">
+      <div class="scenario-label">Scenario</div>
+      <p>Your organisation uses <strong>Windows 11 Pro</strong> for office staff but <strong>Enterprise</strong> for IT and finance teams. You have one source ISO but need to produce different images.</p>
+    </div>
+    <div class="feature-row">
+      <span class="feature-label">How to use</span>
+      <span class="feature-value">Browse to the ISO, wait for analysis to complete, then select the edition from the dropdown. Save the profile (<em>gibprofile</em>), then reload it and change only the edition for the second build.</span>
+    </div>
+    <div class="outcome">
+      <div class="outcome-label">Result</div>
+      <p>Two ISOs from one source — same apps, same hardening, different edition. No manual WIM surgery required.</p>
+    </div>
+    <div class="combo-row">
+      <span class="combo-label">Combine with</span>
+      <span class="pill gold">Output Filename (Step 1)</span>
+      <span class="pill">Group Policy (Step 3)</span>
+      <span class="pill green">Product Key (Step 6)</span>
+    </div>
+  </div>
+</div>
+
+<div class="feature">
+  <div class="feature-header">
+    <span class="feature-name">ISO Boot Language &amp; Target OS Language</span>
+    <span class="step-tag">Step 1</span>
+  </div>
+  <div class="feature-body">
+    <div class="feature-row">
+      <span class="feature-label">What it does</span>
+      <span class="feature-value"><strong>ISO Boot Language</strong> must match the language pack inside the ISO's boot.wim (auto-detected). <strong>Target OS Language</strong> sets the display language of the deployed Windows instance — these two can differ.</span>
+    </div>
+    <div class="scenario">
+      <div class="scenario-label">Scenario</div>
+      <p>You have an <strong>en-GB</strong> source ISO (English International). You want to deploy to your Paris office with a <strong>French</strong> display language and to your Shanghai office with <strong>Chinese Simplified</strong>.</p>
+    </div>
+    <div class="feature-row">
+      <span class="feature-label">How to use</span>
+      <span class="feature-value">Leave ISO Boot Language as auto-detected (en-GB). Change <em>Target OS Language</em> to fr-FR for the Paris build, then zh-CN for the Shanghai build. Rebuild with the same profile each time.</span>
+    </div>
+    <div class="outcome">
+      <div class="outcome-label">Result</div>
+      <p>Paris machines boot in French; Shanghai machines boot in Chinese. No 0x8007000D boot crash, no manual language pack installation post-deployment.</p>
+    </div>
+    <div class="combo-row">
+      <span class="combo-label">Combine with</span>
+      <span class="pill gold">Timezone (Step 6)</span>
+      <span class="pill">Keyboard Layout Script (Step 2 — Deployment Scripts)</span>
+      <span class="pill green">Output Filename (Step 1)</span>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════ STEP 2 ══════════════════════════ -->
+<div class="step-bar">
+  <div class="step-number">2</div>
+  <div class="step-title">Assets</div>
+</div>
+
+<div class="feature">
+  <div class="feature-header">
+    <span class="feature-name">Wallpaper</span>
+    <span class="step-tag">Step 2</span>
+  </div>
+  <div class="feature-body">
+    <div class="feature-row">
+      <span class="feature-label">What it does</span>
+      <span class="feature-value">Replaces the default Windows wallpaper files (all resolutions including 4K and lock screen) inside the WIM image so every deployed machine shows your chosen wallpaper from the very first login.</span>
+    </div>
+    <div class="scenario">
+      <div class="scenario-label">Scenario</div>
+      <p>IT wants all company laptops to show the corporate wallpaper with the helpdesk extension number baked in — without relying on Group Policy or login scripts that could fail.</p>
+    </div>
+    <div class="feature-row">
+      <span class="feature-label">How to use</span>
+      <span class="feature-value">Browse to your <code>.jpg</code> wallpaper (4K recommended, 3840×2160). The engine replaces <code>img0.jpg</code>, <code>img19.jpg</code>, <code>img20.jpg</code> and the lock screen variant inside the WIM automatically.</span>
+    </div>
+    <div class="outcome">
+      <div class="outcome-label">Result</div>
+      <p>Brand wallpaper appears at first login — no GPO, no script, no waiting for policy refresh. Works even if the machine is never domain-joined.</p>
+    </div>
+    <div class="combo-row">
+      <span class="combo-label">Combine with</span>
+      <span class="pill gold">OEM Branding (Step 6)</span>
+      <span class="pill">Registry — Wallpaper lock (Step 5)</span>
+      <span class="pill green">Auto-Logon (Step 4)</span>
+    </div>
+    <pre># Registry entry to prevent users changing the wallpaper (add in Step 5):
+# Key:   HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System
+# Value: Wallpaper  = C:\Windows\Web\Wallpaper\Windows\img0.jpg
+# Value: WallpaperStyle = 10</pre>
+  </div>
+</div>
+
+<div class="feature">
+  <div class="feature-header">
+    <span class="feature-name">Staged Apps (First-Boot Installer Queue)</span>
+    <span class="step-tag">Step 2</span>
+  </div>
+  <div class="feature-body">
+    <div class="feature-row">
+      <span class="feature-label">What it does</span>
+      <span class="feature-value">Copies your EXE/MSI installers into the image at <code>C:\GIB\Installers\</code>. On first user login, GIBFirstBoot runs silently and installs each app in order, resuming automatically if the machine reboots mid-install.</span>
+    </div>
+    <div class="scenario">
+      <div class="scenario-label">Scenario</div>
+      <p>New starters need <strong>Microsoft Teams, Zscaler Client Connector, and a custom LOB application</strong> on day one. You cannot rely on SCCM because the machines may not be on the corporate network during imaging.</p>
+    </div>
+    <div class="feature-row">
+      <span class="feature-label">How to use</span>
+      <span class="feature-value">Click <em>Add App</em>, browse to each installer. Set silent arguments (<code>/S</code>, <code>/qn /norestart</code>, etc.). Set the install order — dependencies first. GIBFirstBoot handles the queue, including reboot-and-resume.</span>
+    </div>
+    <div class="outcome">
+      <div class="outcome-label">Result</div>
+      <p>User logs in for the first time and sees a progress window installing all apps silently. By the time it closes, the machine is fully provisioned — no IT desk visit required.</p>
+    </div>
+    <div class="combo-row">
+      <span class="combo-label">Combine with</span>
+      <span class="pill gold">Auto-Logon (Step 4)</span>
+      <span class="pill">Deployment Scripts (Step 2)</span>
+      <span class="pill green">Bloatware Removal (Step 3)</span>
+      <span class="pill">Driver Injection (Step 2)</span>
+    </div>
+  </div>
+</div>
+
+<div class="feature">
+  <div class="feature-header">
+    <span class="feature-name">Public Desktop Files</span>
+    <span class="step-tag">Step 2</span>
+  </div>
+  <div class="feature-body">
+    <div class="feature-row">
+      <span class="feature-label">What it does</span>
+      <span class="feature-value">Copies any file (shortcuts, PDFs, URL links, scripts) into <code>C:\Users\Public\Desktop\</code> inside the image. These files appear on the desktop for every user account on the machine.</span>
+    </div>
+    <div class="scenario">
+      <div class="scenario-label">Scenario</div>
+      <p>Every deployed machine must have a <strong>shortcut to the IT Service Portal</strong> and a <strong>PDF quick-start guide</strong> on the desktop — visible to any user who logs in, including future domain accounts.</p>
+    </div>
+    <div class="feature-row">
+      <span class="feature-label">How to use</span>
+      <span class="feature-value">Create a <code>.url</code> file pointing to your IT portal URL. Add it here along with your PDF. Both land in Public Desktop and are visible to all users immediately after login.</span>
+    </div>
+    <div class="outcome">
+      <div class="outcome-label">Result</div>
+      <p>Every user on every deployed machine sees the IT portal shortcut and quick-start guide on their desktop from day one — no login script, no GPO required.</p>
+    </div>
+    <div class="combo-row">
+      <span class="combo-label">Combine with</span>
+      <span class="pill gold">Wallpaper (Step 2)</span>
+      <span class="pill">OEM Branding (Step 6)</span>
+      <span class="pill green">Staged Apps (Step 2)</span>
+    </div>
+  </div>
+</div>
+
+<div class="feature">
+  <div class="feature-header">
+    <span class="feature-name">Driver Injection</span>
+    <span class="step-tag">Step 2</span>
+  </div>
+  <div class="feature-body">
+    <div class="feature-row">
+      <span class="feature-label">What it does</span>
+      <span class="feature-value">Injects <code>.inf</code> driver packages into the WIM offline using <code>DISM /Add-Driver /Recurse</code>. Drivers are available from the very first boot — before Windows Update has a chance to deliver them.</span>
+    </div>
+    <div class="scenario">
+      <div class="scenario-label">Scenario</div>
+      <p>You are deploying to a mix of <strong>Dell OptiPlex</strong> and <strong>Lenovo ThinkPad</strong> hardware. Certain models have USB-C docks and fingerprint readers that Windows cannot find on its own. Machines land in a network-less staging area so Windows Update cannot help.</p>
+    </div>
+    <div class="feature-row">
+      <span class="feature-label">How to use</span>
+      <span class="feature-value">Download the driver pack from the OEM website. Extract to a folder. Add the folder here. The engine recursively scans for <code>.inf</code> files and injects all of them — you do not need to specify individual drivers.</span>
+    </div>
+    <div class="outcome">
+      <div class="outcome-label">Result</div>
+      <p>All hardware is recognised and functional at first boot. No "Unknown Device" in Device Manager, no missing audio, no broken docks.</p>
+    </div>
+    <div class="combo-row">
+      <span class="combo-label">Combine with</span>
+      <span class="pill gold">Staged Apps (Step 2)</span>
+      <span class="pill green">Disable Telemetry (Step 3)</span>
+    </div>
+  </div>
+</div>
+
+<div class="feature">
+  <div class="feature-header">
+    <span class="feature-name">Deployment Scripts</span>
+    <span class="step-tag">Step 2</span>
+  </div>
+  <div class="feature-body">
+    <div class="feature-row">
+      <span class="feature-label">What it does</span>
+      <span class="feature-value">Copies PowerShell scripts into <code>C:\Users\Public\Documents\</code> inside the image and registers a startup trigger so each script runs automatically at first boot (as SYSTEM or the logged-in user, depending on trigger).</span>
+    </div>
+    <div class="scenario">
+      <div class="scenario-label">Scenario</div>
+      <p>You need to <strong>clean the Recycle Bin every Friday at 10 PM</strong> across all deployed machines. The script needs to be present on the machine and a Windows Scheduled Task needs to be registered — but this must happen automatically without an IT visit.</p>
+    </div>
+    <div class="feature-row">
+      <span class="feature-label">How to use</span>
+      <span class="feature-value">
+        <strong>Step A</strong> — Create <code>CleanRecycleBin.ps1</code>:<br>
+        <code>Clear-RecycleBin -Force -ErrorAction SilentlyContinue</code><br><br>
+        <strong>Step B</strong> — Create <code>RegisterCleanupTask.ps1</code> that registers the scheduled task.<br><br>
+        <strong>Step C</strong> — Add <code>RegisterCleanupTask.ps1</code> here with trigger set to <em>First Boot</em>. Add <code>CleanRecycleBin.ps1</code> as a companion file (Public Documents). On first boot, the registration script runs and creates the weekly task pointing at the cleanup script.
+      </span>
+    </div>
+    <pre># RegisterCleanupTask.ps1 — staged as a Deployment Script (First Boot trigger)
+$action  = New-ScheduledTaskAction -Execute "powershell.exe" `
+           -Argument "-NonInteractive -ExecutionPolicy Bypass -File `"C:\Users\Public\Documents\CleanRecycleBin.ps1`""
+$trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Friday -At "22:00"
+$settings= New-ScheduledTaskSettingsSet -RunOnlyIfNetworkAvailable:$false
+Register-ScheduledTask -TaskName "WeeklyRecycleBinCleanup" `
+    -Action $action -Trigger $trigger -Settings $settings `
+    -RunLevel Highest -Force</pre>
+    <div class="outcome">
+      <div class="outcome-label">Result</div>
+      <p>Every deployed machine automatically registers a scheduled task at first boot. Every Friday at 22:00, the Recycle Bin is emptied with no user interaction and no IT involvement.</p>
+    </div>
+    <div class="combo-row">
+      <span class="combo-label">Combine with</span>
+      <span class="pill gold">Scheduled Tasks (Step 2)</span>
+      <span class="pill">Auto-Logon (Step 4)</span>
+      <span class="pill green">Staged Apps (Step 2)</span>
+      <span class="pill">BitLocker (Step 6)</span>
+    </div>
+  </div>
+</div>
+
+<div class="feature">
+  <div class="feature-header">
+    <span class="feature-name">Scheduled Tasks</span>
+    <span class="step-tag">Step 2</span>
+  </div>
+  <div class="feature-body">
+    <div class="feature-row">
+      <span class="feature-label">What it does</span>
+      <span class="feature-value">Registers Windows Scheduled Tasks directly into the image via <code>SetupComplete.cmd</code>. Tasks run under SYSTEM or the admin account on a schedule you define — without needing a login script or GPO.</span>
+    </div>
+    <div class="scenario">
+      <div class="scenario-label">Scenario</div>
+      <p>You want to <strong>run a disk space report every Monday morning</strong> and save it to a network share, and also <strong>clear temp files on every login</strong> — both must be registered without touching each machine individually.</p>
+    </div>
+    <div class="feature-row">
+      <span class="feature-label">How to use</span>
+      <span class="feature-value">In Step 2 → Scheduled Tasks, add each task: give it a name, point it at a script (already staged via Deployment Scripts), set the schedule (daily/weekly/at login/at startup) and the run-as account. The engine generates the <code>schtasks</code> commands in SetupComplete.cmd.</span>
+    </div>
+    <div class="outcome">
+      <div class="outcome-label">Result</div>
+      <p>All tasks appear in Windows Task Scheduler on every deployed machine from the very first boot. No GPO preferences, no Intune, no domain join required.</p>
+    </div>
+    <div class="combo-row">
+      <span class="combo-label">Combine with</span>
+      <span class="pill gold">Deployment Scripts (Step 2)</span>
+      <span class="pill">BitLocker (Step 6)</span>
+      <span class="pill green">Auto-Logon (Step 4)</span>
+    </div>
+  </div>
+</div>
+
+<div class="feature">
+  <div class="feature-header">
+    <span class="feature-name">Language Packs</span>
+    <span class="step-tag">Step 2</span>
+  </div>
+  <div class="feature-body">
+    <div class="feature-row">
+      <span class="feature-label">What it does</span>
+      <span class="feature-value">Injects additional Windows language pack <code>.cab</code> files into the WIM using DISM offline, so they are available for selection at first login without requiring internet access or Windows Update.</span>
+    </div>
+    <div class="scenario">
+      <div class="scenario-label">Scenario</div>
+      <p>You use an en-GB source ISO but deploy to a multilingual office. Users need to be able to switch their display language to <strong>French or Arabic</strong> via Settings, without downloading anything.</p>
+    </div>
+    <div class="feature-row">
+      <span class="feature-label">How to use</span>
+      <span class="feature-value">Download the <code>Microsoft-Windows-Client-Language-Pack_x64_fr-fr.cab</code> (and ar-sa) from the Microsoft Update Catalog. Add the CAB files here. The engine injects them offline before the WIM is sealed.</span>
+    </div>
+    <div class="outcome">
+      <div class="outcome-label">Result</div>
+      <p>Users can go to Settings → Time &amp; Language → Language and switch to French or Arabic without internet. Useful for air-gapped environments or machines that never reach Windows Update.</p>
+    </div>
+    <div class="combo-row">
+      <span class="combo-label">Combine with</span>
+      <span class="pill gold">Target OS Language (Step 1)</span>
+      <span class="pill">Deployment Scripts — Keyboard layout (Step 2)</span>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════ STEP 3 ══════════════════════════ -->
+<div class="step-bar">
+  <div class="step-number">3</div>
+  <div class="step-title">Customisations</div>
+</div>
+
+<div class="feature">
+  <div class="feature-header">
+    <span class="feature-name">Bloatware Removal</span>
+    <span class="step-tag">Step 3</span>
+  </div>
+  <div class="feature-body">
+    <div class="feature-row">
+      <span class="feature-label">What it does</span>
+      <span class="feature-value">Removes provisioned UWP app packages (Xbox, Solitaire, News, Weather, Get Help, etc.) from the WIM using <code>DISM /Remove-ProvisionedAppxPackage</code>. They never appear on any user profile — not even new accounts created later.</span>
+    </div>
+    <div class="scenario">
+      <div class="scenario-label">Scenario</div>
+      <p>Deployed machines must not have gaming or entertainment apps. Removing them from the Start menu via GPO still leaves them installed — DISM removal is permanent and reduces the image size.</p>
+    </div>
+    <div class="feature-row">
+      <span class="feature-label">How to use</span>
+      <span class="feature-value">Tick each app to remove. For a corporate image, select all Xbox apps, Solitaire, News, Weather, Get Help, Mixed Reality Portal, and any other consumer-facing apps irrelevant to your workforce.</span>
+    </div>
+    <div class="outcome">
+      <div class="outcome-label">Result</div>
+      <p>Clean, minimal Start menu. Smaller WIM, smaller ISO. Reduced attack surface. Apps cannot be re-installed via the Store if you also apply the Store lockdown Group Policy.</p>
+    </div>
+    <div class="combo-row">
+      <span class="combo-label">Combine with</span>
+      <span class="pill gold">Group Policy — Disable Store (Step 3)</span>
+      <span class="pill">Staged Apps (Step 2)</span>
+      <span class="pill green">Disable Telemetry (Step 3)</span>
+    </div>
+  </div>
+</div>
+
+<div class="feature">
+  <div class="feature-header">
+    <span class="feature-name">Disable SMBv1</span>
+    <span class="step-tag">Step 3 · Security</span>
+  </div>
+  <div class="feature-body">
+    <div class="feature-row">
+      <span class="feature-label">What it does</span>
+      <span class="feature-value">Disables the SMBv1 network protocol (exploited by WannaCry, NotPetya) by writing the appropriate registry value and disabling the Windows feature in the offline WIM.</span>
+    </div>
+    <div class="scenario">
+      <div class="scenario-label">Scenario</div>
+      <p>Your security team's vulnerability scanner flags SMBv1 as critical on every new machine. You want it gone before the machine is ever connected to the network — not patched after deployment.</span>
+    </div>
+    <div class="outcome">
+      <div class="outcome-label">Result</div>
+      <p>SMBv1 is disabled from first boot. No ransomware propagation vector via the protocol. Passes CIS Benchmark control without a post-deployment remediation script.</p>
+    </div>
+    <div class="combo-row">
+      <span class="combo-label">Combine with</span>
+      <span class="pill gold">Disable Telemetry (Step 3)</span>
+      <span class="pill">BitLocker (Step 6)</span>
+      <span class="pill red">Group Policy — USB block (Step 3)</span>
+    </div>
+  </div>
+</div>
+
+<div class="feature">
+  <div class="feature-header">
+    <span class="feature-name">Disable Telemetry</span>
+    <span class="step-tag">Step 3 · Security</span>
+  </div>
+  <div class="feature-body">
+    <div class="feature-row">
+      <span class="feature-label">What it does</span>
+      <span class="feature-value">Sets the Windows diagnostic data level to Security (0 — minimum) and disables the Connected User Experiences and Telemetry service (<code>DiagTrack</code>), preventing data from being sent to Microsoft.</span>
+    </div>
+    <div class="scenario">
+      <div class="scenario-label">Scenario</div>
+      <p>Your organisation handles sensitive data. The data privacy policy prohibits diagnostic data leaving the building. You need this enforced at OS level — not as a user setting that can be reversed.</p>
+    </div>
+    <div class="outcome">
+      <div class="outcome-label">Result</div>
+      <p>Windows telemetry is silenced at the registry and service level from first boot. Users cannot re-enable it via Settings — the policy registry key overrides the UI.</p>
+    </div>
+    <div class="combo-row">
+      <span class="combo-label">Combine with</span>
+      <span class="pill gold">Disable SMBv1 (Step 3)</span>
+      <span class="pill">Group Policy (Step 3)</span>
+      <span class="pill green">Air-gapped — Disable Windows Update GP (Step 3)</span>
+    </div>
+  </div>
+</div>
+
+<div class="feature">
+  <div class="feature-header">
+    <span class="feature-name">Group Policy (Offline Registry Injection)</span>
+    <span class="step-tag">Step 3</span>
+  </div>
+  <div class="feature-body">
+    <div class="feature-row">
+      <span class="feature-label">What it does</span>
+      <span class="feature-value">Writes registry-backed Group Policy values directly into the offline WIM hives (<code>HKLM\SOFTWARE\Policies\...</code> and <code>HKCU\SOFTWARE\Policies\...</code>). Policies are enforced from first boot — no domain, no GPO infrastructure needed.</span>
+    </div>
+    <div class="scenario">
+      <div class="scenario-label">Scenario</div>
+      <p>You need to <strong>disable USB mass storage, block the Microsoft Store, and force Windows Update to install automatically</strong> on all deployed machines — including workgroup machines that will never join a domain.</p>
+    </div>
+    <div class="feature-row">
+      <span class="feature-label">How to use</span>
+      <span class="feature-value">Click <em>Add Policy</em>. Choose Computer or User scope. Enter the registry path under <code>HKLM\SOFTWARE\Policies\...</code> or <code>HKCU\SOFTWARE\Policies\...</code>. Common examples below.</span>
+    </div>
+    <pre># Disable USB mass storage (Computer policy)
+HKLM\SYSTEM\CurrentControlSet\Services\USBSTOR  →  Start = 4 (DWORD)
+
+# Block Microsoft Store (Computer policy)
+HKLM\SOFTWARE\Policies\Microsoft\WindowsStore  →  RemoveWindowsStore = 1 (DWORD)
+
+# Force Windows Update auto-download + install (Computer policy)
+HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU  →  AUOptions = 4 (DWORD)
+
+# Disable Task Manager (User policy — applies to default user profile)
+HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System  →  DisableTaskMgr = 1 (DWORD)</pre>
+    <div class="outcome">
+      <div class="outcome-label">Result</div>
+      <p>Policies are active the moment Windows boots — even before a user logs in. Works on standalone machines, workgroup machines, and domain-joined machines alike.</p>
+    </div>
+    <div class="combo-row">
+      <span class="combo-label">Combine with</span>
+      <span class="pill gold">Bloatware Removal (Step 3)</span>
+      <span class="pill">Registry Changes (Step 5)</span>
+      <span class="pill red">Disable SMBv1 + Telemetry (Step 3)</span>
+      <span class="pill green">BitLocker (Step 6)</span>
+    </div>
+  </div>
+</div>
+
+<div class="feature">
+  <div class="feature-header">
+    <span class="feature-name">System Defaults (Dark Mode, File Extensions, Hidden Files)</span>
+    <span class="step-tag">Step 3</span>
+  </div>
+  <div class="feature-body">
+    <div class="feature-row">
+      <span class="feature-label">What it does</span>
+      <span class="feature-value">Pre-sets Explorer and UI defaults for every new user profile: Dark Mode on/off, file extensions visible, hidden files visible. Written to the default user hive so all accounts — including domain accounts created after deployment — inherit these settings.</span>
+    </div>
+    <div class="scenario">
+      <div class="scenario-label">Scenario</div>
+      <p>Your IT team wants <strong>file extensions always visible</strong> on support/helpdesk machines to make phishing file identification easier (e.g. spotting <code>invoice.pdf.exe</code>). And developer machines should default to showing hidden files.</p>
+    </div>
+    <div class="outcome">
+      <div class="outcome-label">Result</div>
+      <p>Every user who logs into a deployed machine — local account or domain account — inherits the pre-set Explorer defaults. No login script, no GPO, no per-user manual configuration.</p>
+    </div>
+    <div class="combo-row">
+      <span class="combo-label">Combine with</span>
+      <span class="pill gold">Registry Changes (Step 5)</span>
+      <span class="pill">Group Policy (Step 3)</span>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════ STEP 4 ══════════════════════════ -->
+<div class="step-bar">
+  <div class="step-number">4</div>
+  <div class="step-title">Admin Account</div>
+</div>
+
+<div class="feature">
+  <div class="feature-header">
+    <span class="feature-name">Admin Username &amp; Password</span>
+    <span class="step-tag">Step 4</span>
+  </div>
+  <div class="feature-body">
+    <div class="feature-row">
+      <span class="feature-label">What it does</span>
+      <span class="feature-value">Creates (or configures) the local administrator account on the deployed machine. If you use a name other than <em>Administrator</em>, a new local account is created, added to the Administrators group, and the built-in Administrator account is also enabled as a fallback.</span>
+    </div>
+    <div class="scenario">
+      <div class="scenario-label">Scenario</div>
+      <p>Your security policy requires renaming the local admin account away from <em>Administrator</em> to make brute-force attacks harder. You want every machine to have a local <strong>ALE-Admin</strong> account with a strong known password for emergency recovery.</p>
+    </div>
+    <div class="feature-row">
+      <span class="feature-label">How to use</span>
+      <span class="feature-value">Type <code>ALE-Admin</code> in the Username field. Enter the password. Use <em>Generate Strong Password</em> if needed — copy it to your password vault before building.</span>
+    </div>
+    <div class="outcome">
+      <div class="outcome-label">Result</div>
+      <p>Every machine has a consistent local admin account. IT can log in to any machine for emergency access without knowing a user's password. The password is never stored in plain text in the ISO — it is base64-encoded in SetupComplete.cmd.</p>
+    </div>
+    <div class="combo-row">
+      <span class="combo-label">Combine with</span>
+      <span class="pill gold">Auto-Logon (Step 4)</span>
+      <span class="pill">Password Never Expires (Step 4)</span>
+      <span class="pill green">BitLocker (Step 6)</span>
+    </div>
+  </div>
+</div>
+
+<div class="feature">
+  <div class="feature-header">
+    <span class="feature-name">Auto-Logon</span>
+    <span class="step-tag">Step 4</span>
+  </div>
+  <div class="feature-body">
+    <div class="feature-row">
+      <span class="feature-label">What it does</span>
+      <span class="feature-value">Configures the machine to automatically log in as the admin account exactly <strong>once</strong> after OOBE completes. The auto-logon self-disables after the first use — subsequent boots require normal credentials.</span>
+    </div>
+    <div class="scenario">
+      <div class="scenario-label">Scenario</div>
+      <p>You deploy machines in a warehouse where no IT engineer is present. The machine must <strong>boot → log in → install all apps → be ready for the end user</strong> without anyone touching a keyboard. The user should see a normal login screen on their first use.</p>
+    </div>
+    <div class="feature-row">
+      <span class="feature-label">How to use</span>
+      <span class="feature-value">Enable the <em>Auto-Logon</em> toggle. The engine writes <code>AutoAdminLogon=1</code>, <code>DefaultUserName</code>, and <code>AutoLogonCount=1</code> to the Winlogon registry key. After one auto-login the counter reaches 0 and Windows removes the auto-logon setting.</span>
+    </div>
+    <div class="outcome">
+      <div class="outcome-label">Result</div>
+      <p>Machine arrives in the warehouse, power on → auto-logs into admin account → GIBFirstBoot installs all apps → machine is ready. End user first sees a normal Windows login screen. Zero keyboard interaction from IT required.</p>
+    </div>
+    <div class="combo-row">
+      <span class="combo-label">Combine with</span>
+      <span class="pill gold">Staged Apps (Step 2)</span>
+      <span class="pill">Skip OOBE (Step 6)</span>
+      <span class="pill green">Deployment Scripts (Step 2)</span>
+      <span class="pill">BitLocker (Step 6)</span>
+    </div>
+  </div>
+</div>
+
+<div class="feature">
+  <div class="feature-header">
+    <span class="feature-name">Password Never Expires</span>
+    <span class="step-tag">Step 4</span>
+  </div>
+  <div class="feature-body">
+    <div class="feature-row">
+      <span class="feature-label">What it does</span>
+      <span class="feature-value">Sets the <code>DONT_EXPIRE_PASSWD</code> flag on the local admin account so Windows never prompts to change it. Applied in SetupComplete.cmd via <code>Set-LocalUser</code>.</span>
+    </div>
+    <div class="scenario">
+      <div class="scenario-label">Scenario</div>
+      <p>Your local <strong>ALE-Admin</strong> recovery account must always be accessible. If the password expires while a machine is offline (e.g. a remote site), IT loses access. Making it non-expiring ensures it is always usable for emergency recovery.</p>
+    </div>
+    <div class="outcome">
+      <div class="outcome-label">Result</div>
+      <p>The local admin account is always accessible regardless of how long the machine has been offline. Domain password policies do not affect local accounts.</p>
+    </div>
+    <div class="combo-row">
+      <span class="combo-label">Combine with</span>
+      <span class="pill gold">Admin Username (Step 4)</span>
+      <span class="pill">BitLocker — Recovery Key Save (Step 6)</span>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════ STEP 5 ══════════════════════════ -->
+<div class="step-bar">
+  <div class="step-number">5</div>
+  <div class="step-title">Registry Changes</div>
+</div>
+
+<div class="feature">
+  <div class="feature-header">
+    <span class="feature-name">Custom Registry Entries</span>
+    <span class="step-tag">Step 5</span>
+  </div>
+  <div class="feature-body">
+    <div class="feature-row">
+      <span class="feature-label">What it does</span>
+      <span class="feature-value">Writes any registry key/value directly into the offline WIM hives (HKLM Software, HKLM System, or HKCU default user profile) before the image is sealed. Supports REG_SZ, REG_DWORD, REG_EXPAND_SZ, and REG_BINARY.</span>
+    </div>
+    <div class="scenario">
+      <div class="scenario-label">Scenario</div>
+      <p>You need to <strong>pre-configure your VPN client's server address</strong>, <strong>set the RDP port to a non-default value</strong>, and <strong>disable the Windows lock screen</strong> on kiosk machines — none of these have a Group Policy equivalent, so direct registry writes are the only option.</p>
+    </div>
+    <div class="feature-row">
+      <span class="feature-label">How to use</span>
+      <span class="feature-value">Click <em>Add Entry</em>. Choose hive scope. Enter the full key path, value name, type, and data. The engine loads the offline hive, writes with <code>reg.exe</code>, then unloads it — no PowerShell, no reboot risk.</span>
+    </div>
+    <pre># Example entries:
+# Disable lock screen (HKLM Software)
+HKLM\SOFTWARE\Policies\Microsoft\Windows\Personalization  →  NoLockScreen = 1
+
+# Pre-set VPN server (HKLM Software — app-specific)
+HKLM\SOFTWARE\YourVPNApp\Config  →  ServerAddress = "vpn.company.com"
+
+# Default browser to Edge (HKCU — applies to every new user profile)
+HKCU\SOFTWARE\Microsoft\Windows\Shell\Associations\UrlAssociations\https\UserChoice
+  →  ProgId = "MSEdgeHTM"</pre>
+    <div class="outcome">
+      <div class="outcome-label">Result</div>
+      <p>All registry values are present at first boot. Apps pick up their pre-configuration on first launch. Users never see a "first run" setup wizard for pre-configured applications.</p>
+    </div>
+    <div class="combo-row">
+      <span class="combo-label">Combine with</span>
+      <span class="pill gold">Group Policy (Step 3)</span>
+      <span class="pill">Staged Apps (Step 2)</span>
+      <span class="pill green">Wallpaper lock (Step 5 + Wallpaper Step 2)</span>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════ STEP 6 ══════════════════════════ -->
+<div class="step-bar">
+  <div class="step-number">6</div>
+  <div class="step-title">Advanced Options</div>
+</div>
+
+<div class="feature">
+  <div class="feature-header">
+    <span class="feature-name">Skip OOBE (Out-of-Box Experience)</span>
+    <span class="step-tag">Step 6</span>
+  </div>
+  <div class="feature-body">
+    <div class="feature-row">
+      <span class="feature-label">What it does</span>
+      <span class="feature-value">Generates an <code>Autounattend.xml</code> that suppresses the Windows setup wizard — no region selection, no account creation screen, no privacy prompts, no "Let's connect you to a network" — Windows installs and boots straight to the desktop.</span>
+    </div>
+    <div class="scenario">
+      <div class="scenario-label">Scenario</div>
+      <p>You are imaging 200 laptops in a staging room. Each machine must go from power-on to desktop with <strong>zero keyboard input</strong>. Any OOBE prompt means an engineer has to stand there — unacceptable at scale.</p>
+    </div>
+    <div class="outcome">
+      <div class="outcome-label">Result</div>
+      <p>Machine boots from ISO, Windows installs, OOBE is bypassed entirely, machine boots to desktop automatically. An engineer can start 10 machines and walk away.</p>
+    </div>
+    <div class="combo-row">
+      <span class="combo-label">Combine with</span>
+      <span class="pill gold">Auto-Logon (Step 4)</span>
+      <span class="pill">Staged Apps (Step 2)</span>
+      <span class="pill green">Admin Account (Step 4)</span>
+      <span class="pill">Product Key (Step 6)</span>
+    </div>
+  </div>
+</div>
+
+<div class="feature">
+  <div class="feature-header">
+    <span class="feature-name">BitLocker</span>
+    <span class="step-tag">Step 6</span>
+  </div>
+  <div class="feature-body">
+    <div class="feature-row">
+      <span class="feature-label">What it does</span>
+      <span class="feature-value">Stages a BitLocker enablement script as a scheduled task that runs 2 minutes after first boot (as SYSTEM). Waits for TPM readiness, enables BitLocker on C:\ with a recovery password protector, and optionally saves the recovery key to a network path.</span>
+    </div>
+    <div class="scenario">
+      <div class="scenario-label">Scenario</div>
+      <p>Your organisation's security policy mandates full-disk encryption on all laptops. You cannot pre-encrypt during imaging (the drive isn't finalised yet). You need BitLocker to <strong>activate itself automatically</strong> on first boot — with the recovery key saved to a file server — without any IT interaction.</p>
+    </div>
+    <div class="feature-row">
+      <span class="feature-label">How to use</span>
+      <span class="feature-value">Enable BitLocker toggle. Set <em>Recovery Key Save Path</em> to a UNC path (<code>\\fileserver\BitLockerKeys\</code>) or leave blank to save locally. The script uses the machine's serial number as the filename so keys are uniquely identifiable.</span>
+    </div>
+    <pre># Recovery key file saved as: C:\BitlockerPassword_L&lt;SerialNumber&gt;.txt
+# Or to network share:        \\fileserver\BitLockerKeys\BitlockerPassword_L&lt;Serial&gt;.txt
+# Scheduled task runs 2 minutes after first boot, then deletes itself.</pre>
+    <div class="outcome">
+      <div class="outcome-label">Result</div>
+      <p>Every laptop encrypts itself on first boot. Recovery keys are filed away by serial number. The scheduled task deletes itself after completion — no ongoing scheduled task left behind. Meets ISO 27001 and CIS Benchmark encryption controls automatically.</p>
+    </div>
+    <div class="combo-row">
+      <span class="combo-label">Combine with</span>
+      <span class="pill gold">Auto-Logon (Step 4)</span>
+      <span class="pill red">Disable SMBv1 (Step 3)</span>
+      <span class="pill">Disable Telemetry (Step 3)</span>
+      <span class="pill green">Password Never Expires (Step 4)</span>
+    </div>
+  </div>
+</div>
+
+<div class="feature">
+  <div class="feature-header">
+    <span class="feature-name">OEM Branding</span>
+    <span class="step-tag">Step 6</span>
+  </div>
+  <div class="feature-body">
+    <div class="feature-row">
+      <span class="feature-label">What it does</span>
+      <span class="feature-value">Sets the Manufacturer, Model, and Support URL that appear in <em>System Properties → Support Information</em> (winver / About This PC). Written to the registry during SetupComplete.cmd.</span>
+    </div>
+    <div class="scenario">
+      <div class="scenario-label">Scenario</div>
+      <p>Your helpdesk wants users to be able to find the support contact without asking. You want every machine's <em>About This PC</em> to show <strong>"Alcatel-Lucent Enterprise"</strong> as the manufacturer and your internal support portal URL — so users know exactly who to call.</p>
+    </div>
+    <div class="outcome">
+      <div class="outcome-label">Result</div>
+      <p>User presses Win+Pause → sees "Support: support.al-enterprise.com". Asset management is easier because every machine identifies its support owner in the OS itself.</p>
+    </div>
+    <div class="combo-row">
+      <span class="combo-label">Combine with</span>
+      <span class="pill gold">Wallpaper (Step 2)</span>
+      <span class="pill">Public Desktop Files (Step 2)</span>
+      <span class="pill green">Organisation Name (Step 6)</span>
+    </div>
+  </div>
+</div>
+
+<div class="feature">
+  <div class="feature-header">
+    <span class="feature-name">Power Plan</span>
+    <span class="step-tag">Step 6</span>
+  </div>
+  <div class="feature-body">
+    <div class="feature-row">
+      <span class="feature-label">What it does</span>
+      <span class="feature-value">Sets the active Windows power plan (Balanced, High Performance, Power Saver, or Ultimate Performance) via <code>powercfg</code> in SetupComplete.cmd so the machine wakes to the correct plan from its very first boot.</span>
+    </div>
+    <div class="scenario">
+      <div class="scenario-label">Scenario</div>
+      <p><strong>Office laptops</strong> should use Balanced (battery health). <strong>Build servers and VDI masters</strong> should use High Performance (CPU always at maximum). <strong>Kiosk/floor terminals</strong> should never sleep. Each deployment type needs a different plan pre-set without user access to Power Settings.</p>
+    </div>
+    <div class="outcome">
+      <div class="outcome-label">Result</div>
+      <p>Correct power behaviour from boot one. Servers don't throttle under build load. Office laptops don't drain batteries in meetings. Kiosks never show a locked screen.</p>
+    </div>
+    <div class="combo-row">
+      <span class="combo-label">Combine with</span>
+      <span class="pill gold">Registry — Disable screen lock (Step 5)</span>
+      <span class="pill">Group Policy — Sleep settings (Step 3)</span>
+      <span class="pill green">Bloatware Removal (Step 3)</span>
+    </div>
+  </div>
+</div>
+
+<div class="feature">
+  <div class="feature-header">
+    <span class="feature-name">Optional Windows Features (Enable / Disable)</span>
+    <span class="step-tag">Step 6</span>
+  </div>
+  <div class="feature-body">
+    <div class="feature-row">
+      <span class="feature-label">What it does</span>
+      <span class="feature-value">Enables or disables Windows optional features offline using <code>DISM /Enable-Feature</code> and <code>/Disable-Feature</code>. Changes are baked into the WIM — features are present (or absent) from the very first boot with no internet or Windows Update needed.</span>
+    </div>
+    <div class="scenario">
+      <div class="scenario-label">Scenario</div>
+      <p>Developer machines need <strong>WSL2 (Windows Subsystem for Linux) and Hyper-V</strong> enabled out of the box. Server images need <strong>SMB Direct and Windows Search disabled</strong> to reduce resource usage. Each needs a different feature set without relying on users enabling them manually.</p>
+    </div>
+    <div class="feature-row">
+      <span class="feature-label">Common features to enable</span>
+      <span class="feature-value">
+        <code>Microsoft-Windows-Subsystem-Linux</code> (WSL2) &nbsp;·&nbsp;
+        <code>VirtualMachinePlatform</code> (Hyper-V) &nbsp;·&nbsp;
+        <code>NetFx3</code> (.NET Framework 3.5 for legacy apps)
+      </span>
+    </div>
+    <div class="feature-row">
+      <span class="feature-label">Common features to disable</span>
+      <span class="feature-value">
+        <code>WindowsMediaPlayer</code> &nbsp;·&nbsp;
+        <code>Printing-PrintToPDFServices-Features</code> &nbsp;·&nbsp;
+        <code>SearchEngine-Client-Package</code> (Windows Search — VDI)
+      </span>
+    </div>
+    <div class="outcome">
+      <div class="outcome-label">Result</div>
+      <p>Developer opens a terminal — WSL2 is already there. VDI master has no indexer eating CPU. Legacy app launches without a .NET Framework install prompt. Right feature set, right machine, zero manual steps.</p>
+    </div>
+    <div class="combo-row">
+      <span class="combo-label">Combine with</span>
+      <span class="pill gold">Staged Apps (Step 2)</span>
+      <span class="pill">Bloatware Removal (Step 3)</span>
+      <span class="pill green">Power Plan (Step 6)</span>
+    </div>
+  </div>
+</div>
+
+<div class="feature">
+  <div class="feature-header">
+    <span class="feature-name">Timezone</span>
+    <span class="step-tag">Step 6</span>
+  </div>
+  <div class="feature-body">
+    <div class="feature-row">
+      <span class="feature-label">What it does</span>
+      <span class="feature-value">Sets the Windows timezone using <code>tzutil</code> in SetupComplete.cmd. The correct timezone is set before any user logs in — important for Kerberos authentication, certificate validity, and scheduled task timing.</span>
+    </div>
+    <div class="scenario">
+      <div class="scenario-label">Scenario</div>
+      <p>You image in your UK depot but ship machines to India, France, and China. A machine with the wrong timezone will have Kerberos auth failures (5-minute clock skew tolerance), scheduled tasks firing at the wrong local time, and Teams/Outlook showing wrong meeting times.</p>
+    </div>
+    <div class="outcome">
+      <div class="outcome-label">Result</div>
+      <p>Machine boots in the correct timezone for its destination. Kerberos works, scheduled tasks fire at the right local time, meeting invites display correctly. Build separate profiles per region and change only timezone + Target OS Language.</p>
+    </div>
+    <div class="combo-row">
+      <span class="combo-label">Combine with</span>
+      <span class="pill gold">Target OS Language (Step 1)</span>
+      <span class="pill">Scheduled Tasks (Step 2)</span>
+      <span class="pill green">Output Filename (Step 1)</span>
+    </div>
+  </div>
+</div>
+
+<div class="feature">
+  <div class="feature-header">
+    <span class="feature-name">Organisation Name &amp; Computer Prefix</span>
+    <span class="step-tag">Step 6</span>
+  </div>
+  <div class="feature-body">
+    <div class="feature-row">
+      <span class="feature-label">What it does</span>
+      <span class="feature-value"><strong>Organisation Name</strong> appears in System Properties and is written to the <code>RegisteredOrganization</code> registry key. <strong>Computer Prefix</strong> renames the machine at first boot to <code>&lt;PREFIX&gt;-&lt;SerialNumber&gt;</code>, giving every machine a unique, identifiable hostname automatically.</span>
+    </div>
+    <div class="scenario">
+      <div class="scenario-label">Scenario</div>
+      <p>Your asset management system identifies machines by hostname. Currently all new machines come with a random DESKTOP-XXXXX name that means nothing. You want them named <strong>ALE-&lt;SerialNumber&gt;</strong> so every machine is traceable to a physical asset without any manual renaming.</p>
+    </div>
+    <div class="feature-row">
+      <span class="feature-label">How to use</span>
+      <span class="feature-value">Set Computer Prefix = <code>ALE</code>. SetupComplete.cmd reads the serial number from WMI and renames the machine to <code>ALE-&lt;SERIAL&gt;</code>, then triggers a reboot. Auto-Logon fires on the reboot so the user sees the correct hostname from first use.</span>
+    </div>
+    <div class="outcome">
+      <div class="outcome-label">Result</div>
+      <p>Every machine has a unique, meaningful hostname from boot one. Asset management, SCCM, Intune, and DHCP logs all show <code>ALE-SN123456</code> — identifiable with no extra tagging.</p>
+    </div>
+    <div class="combo-row">
+      <span class="combo-label">Combine with</span>
+      <span class="pill gold">Auto-Logon (Step 4)</span>
+      <span class="pill">OEM Branding (Step 6)</span>
+      <span class="pill green">Organisation Name (Step 6)</span>
+    </div>
+  </div>
+</div>
+
+<div class="feature">
+  <div class="feature-header">
+    <span class="feature-name">Product Key</span>
+    <span class="step-tag">Step 6</span>
+  </div>
+  <div class="feature-body">
+    <div class="feature-row">
+      <span class="feature-label">What it does</span>
+      <span class="feature-value">Installs a Volume Licence or KMS product key using <code>slmgr.vbs /ipk</code> in SetupComplete.cmd. The machine is activated (or will activate against your KMS server on first network connection) without any manual input.</span>
+    </div>
+    <div class="scenario">
+      <div class="scenario-label">Scenario</div>
+      <p>Your organisation uses a <strong>KMS key</strong> for volume activation. You want every machine to be activated automatically against your KMS server on first boot — no "Activate Windows" watermark, no user prompts.</p>
+    </div>
+    <div class="outcome">
+      <div class="outcome-label">Result</div>
+      <p>Machine connects to the network, KMS activates Windows silently. No activation nag, no watermark. Licence compliance is automatic.</p>
+    </div>
+    <div class="combo-row">
+      <span class="combo-label">Combine with</span>
+      <span class="pill gold">Skip OOBE (Step 6)</span>
+      <span class="pill">Auto-Logon (Step 4)</span>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════ POWER COMBOS ══════════════════════════ -->
+<h1>Power Combination Reference</h1>
+<p class="step-intro">
+  The table below shows the most effective feature combinations for common deployment goals.
+  Use it as a quick checklist before building — tick each feature off in the wizard to achieve
+  the outcome in the rightmost column.
+</p>
+
+<table style="width:100%;border-collapse:collapse;font-size:9.5pt;margin-top:10pt;">
+  <thead>
+    <tr style="background:#0A1628;color:#EDF1F8;">
+      <th style="padding:8px 10px;text-align:left;font-weight:700;width:22%">Goal</th>
+      <th style="padding:8px 10px;text-align:left;font-weight:700;width:45%">Features to combine</th>
+      <th style="padding:8px 10px;text-align:left;font-weight:700;">Outcome</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr style="background:#F7F9FC;border-bottom:1px solid #DDE4EE;">
+      <td style="padding:8px 10px;font-weight:600;color:#0A1628;">Zero-touch deployment</td>
+      <td style="padding:8px 10px;color:#2A4060;">Skip OOBE + Auto-Logon + Staged Apps + Computer Prefix</td>
+      <td style="padding:8px 10px;color:#1A5030;">Machine boots → installs all apps → renames itself → ready for user. No engineer needed.</td>
+    </tr>
+    <tr style="background:#fff;border-bottom:1px solid #DDE4EE;">
+      <td style="padding:8px 10px;font-weight:600;color:#0A1628;">Security baseline</td>
+      <td style="padding:8px 10px;color:#2A4060;">Disable SMBv1 + Disable Telemetry + BitLocker + Group Policy (USB block) + Bloatware Removal</td>
+      <td style="padding:8px 10px;color:#1A5030;">Encrypted, hardened, minimal-surface machine. Passes CIS Level 1 at first boot.</td>
+    </tr>
+    <tr style="background:#F7F9FC;border-bottom:1px solid #DDE4EE;">
+      <td style="padding:8px 10px;font-weight:600;color:#0A1628;">Corporate identity</td>
+      <td style="padding:8px 10px;color:#2A4060;">Wallpaper + OEM Branding + Organisation Name + Registry (wallpaper lock) + Public Desktop files</td>
+      <td style="padding:8px 10px;color:#1A5030;">Consistent brand on every machine. Support URL in About This PC. IT portal on every desktop.</td>
+    </tr>
+    <tr style="background:#fff;border-bottom:1px solid #DDE4EE;">
+      <td style="padding:8px 10px;font-weight:600;color:#0A1628;">Recurring maintenance</td>
+      <td style="padding:8px 10px;color:#2A4060;">Deployment Scripts + Scheduled Tasks</td>
+      <td style="padding:8px 10px;color:#1A5030;">Script staged on machine, task registered at first boot. Weekly/daily automation runs forever with no further IT action.</td>
+    </tr>
+    <tr style="background:#F7F9FC;border-bottom:1px solid #DDE4EE;">
+      <td style="padding:8px 10px;font-weight:600;color:#0A1628;">Multi-region rollout</td>
+      <td style="padding:8px 10px;color:#2A4060;">Target OS Language + Timezone + Output Filename (one profile, three builds)</td>
+      <td style="padding:8px 10px;color:#1A5030;">Three ISOs from one profile. Right language, right clock, right filename per region.</td>
+    </tr>
+    <tr style="background:#fff;border-bottom:1px solid #DDE4EE;">
+      <td style="padding:8px 10px;font-weight:600;color:#0A1628;">Kiosk / terminal</td>
+      <td style="padding:8px 10px;color:#2A4060;">Auto-Logon + Password Never Expires + Power Plan (High Perf.) + Registry (disable lock screen) + Group Policy (disable Task Manager)</td>
+      <td style="padding:8px 10px;color:#1A5030;">Machine boots directly into the kiosk session. Never sleeps, never locks, operator cannot exit.</td>
+    </tr>
+    <tr style="background:#F7F9FC;border-bottom:1px solid #DDE4EE;">
+      <td style="padding:8px 10px;font-weight:600;color:#0A1628;">Developer workstation</td>
+      <td style="padding:8px 10px;color:#2A4060;">Optional Features (WSL2, Hyper-V) + Staged Apps (VS Code, Git, Docker) + Show Hidden Files + Show File Extensions</td>
+      <td style="padding:8px 10px;color:#1A5030;">Developer unboxes, logs in — all tools present, Explorer shows extensions and hidden files. Code on day one.</td>
+    </tr>
+    <tr style="background:#fff;">
+      <td style="padding:8px 10px;font-weight:600;color:#0A1628;">Air-gapped / offline</td>
+      <td style="padding:8px 10px;color:#2A4060;">Staged Apps + Language Packs + Driver Injection + Group Policy (disable Windows Update) + Disable Telemetry</td>
+      <td style="padding:8px 10px;color:#1A5030;">All software, all drivers, all language packs bundled in the ISO. Machine never needs internet to be fully operational.</td>
+    </tr>
+  </tbody>
+</table>
+
+<div style="margin-top:32pt;padding:14px 18px;background:#F7F9FC;border:1px solid #DDE4EE;border-radius:8px;page-break-inside:avoid;">
+  <p style="font-size:9pt;color:#5A7A9A;line-height:1.6;">
+    <strong style="color:#0A1628;">Tip — Save a profile for each deployment type.</strong>&nbsp;
+    Build your full configuration once, save it as a <code>.gibprofile</code> file, and load it for the next build.
+    Change only the fields that differ (edition, language, output filename) and rebuild.
+    One application, one profile library, unlimited deployment variants.
+  </p>
+</div>
+
+<div style="margin-top:24pt;text-align:center;font-size:9pt;color:#8A9AB0;">
+  ALE Image Forge · Feature Cookbook &nbsp;·&nbsp; Created by Pavan G S &nbsp;·&nbsp; ALE International &nbsp;·&nbsp; v2.4.1
+</div>
+
+</body>
+</html>

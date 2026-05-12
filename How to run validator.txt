@@ -1,0 +1,1 @@
+.\Validate-GoldenISO.ps1 -IsoPath "C:\Users\pgs6718\Downloads\ISO\Output\GoldenImage_Pro_20260505.iso" -LogDir "C:\Temp\ISOLogs"
