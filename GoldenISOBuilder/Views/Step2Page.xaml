@@ -430,7 +430,10 @@
                                       Foreground="{DynamicResource FG0Brush}"
                                       Background="{DynamicResource BG0Brush}"
                                       SelectionChanged="Vendor_Changed">
-                                <ComboBoxItem Content="Dell"   Tag="Dell"   IsSelected="True"/>
+                                <!-- Default selection set in code-behind OnLoaded
+                                     to avoid SelectionChanged firing during
+                                     XAML parse before ModelListPanel exists. -->
+                                <ComboBoxItem Content="Dell"   Tag="Dell"/>
                                 <ComboBoxItem Content="HP"     Tag="HP"/>
                                 <ComboBoxItem Content="Lenovo" Tag="Lenovo"/>
                             </ComboBox>

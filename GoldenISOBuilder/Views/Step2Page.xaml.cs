@@ -137,6 +137,13 @@ public partial class Step2Page : UserControl
         };
         RefreshAutoFetchVisibility();
         RefreshUpdatesResolvedPanel();
+
+        // Set vendor dropdown to Dell now that all controls referenced by
+        // Vendor_Changed exist. Doing this in XAML via IsSelected="True" fires
+        // SelectionChanged during InitializeComponent — before ModelListPanel
+        // is constructed — and crashes the whole MainWindow ctor.
+        if (VendorCombo != null && VendorCombo.SelectedIndex < 0)
+            VendorCombo.SelectedIndex = 0;
     }
 
     // ── Auto-fetch (Windows Updates) ─────────────────────────────────────────
@@ -266,6 +273,7 @@ public partial class Step2Page : UserControl
 
     private void UpdatesTarget_Changed(object sender, SelectionChangedEventArgs e)
     {
+        if (UpdatesFetchBtn == null || UpdatesTargetCombo == null) return;
         UpdatesFetchBtn.IsEnabled =
             UpdatesTargetCombo.SelectedItem is ComboBoxItem ci && ci.Tag is Catalog.MsUpdate;
     }
@@ -393,6 +401,11 @@ public partial class Step2Page : UserControl
     private void Vendor_Changed(object sender, SelectionChangedEventArgs e)
     {
         // Vendor changed — wipe the previous model list and selection.
+        // Guard against the firing that happens during XAML parse when
+        // ComboBox first picks its initial item: controls referenced below
+        // appear later in the XAML and aren't constructed yet at that point.
+        if (ModelListPanel == null || DriverFetchBtn == null) return;
+
         _vendorModels.Clear();
         _selectedSystemIds.Clear();
         ModelListPanel.Children.Clear();
@@ -451,7 +464,10 @@ public partial class Step2Page : UserControl
     }
 
     private void ModelSearch_Changed(object sender, TextChangedEventArgs e)
-        => RenderModelList(ModelSearchBox.Text.Trim());
+    {
+        if (ModelSearchBox == null || ModelListPanel == null) return;
+        RenderModelList(ModelSearchBox.Text.Trim());
+    }
 
     private void RenderModelList(string? filter)
     {
