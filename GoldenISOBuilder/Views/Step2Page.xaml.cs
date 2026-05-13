@@ -228,6 +228,7 @@ public partial class Step2Page : UserControl
                 .ToList();
 
             RenderUpdatesList(UpdatesSearchBox?.Text?.Trim());
+            UpdatesExportBtn.IsEnabled = _availableUpdates.Count > 0;
             UpdatesStatusText.Text = _availableUpdates.Count == 0
                 ? "Catalog returned no results. Try the manual folder mode below."
                 : $"Catalog ready — {_availableUpdates.Count} update(s) available. Tick any number to slipstream.";
@@ -295,6 +296,15 @@ public partial class Step2Page : UserControl
     private static string Trim(string s, int max) =>
         s.Length <= max ? s : s[..max] + "…";
 
+    private static string FormatEta(double seconds)
+    {
+        if (double.IsNaN(seconds) || seconds < 0 || double.IsInfinity(seconds))
+            return "?";
+        if (seconds < 60)        return $"{seconds:F0}s";
+        if (seconds < 60 * 60)   return $"{seconds / 60:F0}m {seconds % 60:F0}s";
+        return $"{seconds / 3600:F0}h {(seconds % 3600) / 60:F0}m";
+    }
+
     private void UpdatesSearch_Changed(object sender, TextChangedEventArgs e)
     {
         if (UpdatesSearchBox == null || UpdatesListPanel == null) return;
@@ -307,6 +317,76 @@ public partial class Step2Page : UserControl
         if (cb.IsChecked == true) _selectedUpdateIds.Add(u.UpdateId);
         else                       _selectedUpdateIds.Remove(u.UpdateId);
         UpdatesFetchBtn.IsEnabled = _selectedUpdateIds.Count > 0;
+    }
+
+    private void UpdatesExport_Click(object sender, RoutedEventArgs e)
+    {
+        if (_availableUpdates.Count == 0) return;
+
+        var dlg = new Microsoft.Win32.SaveFileDialog
+        {
+            Title      = "Export update list",
+            Filter     = "Text file (*.txt)|*.txt|CSV (*.csv)|*.csv",
+            FileName   = $"WindowsUpdates_{DateTime.Now:yyyyMMdd_HHmmss}.txt"
+        };
+        if (dlg.ShowDialog() != true) return;
+
+        var isCsv = dlg.FileName.EndsWith(".csv", StringComparison.OrdinalIgnoreCase);
+        var sb = new System.Text.StringBuilder();
+
+        if (isCsv)
+        {
+            sb.AppendLine("Selected,KB,Title,Classification,Size,LastUpdated,UpdateID");
+            foreach (var u in _availableUpdates)
+            {
+                var ticked = _selectedUpdateIds.Contains(u.UpdateId) ? "Y" : "";
+                sb.Append(ticked).Append(',')
+                  .Append(CsvField(u.KbId)).Append(',')
+                  .Append(CsvField(u.Title)).Append(',')
+                  .Append(CsvField(u.Classification)).Append(',')
+                  .Append(CsvField(u.SizeText)).Append(',')
+                  .Append(CsvField(u.LastUpdated)).Append(',')
+                  .AppendLine(u.UpdateId);
+            }
+        }
+        else
+        {
+            sb.AppendLine($"ALE Image Forge — Windows Update list ({DateTime.Now:yyyy-MM-dd HH:mm})");
+            sb.AppendLine($"Total available: {_availableUpdates.Count}    Selected: {_selectedUpdateIds.Count}");
+            sb.AppendLine(new string('─', 100));
+            sb.AppendLine($"{"Sel",-4}{"KB",-13}{"Title",-70}{"Size",-12}{"Updated"}");
+            sb.AppendLine(new string('─', 100));
+            foreach (var u in _availableUpdates)
+            {
+                var ticked = _selectedUpdateIds.Contains(u.UpdateId) ? "[✓]" : "[ ]";
+                sb.Append(ticked.PadRight(4));
+                sb.Append((u.KbId ?? "").PadRight(13));
+                sb.Append(Trim(u.Title ?? "", 68).PadRight(70));
+                sb.Append((u.SizeText ?? "").PadRight(12));
+                sb.AppendLine(u.LastUpdated ?? "");
+            }
+            sb.AppendLine();
+            sb.AppendLine("Selected updates will be slipstreamed into install.wim during the build.");
+            sb.AppendLine("UpdateID column omitted in text mode — choose CSV for the GUIDs.");
+        }
+
+        try
+        {
+            File.WriteAllText(dlg.FileName, sb.ToString(), System.Text.Encoding.UTF8);
+            UpdatesStatusText.Text = $"Exported {_availableUpdates.Count} update(s) → {dlg.FileName}";
+        }
+        catch (Exception ex)
+        {
+            UpdatesStatusText.Text = "Export failed: " + ex.Message;
+        }
+    }
+
+    private static string CsvField(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return "";
+        bool needsQuote = s.Contains(',') || s.Contains('"') || s.Contains('\n');
+        if (!needsQuote) return s;
+        return "\"" + s.Replace("\"", "\"\"") + "\"";
     }
 
     private async void UpdatesFetch_Click(object sender, RoutedEventArgs e)
@@ -347,7 +427,7 @@ public partial class Step2Page : UserControl
                     }
 
                     UpdatesStatusText.Text =
-                        $"[{idx}/{selected.Count}] Downloading {u.KbId} from {new Uri(url).Host}…";
+                        $"[{idx}/{selected.Count}] Starting download of {u.KbId}…";
                     UpdatesProgress.IsIndeterminate = false;
                     UpdatesProgress.Value = 0;
 
@@ -358,9 +438,30 @@ public partial class Step2Page : UserControl
 
                     var progress = new Progress<Catalog.DownloadProgress>(p =>
                     {
+                        // Percentage bar
                         if (p.TotalBytes.HasValue && p.TotalBytes.Value > 0)
                             UpdatesProgress.Value =
                                 (double)p.BytesDownloaded / p.TotalBytes.Value * 100;
+
+                        // Rich status text: [i/n] KB12345 — 425 MB / 871 MB (49%) — 12.5 Mbps — 35s left
+                        string size = $"{p.BytesDownloaded / 1024 / 1024} MB";
+                        string pct  = "";
+                        string eta  = "";
+                        if (p.TotalBytes.HasValue && p.TotalBytes.Value > 0)
+                        {
+                            size += $" / {p.TotalBytes.Value / 1024 / 1024} MB";
+                            pct   = $" ({(double)p.BytesDownloaded / p.TotalBytes.Value * 100:F0}%)";
+                            if (p.Mbps.HasValue && p.Mbps.Value > 0.1)
+                            {
+                                var remainingBits = (p.TotalBytes.Value - p.BytesDownloaded) * 8.0;
+                                var seconds       = remainingBits / (p.Mbps.Value * 1_000_000);
+                                eta               = "  —  " + FormatEta(seconds) + " left";
+                            }
+                        }
+                        string speed = p.Mbps.HasValue
+                            ? $"  —  {p.Mbps.Value:F1} Mbps" : "";
+                        UpdatesStatusText.Text =
+                            $"[{idx}/{selected.Count}] {u.KbId}  —  {size}{pct}{speed}{eta}";
                     });
                     var result = await _downloader!.DownloadAsync(
                         url, dest, expectedSha256: null, progress);

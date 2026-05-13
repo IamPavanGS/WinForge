@@ -85,6 +85,7 @@ public sealed class LenovoDriverService : IDriverPackService
         string systemId, string osVersion, CancellationToken ct = default)
     {
         var log = new System.Text.StringBuilder();
+        int   xmlsLoaded = 0;
         // Probe Win11 first, fall back to Win10 (Lenovo's older naming
         // convention still publishes Win11-compatible packages).
         foreach (var os in new[] { "Win11", "Win10" })
@@ -96,6 +97,7 @@ public sealed class LenovoDriverService : IDriverPackService
                 log.Append($"Tried {systemId}_{os}.xml → {err}; ");
                 continue;
             }
+            xmlsLoaded++;
 
             var pack = SelectDriverPack(doc, systemId, os, url);
             if (pack != null)
@@ -103,9 +105,27 @@ public sealed class LenovoDriverService : IDriverPackService
                 LastAttemptLog = $"OK from {systemId}_{os}.xml";
                 return pack;
             }
-            log.Append($"{systemId}_{os}.xml had no Driver Pack entry; ");
+            log.Append($"{systemId}_{os}.xml loaded but contains individual driver SoftPaqs not a bundled Driver Pack; ");
         }
-        LastAttemptLog = log.ToString().TrimEnd(' ', ';');
+
+        // If we *did* load at least one XML but couldn't find a bundled pack,
+        // it's the canonical Lenovo case: their Update Retriever feed lists
+        // individual drivers, not pre-bundled packs the way Dell does. Surface
+        // the actionable path the user should take.
+        if (xmlsLoaded > 0)
+        {
+            LastAttemptLog =
+                log.ToString().TrimEnd(' ', ';') +
+                ".  Lenovo's per-MT catalogue lists individual driver SoftPaqs " +
+                "rather than a single bundled pack (unlike Dell). Download the " +
+                "pre-built driver pack manually from support.lenovo.com/drivers/" +
+                $"{systemId.ToLowerInvariant()} (search 'driver pack ISO/CAB' or " +
+                "'OS deployment'), then use the manual Driver Injection card above.";
+        }
+        else
+        {
+            LastAttemptLog = log.ToString().TrimEnd(' ', ';');
+        }
         return null;
     }
 

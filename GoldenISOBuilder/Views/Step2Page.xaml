@@ -147,11 +147,19 @@
                                                Foreground="{DynamicResource FG2Brush}" FontSize="12"
                                                TextWrapping="Wrap"/>
                                 </StackPanel>
-                                <Button Grid.Column="1" x:Name="UpdatesRefreshBtn"
-                                        Content="Refresh catalog"
-                                        Style="{StaticResource DefaultButtonStyle}"
-                                        Click="UpdatesRefresh_Click"
-                                        Margin="8,0,0,0"/>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal"
+                                            h:PanelSpacing.Spacing="6">
+                                    <Button x:Name="UpdatesRefreshBtn"
+                                            Content="Refresh catalog"
+                                            Style="{StaticResource DefaultButtonStyle}"
+                                            Click="UpdatesRefresh_Click"/>
+                                    <Button x:Name="UpdatesExportBtn"
+                                            Content="Export list"
+                                            Style="{StaticResource DefaultButtonStyle}"
+                                            IsEnabled="False"
+                                            Click="UpdatesExport_Click"
+                                            ToolTip="Save the current update list to a text file"/>
+                                </StackPanel>
                             </Grid>
                             <TextBox x:Name="UpdatesSearchBox" Margin="0,10,0,0" Height="30"
                                      Padding="8,0"
