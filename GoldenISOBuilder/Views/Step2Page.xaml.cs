@@ -155,6 +155,7 @@ public partial class Step2Page : UserControl
     // All state persists on BuildSession.UpdatesMsuPaths.
 
     private List<Catalog.CatalogItem> _availableUpdates = new();
+    private readonly HashSet<string> _selectedUpdateIds = new(StringComparer.OrdinalIgnoreCase);
     private Catalog.CatalogCacheManager?  _cache;
     private Catalog.ResumeableDownloader? _downloader;
     private Catalog.MsCatalogWebService?  _msCatalog;
@@ -226,10 +227,10 @@ public partial class Step2Page : UserControl
                 .OrderByDescending(i => i.LastUpdated)
                 .ToList();
 
-            PopulateTargetCombo();
+            RenderUpdatesList(UpdatesSearchBox?.Text?.Trim());
             UpdatesStatusText.Text = _availableUpdates.Count == 0
                 ? "Catalog returned no results. Try the manual folder mode below."
-                : $"Catalog ready — {_availableUpdates.Count} update(s) available.";
+                : $"Catalog ready — {_availableUpdates.Count} update(s) available. Tick any number to slipstream.";
         }
         catch (Exception ex)
         {
@@ -244,109 +245,165 @@ public partial class Step2Page : UserControl
         }
     }
 
-    private void PopulateTargetCombo()
+    private void RenderUpdatesList(string? filter)
     {
-        UpdatesTargetCombo.Items.Clear();
-        if (_availableUpdates.Count == 0)
+        if (UpdatesListPanel == null) return;
+        UpdatesListPanel.Children.Clear();
+
+        IEnumerable<Catalog.CatalogItem> visible = _availableUpdates;
+        if (!string.IsNullOrEmpty(filter))
+            visible = visible.Where(u =>
+                u.Title.Contains(filter, StringComparison.OrdinalIgnoreCase) ||
+                u.KbId .Contains(filter, StringComparison.OrdinalIgnoreCase));
+
+        foreach (var u in visible.Take(120))
         {
-            UpdatesTargetCombo.Items.Add(new ComboBoxItem
+            var cb = new CheckBox
             {
-                Content = "(no updates found — click Refresh catalog)"
-            });
-            UpdatesFetchBtn.IsEnabled = false;
-            return;
+                Tag        = u,
+                Margin     = new Thickness(0, 1, 0, 1),
+                Foreground = (System.Windows.Media.Brush)FindResource("FG0Brush"),
+                IsChecked  = _selectedUpdateIds.Contains(u.UpdateId),
+                ToolTip    = u.Title
+            };
+            // Compose a short label so the checkbox row is readable.
+            cb.Content =
+                $"{(string.IsNullOrEmpty(u.KbId) ? "" : u.KbId + "  ")}" +
+                $"{Trim(u.Title, 90)}" +
+                $"{(string.IsNullOrEmpty(u.SizeText) ? "" : "   (" + u.SizeText + ")")}";
+            cb.Checked   += UpdateRow_CheckChanged;
+            cb.Unchecked += UpdateRow_CheckChanged;
+            UpdatesListPanel.Children.Add(cb);
         }
-        foreach (var u in _availableUpdates.Take(60))   // cap for sanity
+
+        if (!UpdatesListPanel.Children.OfType<CheckBox>().Any())
         {
-            UpdatesTargetCombo.Items.Add(new ComboBoxItem
+            UpdatesListPanel.Children.Add(new TextBlock
             {
-                Content = $"{(string.IsNullOrEmpty(u.KbId) ? "" : u.KbId + " — ")}" +
-                          $"{u.Title}" +
-                          $"{(string.IsNullOrEmpty(u.SizeText) ? "" : "  (" + u.SizeText + ")")}",
-                Tag = u
+                Text       = _availableUpdates.Count == 0
+                             ? "Click 'Refresh catalog' above to query Microsoft Update Catalog."
+                             : "(no matches for current filter)",
+                Foreground = (System.Windows.Media.Brush)FindResource("FG3Brush"),
+                FontStyle  = FontStyles.Italic,
+                Margin     = new Thickness(4)
             });
         }
-        UpdatesTargetCombo.SelectedIndex = 0;
-        UpdatesFetchBtn.IsEnabled = true;
+
+        UpdatesFetchBtn.IsEnabled = _selectedUpdateIds.Count > 0;
     }
 
-    private void UpdatesTarget_Changed(object sender, SelectionChangedEventArgs e)
+    private static string Trim(string s, int max) =>
+        s.Length <= max ? s : s[..max] + "…";
+
+    private void UpdatesSearch_Changed(object sender, TextChangedEventArgs e)
     {
-        if (UpdatesFetchBtn == null || UpdatesTargetCombo == null) return;
-        UpdatesFetchBtn.IsEnabled =
-            UpdatesTargetCombo.SelectedItem is ComboBoxItem ci && ci.Tag is Catalog.CatalogItem;
+        if (UpdatesSearchBox == null || UpdatesListPanel == null) return;
+        RenderUpdatesList(UpdatesSearchBox.Text.Trim());
+    }
+
+    private void UpdateRow_CheckChanged(object sender, RoutedEventArgs e)
+    {
+        if (sender is not CheckBox cb || cb.Tag is not Catalog.CatalogItem u) return;
+        if (cb.IsChecked == true) _selectedUpdateIds.Add(u.UpdateId);
+        else                       _selectedUpdateIds.Remove(u.UpdateId);
+        UpdatesFetchBtn.IsEnabled = _selectedUpdateIds.Count > 0;
     }
 
     private async void UpdatesFetch_Click(object sender, RoutedEventArgs e)
     {
-        if (UpdatesTargetCombo.SelectedItem is not ComboBoxItem ci ||
-            ci.Tag is not Catalog.CatalogItem u)
-            return;
+        if (_selectedUpdateIds.Count == 0) return;
 
         UpdatesFetchBtn.IsEnabled = false;
         UpdatesProgress.Visibility = Visibility.Visible;
-        UpdatesProgress.IsIndeterminate = true;
-        UpdatesStatusText.Text = $"Resolving {u.KbId} download URL…";
+        UpdatesProgress.IsIndeterminate = false;
+
+        var selected = _availableUpdates
+            .Where(u => _selectedUpdateIds.Contains(u.UpdateId))
+            .ToList();
+
+        int ok = 0;
+        var failures = new System.Text.StringBuilder();
 
         try
         {
             EnsureCatalogServices();
-            var url = await _msCatalog!.ResolveDownloadUrlAsync(u.UpdateId);
-            if (string.IsNullOrEmpty(url))
+
+            int idx = 0;
+            foreach (var u in selected)
             {
+                idx++;
                 UpdatesStatusText.Text =
-                    $"Could not resolve a direct download URL for {u.KbId}. " +
-                    "Open https://catalog.update.microsoft.com manually and " +
-                    "save the .msu, then use the manual folder mode below.";
-                return;
+                    $"[{idx}/{selected.Count}] Resolving {u.KbId} download URL…";
+                UpdatesProgress.IsIndeterminate = true;
+
+                try
+                {
+                    var url = await _msCatalog!.ResolveDownloadUrlAsync(u.UpdateId);
+                    if (string.IsNullOrEmpty(url))
+                    {
+                        failures.AppendLine(
+                            $"  • {u.KbId}: catalog did not expose a direct URL.");
+                        continue;
+                    }
+
+                    UpdatesStatusText.Text =
+                        $"[{idx}/{selected.Count}] Downloading {u.KbId} from {new Uri(url).Host}…";
+                    UpdatesProgress.IsIndeterminate = false;
+                    UpdatesProgress.Value = 0;
+
+                    var key = (u.KbId.Length > 0 ? u.KbId : $"update-{u.UpdateId[..8]}") +
+                              System.IO.Path.GetExtension(new Uri(url).LocalPath);
+                    var dest = _cache!.GetEntryPath(
+                        Catalog.CatalogCacheManager.Category.WindowsUpdates, key);
+
+                    var progress = new Progress<Catalog.DownloadProgress>(p =>
+                    {
+                        if (p.TotalBytes.HasValue && p.TotalBytes.Value > 0)
+                            UpdatesProgress.Value =
+                                (double)p.BytesDownloaded / p.TotalBytes.Value * 100;
+                    });
+                    var result = await _downloader!.DownloadAsync(
+                        url, dest, expectedSha256: null, progress);
+
+                    _cache.WriteManifest(dest, new Catalog.CacheManifest
+                    {
+                        SourceUrl     = url,
+                        Sha256        = result.Sha256,
+                        SizeBytes     = result.SizeBytes,
+                        DownloadedUtc = DateTime.UtcNow,
+                        ExpiresUtc    = DateTime.UtcNow.AddDays(60),
+                        Vendor        = "Microsoft",
+                        Notes         = u.Title
+                    });
+
+                    if (!BuildSession.Current.UpdatesMsuPaths.Contains(dest))
+                        BuildSession.Current.UpdatesMsuPaths.Add(dest);
+                    ok++;
+                }
+                catch (Exception ex)
+                {
+                    failures.AppendLine($"  • {u.KbId}: {ex.Message}");
+                }
             }
 
-            UpdatesStatusText.Text = $"Downloading {u.KbId} from {new Uri(url).Host}…";
-            UpdatesProgress.IsIndeterminate = false;
-            UpdatesProgress.Value = 0;
-
-            var key = (u.KbId.Length > 0 ? u.KbId : "update") +
-                      System.IO.Path.GetExtension(new Uri(url).LocalPath);
-            var dest = _cache!.GetEntryPath(
-                Catalog.CatalogCacheManager.Category.WindowsUpdates, key);
-
-            var progress = new Progress<Catalog.DownloadProgress>(p =>
-            {
-                if (p.TotalBytes.HasValue && p.TotalBytes.Value > 0)
-                    UpdatesProgress.Value =
-                        (double)p.BytesDownloaded / p.TotalBytes.Value * 100;
-            });
-            var result = await _downloader!.DownloadAsync(
-                url, dest, expectedSha256: null, progress);
-
-            _cache.WriteManifest(dest, new Catalog.CacheManifest
-            {
-                SourceUrl     = url,
-                Sha256        = result.Sha256,
-                SizeBytes     = result.SizeBytes,
-                DownloadedUtc = DateTime.UtcNow,
-                ExpiresUtc    = DateTime.UtcNow.AddDays(60),
-                Vendor        = "Microsoft",
-                Notes         = u.Title
-            });
-
-            if (!BuildSession.Current.UpdatesMsuPaths.Contains(dest))
-                BuildSession.Current.UpdatesMsuPaths.Add(dest);
             RefreshUpdatesResolvedPanel();
 
-            UpdatesStatusText.Text =
-                $"Fetched {u.KbId} ({result.SizeBytes / 1024 / 1024} MB). " +
-                "Will be slipstreamed during the build.";
-        }
-        catch (Exception ex)
-        {
-            UpdatesStatusText.Text = "Download failed: " + ex.Message;
+            if (failures.Length == 0)
+                UpdatesStatusText.Text =
+                    $"Fetched {ok} update(s). They will be slipstreamed during the build.";
+            else if (ok == 0)
+                UpdatesStatusText.Text =
+                    "No updates fetched. Reason(s):\n" + failures.ToString().TrimEnd();
+            else
+                UpdatesStatusText.Text =
+                    $"Fetched {ok} update(s); {selected.Count - ok} failed:\n" +
+                    failures.ToString().TrimEnd();
         }
         finally
         {
             UpdatesProgress.Visibility = Visibility.Collapsed;
             UpdatesProgress.IsIndeterminate = false;
-            UpdatesFetchBtn.IsEnabled = true;
+            UpdatesFetchBtn.IsEnabled = _selectedUpdateIds.Count > 0;
         }
     }
 
@@ -567,6 +624,9 @@ public partial class Step2Page : UserControl
         DriverStatusText.Text =
             $"Resolving {_selectedSystemIds.Count} driver pack(s)…";
 
+        var failures = new System.Text.StringBuilder();
+        int okPacks = 0;
+
         try
         {
             var ids = _selectedSystemIds.ToArray();
@@ -590,15 +650,14 @@ public partial class Step2Page : UserControl
                 var pack = await _activeVendorService.GetDriverPackAsync(sid, osCode);
                 if (pack == null)
                 {
-                    // Lenovo (and any future service that exposes it) reports
-                    // why via LastAttemptLog. Surface it so the user knows
-                    // exactly what failed instead of seeing a silent "0 packs".
+                    // Collect the reason — final status message lists every
+                    // failure rather than each one being overwritten by the
+                    // final "Done" line.
                     var why = (_activeVendorService as Catalog.LenovoDriverService)?
                               .LastAttemptLog;
-                    DriverStatusText.Text = string.IsNullOrEmpty(why)
-                        ? $"No {osCode} driver pack published for {model.Name} ({sid}). Skipping."
-                        : $"{model.Name} ({sid}): {why}";
-                    await Task.Delay(1500);
+                    if (string.IsNullOrEmpty(why))
+                        why = $"no {osCode} driver pack published (vendor returned nothing).";
+                    failures.AppendLine($"  • {model.Name} ({sid}): {why}");
                     continue;
                 }
 
@@ -655,11 +714,23 @@ public partial class Step2Page : UserControl
                 if (existing != null)
                     BuildSession.Current.AutoFetchedDriverPacks.Remove(existing);
                 BuildSession.Current.AutoFetchedDriverPacks.Add(sel);
+                okPacks++;
             }
 
             RefreshFetchedPacksPanel();
-            DriverStatusText.Text =
-                $"Done. {BuildSession.Current.AutoFetchedDriverPacks.Count} pack(s) staged for build.";
+
+            // Compose a final status that doesn't mask per-model failures.
+            int totalStaged = BuildSession.Current.AutoFetchedDriverPacks.Count;
+            if (failures.Length == 0)
+                DriverStatusText.Text = $"Done. {totalStaged} pack(s) staged for build.";
+            else if (okPacks == 0)
+                DriverStatusText.Text =
+                    "No packs fetched. Reason(s):\n" + failures.ToString().TrimEnd() +
+                    "\nFor Lenovo: check the 4-char Machine Type on the laptop's underside sticker and type it into the search box — the seed list is reference only.";
+            else
+                DriverStatusText.Text =
+                    $"Fetched {okPacks} pack(s); {failures.ToString().Split('\n').Count(l => l.Trim().Length > 0)} failed:\n" +
+                    failures.ToString().TrimEnd();
         }
         catch (Exception ex)
         {

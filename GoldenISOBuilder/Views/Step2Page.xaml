@@ -153,17 +153,31 @@
                                         Click="UpdatesRefresh_Click"
                                         Margin="8,0,0,0"/>
                             </Grid>
-                            <ComboBox x:Name="UpdatesTargetCombo"
-                                      Margin="0,12,0,0" Height="32"
-                                      Foreground="{DynamicResource FG0Brush}"
-                                      Background="{DynamicResource BG0Brush}"
-                                      SelectionChanged="UpdatesTarget_Changed">
-                                <ComboBoxItem Content="(no targets available)"/>
-                            </ComboBox>
+                            <TextBox x:Name="UpdatesSearchBox" Margin="0,10,0,0" Height="30"
+                                     Padding="8,0"
+                                     Foreground="{DynamicResource FG0Brush}"
+                                     Background="{DynamicResource BG0Brush}"
+                                     VerticalContentAlignment="Center"
+                                     TextChanged="UpdatesSearch_Changed"
+                                     ToolTip="Filter the list — type 'KB5089549' or '25H2' etc."/>
+
+                            <!-- Multi-select list of catalog hits. Tick every
+                                 KB you want slipstreamed; click Fetch selected
+                                 to download them all in sequence. -->
+                            <Border Margin="0,8,0,0"
+                                    Background="{DynamicResource BG0Brush}"
+                                    BorderBrush="{DynamicResource LineBrush}"
+                                    BorderThickness="1" CornerRadius="6"
+                                    MinHeight="120" MaxHeight="240">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                    <StackPanel x:Name="UpdatesListPanel" Margin="6"/>
+                                </ScrollViewer>
+                            </Border>
+
                             <StackPanel Orientation="Horizontal" Margin="0,12,0,0"
                                         h:PanelSpacing.Spacing="6">
                                 <Button x:Name="UpdatesFetchBtn"
-                                        Content="Fetch updates"
+                                        Content="Fetch selected"
                                         Style="{StaticResource PrimaryButtonStyle}"
                                         IsEnabled="False"
                                         Click="UpdatesFetch_Click"/>
@@ -457,8 +471,14 @@
                                      Background="{DynamicResource BG0Brush}"
                                      Padding="8,0"
                                      VerticalContentAlignment="Center"
+                                     ToolTip="Type a model name (Dell / HP) or a 4-char Machine Type (Lenovo — found on the laptop's underside sticker)"
                                      TextChanged="ModelSearch_Changed"/>
                         </Grid>
+
+                        <TextBlock Margin="140,4,0,0" FontSize="11"
+                                   Foreground="{DynamicResource FG3Brush}"
+                                   TextWrapping="Wrap"
+                                   Text="Lenovo: type the 4-char Machine Type from the laptop's underside sticker — the seed list is reference only and won't cover every SKU."/>
 
                         <Border Margin="0,8,0,0"
                                 Background="{DynamicResource BG0Brush}"
