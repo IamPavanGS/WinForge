@@ -398,6 +398,108 @@
                     </StackPanel>
                 </Border>
 
+                <!-- ══ Driver Auto-Fetch (Dell / HP / Lenovo) ════════════════════
+                     Visible only when EnableAutoFetchFeatures is on (Settings).
+                     Sits next to the manual Driver Injection card above so
+                     admins can use both: a vendor pack for the target SKUs and
+                     a folder pick for anything else. -->
+                <Border x:Name="DriversAutoCard" Style="{StaticResource CardStyle}"
+                        Visibility="Collapsed">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,4">
+                            <StackPanel>
+                                <TextBlock Text="Driver Auto-Fetch (Dell / HP / Lenovo)"
+                                           Style="{StaticResource CardTitleText}"/>
+                                <TextBlock Text="Pick laptop / desktop SKUs and the tool downloads the official OEM driver pack from the vendor's public catalogue."
+                                           Foreground="{DynamicResource FG2Brush}" FontSize="12"
+                                           Margin="0,2,0,0" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Grid>
+
+                        <Grid Margin="0,12,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="140"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock Text="Vendor"
+                                       Grid.Column="0" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource FG2Brush}" FontSize="12"/>
+                            <ComboBox x:Name="VendorCombo" Grid.Column="1" Height="32"
+                                      Foreground="{DynamicResource FG0Brush}"
+                                      Background="{DynamicResource BG0Brush}"
+                                      SelectionChanged="Vendor_Changed">
+                                <ComboBoxItem Content="Dell"   Tag="Dell"   IsSelected="True"/>
+                                <ComboBoxItem Content="HP"     Tag="HP"/>
+                                <ComboBoxItem Content="Lenovo" Tag="Lenovo"/>
+                            </ComboBox>
+                            <Button Grid.Column="2" x:Name="DriverRefreshBtn"
+                                    Content="Load models"
+                                    Style="{StaticResource DefaultButtonStyle}"
+                                    Margin="8,0,0,0"
+                                    Click="DriverRefresh_Click"/>
+                        </Grid>
+
+                        <Grid Margin="0,10,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="140"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Search model"
+                                       Grid.Column="0" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource FG2Brush}" FontSize="12"/>
+                            <TextBox x:Name="ModelSearchBox" Grid.Column="1" Height="32"
+                                     Foreground="{DynamicResource FG0Brush}"
+                                     Background="{DynamicResource BG0Brush}"
+                                     Padding="8,0"
+                                     VerticalContentAlignment="Center"
+                                     TextChanged="ModelSearch_Changed"/>
+                        </Grid>
+
+                        <Border Margin="0,8,0,0"
+                                Background="{DynamicResource BG0Brush}"
+                                BorderBrush="{DynamicResource LineBrush}"
+                                BorderThickness="1" CornerRadius="6"
+                                MinHeight="120" MaxHeight="220">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <StackPanel x:Name="ModelListPanel" Margin="6"/>
+                            </ScrollViewer>
+                        </Border>
+
+                        <StackPanel Orientation="Horizontal" Margin="0,12,0,0"
+                                    h:PanelSpacing.Spacing="6">
+                            <Button x:Name="DriverFetchBtn"
+                                    Content="Fetch selected (max 3)"
+                                    Style="{StaticResource PrimaryButtonStyle}"
+                                    IsEnabled="False"
+                                    Click="DriverFetch_Click"/>
+                            <ProgressBar x:Name="DriverProgress" Width="280" Height="6"
+                                         Margin="12,0,0,0"
+                                         VerticalAlignment="Center"
+                                         Visibility="Collapsed"/>
+                        </StackPanel>
+                        <TextBlock x:Name="DriverStatusText"
+                                   Margin="0,8,0,0" FontSize="11.5"
+                                   Foreground="{DynamicResource FG2Brush}"
+                                   TextWrapping="Wrap"/>
+
+                        <StackPanel x:Name="FetchedPacksPanel" Margin="0,8,0,0"
+                                    h:PanelSpacing.Spacing="4"/>
+
+                        <Border Background="{DynamicResource BG3Brush}" CornerRadius="6"
+                                Padding="12,10" Margin="0,10,0,0">
+                            <StackPanel Orientation="Horizontal" h:PanelSpacing.Spacing="8">
+                                <Path Style="{StaticResource IconPath}" Width="14" Height="14"
+                                      Data="{StaticResource AlertIcon}" Stroke="{DynamicResource Gold1Brush}"/>
+                                <TextBlock Text="Fetched packs are stored under %LOCALAPPDATA%\GoldenISOBuilder\Cache and reused across builds. WinPE-critical drivers (Net/Storage/HID) are auto-injected into boot.wim to unblock Intel 12th-gen+ NVMe."
+                                           Foreground="{DynamicResource FG2Brush}" FontSize="12"
+                                           TextWrapping="Wrap" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Border>
+
                 <!-- ══ First-Boot Applications ════════════════════════════════ -->
                 <Border Style="{StaticResource CardStyle}">
                     <StackPanel>

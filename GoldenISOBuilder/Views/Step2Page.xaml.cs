@@ -157,7 +157,9 @@ public partial class Step2Page : UserControl
         bool on =
             GoldenISOBuilder.Helpers.AppSettingsLoader.ReadEnableAutoFetchFeatures();
         BuildSession.Current.EnableAutoFetchFeatures = on;
-        UpdatesCard.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+        UpdatesCard.Visibility     = on ? Visibility.Visible : Visibility.Collapsed;
+        DriversAutoCard.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+        if (on) RefreshFetchedPacksPanel();
         if (on)
         {
             // Update the detected-build label from the current session.
@@ -374,6 +376,268 @@ public partial class Step2Page : UserControl
         _cache      ??= new Catalog.CatalogCacheManager();
         _downloader ??= new Catalog.ResumeableDownloader();
         _msUpdates  ??= new Catalog.MsUpdateService(_cache, _downloader);
+    }
+
+    // ── Auto-fetch (Driver packs) ─────────────────────────────────────────────
+    //
+    // Adds a second card under Driver Injection. Vendor dropdown picks
+    // Dell / HP / Lenovo, the model list is populated lazily on "Load models",
+    // user multi-selects up to 3 SKUs, "Fetch selected" downloads each pack
+    // via Phase 1 ResumeableDownloader and registers the resulting local path
+    // in BuildSession.AutoFetchedDriverPacks for the Phase 4 pipeline step.
+
+    private Catalog.IDriverPackService? _activeVendorService;
+    private List<Catalog.DriverPackModel> _vendorModels = new();
+    private readonly HashSet<string> _selectedSystemIds = new(StringComparer.OrdinalIgnoreCase);
+
+    private void Vendor_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        // Vendor changed — wipe the previous model list and selection.
+        _vendorModels.Clear();
+        _selectedSystemIds.Clear();
+        ModelListPanel.Children.Clear();
+        DriverFetchBtn.IsEnabled = false;
+        if (DriverStatusText != null)
+            DriverStatusText.Text = "Click 'Load models' to query the vendor catalogue.";
+    }
+
+    private async void DriverRefresh_Click(object sender, RoutedEventArgs e)
+    {
+        if (VendorCombo.SelectedItem is not ComboBoxItem ci ||
+            ci.Tag is not string vendorTag)
+            return;
+
+        DriverRefreshBtn.IsEnabled = false;
+        DriverStatusText.Text = $"Loading {vendorTag} catalogue…";
+        DriverProgress.Visibility = Visibility.Visible;
+        DriverProgress.IsIndeterminate = true;
+
+        try
+        {
+            EnsureCatalogServices();
+            _activeVendorService = vendorTag switch
+            {
+                "Dell"   => new Catalog.DellDriverService  (_cache!, _downloader!),
+                "HP"     => new Catalog.HpDriverService    (_cache!, _downloader!),
+                "Lenovo" => new Catalog.LenovoDriverService(_cache!, _downloader!),
+                _        => null
+            };
+            if (_activeVendorService == null)
+            {
+                DriverStatusText.Text = "Unknown vendor.";
+                return;
+            }
+
+            await _activeVendorService.EnsureCatalogAsync();
+            _vendorModels = (await _activeVendorService.ListModelsAsync()).ToList();
+            ModelSearchBox.Text = "";
+            RenderModelList(filter: null);
+
+            DriverStatusText.Text =
+                $"{_vendorModels.Count} {vendorTag} model(s) available — type to search, tick up to 3.";
+        }
+        catch (Exception ex)
+        {
+            DriverStatusText.Text =
+                "Catalogue load failed: " + ex.Message +
+                "  (Manual driver folder picker above still works.)";
+        }
+        finally
+        {
+            DriverProgress.IsIndeterminate = false;
+            DriverProgress.Visibility = Visibility.Collapsed;
+            DriverRefreshBtn.IsEnabled = true;
+        }
+    }
+
+    private void ModelSearch_Changed(object sender, TextChangedEventArgs e)
+        => RenderModelList(ModelSearchBox.Text.Trim());
+
+    private void RenderModelList(string? filter)
+    {
+        ModelListPanel.Children.Clear();
+        IEnumerable<Catalog.DriverPackModel> visible = _vendorModels;
+        if (!string.IsNullOrEmpty(filter))
+            visible = visible.Where(m =>
+                m.Name.Contains(filter, StringComparison.OrdinalIgnoreCase) ||
+                m.SystemId.Contains(filter, StringComparison.OrdinalIgnoreCase) ||
+                (m.Brand?.Contains(filter, StringComparison.OrdinalIgnoreCase) ?? false));
+
+        foreach (var m in visible.Take(200))
+        {
+            var cb = new CheckBox
+            {
+                Content    = $"{m.Name}   ({m.SystemId})",
+                Tag        = m,
+                Margin     = new Thickness(0, 1, 0, 1),
+                Foreground = (System.Windows.Media.Brush)FindResource("FG0Brush"),
+                IsChecked  = _selectedSystemIds.Contains(m.SystemId)
+            };
+            cb.Checked   += Model_CheckChanged;
+            cb.Unchecked += Model_CheckChanged;
+            ModelListPanel.Children.Add(cb);
+        }
+        if (!ModelListPanel.Children.OfType<CheckBox>().Any())
+        {
+            ModelListPanel.Children.Add(new TextBlock
+            {
+                Text       = "(no matches)",
+                Foreground = (System.Windows.Media.Brush)FindResource("FG3Brush"),
+                FontStyle  = FontStyles.Italic,
+                Margin     = new Thickness(4)
+            });
+        }
+    }
+
+    private void Model_CheckChanged(object sender, RoutedEventArgs e)
+    {
+        if (sender is not CheckBox cb || cb.Tag is not Catalog.DriverPackModel m) return;
+        if (cb.IsChecked == true)
+        {
+            if (_selectedSystemIds.Count >= 3)
+            {
+                cb.IsChecked = false;
+                DriverStatusText.Text =
+                    "Maximum 3 SKUs per build. Untick another model first to add this one.";
+                return;
+            }
+            _selectedSystemIds.Add(m.SystemId);
+        }
+        else
+        {
+            _selectedSystemIds.Remove(m.SystemId);
+        }
+        DriverFetchBtn.IsEnabled = _selectedSystemIds.Count > 0;
+        DriverStatusText.Text = _selectedSystemIds.Count > 0
+            ? $"{_selectedSystemIds.Count} model(s) selected."
+            : "No models selected.";
+    }
+
+    private async void DriverFetch_Click(object sender, RoutedEventArgs e)
+    {
+        if (_activeVendorService == null || _selectedSystemIds.Count == 0) return;
+
+        DriverFetchBtn.IsEnabled = false;
+        DriverProgress.Visibility = Visibility.Visible;
+        DriverProgress.IsIndeterminate = false;
+        DriverStatusText.Text =
+            $"Resolving {_selectedSystemIds.Count} driver pack(s)…";
+
+        try
+        {
+            var ids = _selectedSystemIds.ToArray();
+            foreach (var sid in ids)
+            {
+                var model = _vendorModels.FirstOrDefault(
+                    m => string.Equals(m.SystemId, sid, StringComparison.OrdinalIgnoreCase));
+                if (model == null) continue;
+
+                // Vendor OS token differs: Dell expects "W11", HP "win11",
+                // Lenovo "Win11". Each service maps internally.
+                string osCode = _activeVendorService.Vendor switch
+                {
+                    Catalog.DriverVendor.Dell   => "W11",
+                    Catalog.DriverVendor.HP     => "win11",
+                    Catalog.DriverVendor.Lenovo => "Win11",
+                    _                            => "W11"
+                };
+
+                DriverStatusText.Text = $"Resolving driver pack for {model.Name}…";
+                var pack = await _activeVendorService.GetDriverPackAsync(sid, osCode);
+                if (pack == null)
+                {
+                    DriverStatusText.Text =
+                        $"No {osCode} driver pack published for {model.Name} ({sid}). Skipping.";
+                    await Task.Delay(800);
+                    continue;
+                }
+
+                DriverStatusText.Text =
+                    $"Downloading {pack.Filename} for {model.Name} ({pack.SizeBytes / 1024 / 1024} MB)…";
+
+                var key = $"{pack.Vendor}/{sid}/{pack.Filename}";
+                var dest = _cache!.GetEntryPath(
+                    pack.Vendor switch
+                    {
+                        Catalog.DriverVendor.Dell   => Catalog.CatalogCacheManager.Category.Dell,
+                        Catalog.DriverVendor.HP     => Catalog.CatalogCacheManager.Category.HP,
+                        _                            => Catalog.CatalogCacheManager.Category.Lenovo
+                    },
+                    key);
+
+                var progress = new Progress<Catalog.DownloadProgress>(p =>
+                {
+                    if (p.TotalBytes.HasValue && p.TotalBytes.Value > 0)
+                        DriverProgress.Value =
+                            (double)p.BytesDownloaded / p.TotalBytes.Value * 100;
+                });
+                var result = await _downloader!.DownloadAsync(
+                    pack.DownloadUrl, dest, expectedSha256: pack.Sha256, progress);
+
+                _cache.WriteManifest(dest, new Catalog.CacheManifest
+                {
+                    SourceUrl     = pack.DownloadUrl,
+                    Sha256        = result.Sha256,
+                    SizeBytes     = result.SizeBytes,
+                    DownloadedUtc = DateTime.UtcNow,
+                    ExpiresUtc    = DateTime.UtcNow.AddDays(60),
+                    Vendor        = pack.Vendor.ToString(),
+                    Notes         = $"{pack.Model} {pack.OsVersion} {pack.Version}"
+                });
+
+                var sel = new DriverPackSelection
+                {
+                    Vendor              = pack.Vendor.ToString(),
+                    SystemId            = pack.SystemId,
+                    ModelName           = pack.Model,
+                    OsVersion           = pack.OsVersion,
+                    PackVersion         = pack.Version,
+                    DownloadUrl         = pack.DownloadUrl,
+                    LocalCabPath        = dest,
+                    Sha256              = result.Sha256,
+                    SizeBytes           = result.SizeBytes,
+                    InjectWinPECritical = true
+                };
+
+                var existing = BuildSession.Current.AutoFetchedDriverPacks
+                    .FirstOrDefault(p => p.SystemId == sel.SystemId &&
+                                         p.Vendor   == sel.Vendor);
+                if (existing != null)
+                    BuildSession.Current.AutoFetchedDriverPacks.Remove(existing);
+                BuildSession.Current.AutoFetchedDriverPacks.Add(sel);
+            }
+
+            RefreshFetchedPacksPanel();
+            DriverStatusText.Text =
+                $"Done. {BuildSession.Current.AutoFetchedDriverPacks.Count} pack(s) staged for build.";
+        }
+        catch (Exception ex)
+        {
+            DriverStatusText.Text = "Fetch failed: " + ex.Message;
+        }
+        finally
+        {
+            DriverProgress.Visibility = Visibility.Collapsed;
+            DriverFetchBtn.IsEnabled = _selectedSystemIds.Count > 0;
+        }
+    }
+
+    private void RefreshFetchedPacksPanel()
+    {
+        if (FetchedPacksPanel == null) return;
+        FetchedPacksPanel.Children.Clear();
+        foreach (var p in BuildSession.Current.AutoFetchedDriverPacks)
+        {
+            var row = new TextBlock
+            {
+                Text       = $"  • {p.Vendor}  {p.ModelName} ({p.SystemId}) — v{p.PackVersion}, " +
+                             $"{p.SizeBytes / 1024 / 1024} MB",
+                Foreground = (System.Windows.Media.Brush)FindResource("FG1Brush"),
+                FontSize   = 11.5,
+                ToolTip    = p.LocalCabPath
+            };
+            FetchedPacksPanel.Children.Add(row);
+        }
     }
 
     // ── Wallpaper ─────────────────────────────────────────────────────────────
