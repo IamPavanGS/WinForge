@@ -786,6 +786,28 @@ public partial class Step2Page : UserControl
                     if (p.TotalBytes.HasValue && p.TotalBytes.Value > 0)
                         DriverProgress.Value =
                             (double)p.BytesDownloaded / p.TotalBytes.Value * 100;
+
+                    // Rich status: model — 425 MB / 871 MB (49%) — 12.5 Mbps — 35s left
+                    string size = $"{p.BytesDownloaded / 1024 / 1024} MB";
+                    string pct  = "";
+                    string eta  = "";
+                    string spd  = "";
+                    if (p.TotalBytes.HasValue && p.TotalBytes.Value > 0)
+                    {
+                        size += $" / {p.TotalBytes.Value / 1024 / 1024} MB";
+                        pct   = $" ({(double)p.BytesDownloaded / p.TotalBytes.Value * 100:F0}%)";
+                        if (p.Mbps.HasValue && p.Mbps.Value > 0.1)
+                        {
+                            var remainingBits = (p.TotalBytes.Value - p.BytesDownloaded) * 8.0;
+                            var seconds       = remainingBits / (p.Mbps.Value * 1_000_000);
+                            eta               = "  —  " + FormatEta(seconds) + " left";
+                        }
+                    }
+                    if (p.Mbps.HasValue && p.Mbps.Value > 0.1)
+                        spd = $"  —  {p.Mbps.Value:F1} Mbps";
+
+                    DriverStatusText.Text =
+                        $"Downloading {pack.Filename} for {model.Name} — {size}{pct}{spd}{eta}";
                 });
                 var result = await _downloader!.DownloadAsync(
                     pack.DownloadUrl, dest, expectedSha256: pack.Sha256, progress);
@@ -801,18 +823,25 @@ public partial class Step2Page : UserControl
                     Notes         = $"{pack.Model} {pack.OsVersion} {pack.Version}"
                 });
 
-                // Lenovo packs are self-extracting EXEs, not folders DISM can
-                // /Add-Driver /Recurse directly. Extract before staging.
+                // Lenovo + HP packs are self-extracting EXEs, not folders DISM
+                // can /Add-Driver /Recurse directly. Extract before staging.
+                // (Dell packs are CABs and need a separate path — handled in
+                // BuildEngine.)
                 var localPath = dest;
-                if (pack.Vendor == Catalog.DriverVendor.Lenovo)
+                if (pack.Vendor == Catalog.DriverVendor.Lenovo ||
+                    pack.Vendor == Catalog.DriverVendor.HP)
                 {
                     DriverStatusText.Text =
-                        $"Extracting Lenovo SoftPaq for {model.Name}…";
+                        $"Extracting {pack.Vendor} SoftPaq for {model.Name}…";
                     try
                     {
                         var extractDir = dest + ".extracted";
-                        await Catalog.LenovoSoftPaqExtractor.ExtractAsync(
-                            dest, extractDir);
+                        if (pack.Vendor == Catalog.DriverVendor.Lenovo)
+                            await Catalog.LenovoSoftPaqExtractor.ExtractAsync(
+                                dest, extractDir);
+                        else
+                            await Catalog.HpSoftPaqExtractor.ExtractAsync(
+                                dest, extractDir);
                         localPath = extractDir;
                     }
                     catch (Exception ex)

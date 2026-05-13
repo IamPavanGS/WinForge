@@ -340,6 +340,13 @@ public partial class WelcomePage : UserControl
         d.DriverFolderPaths       = src.DriverFolderPaths;
         d.ScheduledTasks          = src.ScheduledTasks;
 
+        // Auto-fetched Windows Updates (.msu) and OEM driver packs — cached
+        // locally under %LOCALAPPDATA%\GoldenISOBuilder\Cache\. Stored paths
+        // may be stale if the cache was cleared or the profile was loaded on
+        // a different machine; CollectMissingPaths surfaces these to the user.
+        d.UpdatesMsuPaths         = src.UpdatesMsuPaths ?? [];
+        d.AutoFetchedDriverPacks  = src.AutoFetchedDriverPacks ?? [];
+
         // ── Step 3: Customisations ────────────────────────────────────────────
         d.BloatwareToRemove       = src.BloatwareToRemove;
 
@@ -496,6 +503,25 @@ public partial class WelcomePage : UserControl
         foreach (var df in s.DriverFolderPaths)
             if (!string.IsNullOrWhiteSpace(df) && !System.IO.Directory.Exists(df))
                 issues.Add(("Driver folder", df));
+
+        // ── Auto-fetched Windows Updates (.msu in the catalogue cache) ───────
+        foreach (var msu in s.UpdatesMsuPaths)
+            if (!string.IsNullOrWhiteSpace(msu) && !System.IO.File.Exists(msu))
+                issues.Add(("Windows Update (auto-fetched) — re-fetch in Step 2",
+                            System.IO.Path.GetFileName(msu)));
+
+        // ── Auto-fetched OEM driver packs ─────────────────────────────────────
+        // Lenovo and HP packs are extracted-folder paths; Dell packs are CAB
+        // files. Accept either form so we don't false-positive on Dell entries.
+        foreach (var dp in s.AutoFetchedDriverPacks)
+        {
+            if (string.IsNullOrWhiteSpace(dp.LocalCabPath)) continue;
+            if (System.IO.File.Exists(dp.LocalCabPath) ||
+                System.IO.Directory.Exists(dp.LocalCabPath)) continue;
+            issues.Add(
+                ($"Driver pack (auto-fetched) — {dp.Vendor} {dp.ModelName} ({dp.SystemId}). Re-fetch in Step 2",
+                 dp.LocalCabPath));
+        }
 
         // ── Deployment scripts ────────────────────────────────────────────────
         foreach (var ds in s.DeploymentScripts)

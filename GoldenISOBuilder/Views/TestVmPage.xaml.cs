@@ -603,7 +603,7 @@ public partial class TestVmPage : UserControl
         // process exits. Without this wait, the PowerShell child orphans the VM.
         try
         {
-            var task = _hv.StopAndDeleteAsync();
+            var task = _hv.StopAndDeleteAsync("app closing — CleanupVmOnClose");
             task.Wait(TimeSpan.FromSeconds(8));
         }
         catch { /* best-effort */ }
@@ -645,10 +645,20 @@ public partial class TestVmPage : UserControl
     private async void StopVm_Click(object sender, RoutedEventArgs e)
     {
         if (_hv.State != VmState.Running) return;
+
+        // Destructive action — the VM and its VHDX go away. Confirm so a
+        // misclick on a long-running test doesn't wipe the work.
+        if (!AppDialog.Confirm(this,
+                "Stop and delete this test VM?\n\n" +
+                "The VM and its virtual disk (.vhdx) will be removed. Any " +
+                "changes made inside the VM will be lost.",
+                "Confirm Stop & Delete"))
+            return;
+
         AppendLogRow("INFO", "#4D8EF8", "Stopping VM…");
         _telemetryTimer?.Stop();
         DisposeEmbed();
-        await _hv.StopAndDeleteAsync();
+        await _hv.StopAndDeleteAsync("user clicked Stop VM");
         AppendLogRow("OK", "#27C48A", "VM stopped and removed");
         SetVmUiState(VmState.Idle);
         _elapsedSeconds = 0;

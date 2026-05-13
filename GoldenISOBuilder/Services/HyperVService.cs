@@ -194,6 +194,7 @@ Write-Output 'GIB_VM_STARTED'
 
     public Task ReapOrphanedVmsAsync()
     {
+        LogVmEvent("ReapOrphanedVmsAsync", "app startup", "GIB-Test-*");
         const string script = @"
 $ErrorActionPreference = 'SilentlyContinue'
 Get-VM -Name 'GIB-Test-*' | ForEach-Object {
@@ -447,9 +448,19 @@ if (Test-Path $vmRoot) {
 
     // ── Cleanup ───────────────────────────────────────────────────────────────
 
-    public async Task StopAndDeleteAsync()
+    /// <summary>
+    /// Stops and deletes the active test VM and its VHDX. Pass a short
+    /// <paramref name="reason"/> so the forensic log records WHO requested
+    /// the teardown — useful for diagnosing reports of "the VM disappeared
+    /// on its own".
+    /// </summary>
+    public async Task StopAndDeleteAsync(string reason = "unspecified")
     {
         if (ActiveVmName == null) return;
+
+        // Forensic trail. Every Remove-VM call this app makes goes through
+        // here; the log lives next to crash.log so it's easy to find.
+        LogVmEvent("StopAndDeleteAsync", reason, ActiveVmName);
 
         // Close any vmconnect window we launched before tearing down the VM —
         // otherwise vmconnect pops a "VM is no longer available" dialog.
@@ -481,6 +492,38 @@ Remove-VM -Name '{name.Replace("'","''")}' -Force
                 Directory.Delete(vhdDir, recursive: true);
         }
         catch { /* ignored */ }
+    }
+
+    /// <summary>
+    /// Appends a timestamped line to <c>vm-events.log</c> recording every
+    /// destructive VM operation this app performs. Records the source method,
+    /// caller-supplied reason, VM name, and the managed stack at the call
+    /// site so we can trace back to the originating event handler.
+    /// </summary>
+    private static void LogVmEvent(string method, string reason, string vmName)
+    {
+        try
+        {
+            var dir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "GoldenISOBuilder");
+            Directory.CreateDirectory(dir);
+            var path = Path.Combine(dir, "vm-events.log");
+
+            var stack = new StackTrace(skipFrames: 1, fNeedFileInfo: false);
+            var frames = string.Join(" <- ",
+                stack.GetFrames()?
+                     .Take(6)
+                     .Select(f => f.GetMethod() is { } m
+                         ? $"{m.DeclaringType?.Name}.{m.Name}"
+                         : "?")
+                     .Where(s => !string.IsNullOrEmpty(s)) ?? Array.Empty<string>());
+
+            var line = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} | {method} | " +
+                       $"vm={vmName} | reason={reason} | stack={frames}";
+            File.AppendAllText(path, line + Environment.NewLine);
+        }
+        catch { /* logging must never throw */ }
     }
 
     // ── PowerShell runner ─────────────────────────────────────────────────────
