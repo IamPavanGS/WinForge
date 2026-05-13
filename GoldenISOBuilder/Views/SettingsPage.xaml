@@ -296,6 +296,23 @@
                                 <CheckBox x:Name="SoundOnCompleteToggle" HorizontalAlignment="Right" IsChecked="False"
                                           Style="{StaticResource ToggleSwitchStyle}"/>
                             </Grid>
+                            <Border Style="{StaticResource DividerStyle}" Margin="0,0,0,16"/>
+
+                            <!-- Auto-fetch Updates &amp; Drivers (experimental) — gates the new
+                                 Windows Update slipstream + OEM driver-pack auto-download
+                                 features. Off by default so existing builds are unaffected. -->
+                            <Grid>
+                                <StackPanel>
+                                    <TextBlock Text="Auto-fetch Updates &amp; Drivers (experimental)"
+                                               Foreground="{DynamicResource FG0Brush}" FontSize="13"/>
+                                    <TextBlock Text="Enable the Windows Update slipstream panel and the Dell/HP/Lenovo driver-pack auto-download in Step 2. Off keeps the wizard exactly as it was."
+                                               Foreground="{DynamicResource FG2Brush}" FontSize="11" TextWrapping="Wrap"/>
+                                </StackPanel>
+                                <CheckBox x:Name="AutoFetchToggle" HorizontalAlignment="Right" IsChecked="False"
+                                          Style="{StaticResource ToggleSwitchStyle}"
+                                          Checked="AutoFetchToggle_Changed"
+                                          Unchecked="AutoFetchToggle_Changed"/>
+                            </Grid>
                         </StackPanel>
                     </Border>
 

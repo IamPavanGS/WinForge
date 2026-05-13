@@ -103,6 +103,115 @@
                     </Grid>
                 </Border>
 
+                <!-- ══ Windows Updates (auto-fetch — toggled in Settings) ═════════
+                     Visible only when EnableAutoFetchFeatures is on. Lets the
+                     admin either point at a folder of .msu files (existing
+                     pattern) or fetch the current LCU + checkpoint chain +
+                     optional 25H2 eKB directly from Microsoft Update Catalog. -->
+                <Border x:Name="UpdatesCard" Style="{StaticResource CardStyle}"
+                        Visibility="Collapsed">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,4">
+                            <StackPanel>
+                                <TextBlock Text="Windows Updates"
+                                           Style="{StaticResource CardTitleText}"/>
+                                <TextBlock Text="Slipstream the latest cumulative update + checkpoint chain into install.wim so deployed machines don't pull ~4 GB at first boot. Optionally apply the 25H2 enablement package."
+                                           Foreground="{DynamicResource FG2Brush}" FontSize="12"
+                                           Margin="0,2,0,0" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- Mode toggle: Auto / Manual -->
+                        <StackPanel Orientation="Horizontal" Margin="0,12,0,8"
+                                    h:PanelSpacing.Spacing="6">
+                            <RadioButton x:Name="UpdatesAutoMode" Content="Auto-fetch from Microsoft"
+                                         GroupName="UpdatesMode" IsChecked="True"
+                                         Foreground="{DynamicResource FG0Brush}"
+                                         Checked="UpdatesMode_Changed"/>
+                            <RadioButton x:Name="UpdatesManualMode" Content="Pick folder of MSU/CAB files"
+                                         GroupName="UpdatesMode"
+                                         Foreground="{DynamicResource FG0Brush}" Margin="16,0,0,0"
+                                         Checked="UpdatesMode_Changed"/>
+                        </StackPanel>
+
+                        <!-- Auto-fetch panel -->
+                        <StackPanel x:Name="UpdatesAutoPanel">
+                            <Grid Margin="0,4,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock x:Name="UpdatesDetectedBuild"
+                                               Text="ISO not yet analysed — go to Step 1 first."
+                                               Foreground="{DynamicResource FG2Brush}" FontSize="12"
+                                               TextWrapping="Wrap"/>
+                                </StackPanel>
+                                <Button Grid.Column="1" x:Name="UpdatesRefreshBtn"
+                                        Content="Refresh catalog"
+                                        Style="{StaticResource DefaultButtonStyle}"
+                                        Click="UpdatesRefresh_Click"
+                                        Margin="8,0,0,0"/>
+                            </Grid>
+                            <ComboBox x:Name="UpdatesTargetCombo"
+                                      Margin="0,12,0,0" Height="32"
+                                      Foreground="{DynamicResource FG0Brush}"
+                                      Background="{DynamicResource BG0Brush}"
+                                      SelectionChanged="UpdatesTarget_Changed">
+                                <ComboBoxItem Content="(no targets available)"/>
+                            </ComboBox>
+                            <StackPanel Orientation="Horizontal" Margin="0,12,0,0"
+                                        h:PanelSpacing.Spacing="6">
+                                <Button x:Name="UpdatesFetchBtn"
+                                        Content="Fetch updates"
+                                        Style="{StaticResource PrimaryButtonStyle}"
+                                        IsEnabled="False"
+                                        Click="UpdatesFetch_Click"/>
+                                <ProgressBar x:Name="UpdatesProgress" Width="280" Height="6"
+                                             Margin="12,0,0,0"
+                                             VerticalAlignment="Center"
+                                             Visibility="Collapsed"/>
+                            </StackPanel>
+                            <TextBlock x:Name="UpdatesStatusText"
+                                       Margin="0,8,0,0"
+                                       FontSize="11.5"
+                                       TextWrapping="Wrap"
+                                       Foreground="{DynamicResource FG2Brush}"/>
+                        </StackPanel>
+
+                        <!-- Manual-folder panel -->
+                        <StackPanel x:Name="UpdatesManualPanel" Visibility="Collapsed">
+                            <Grid Margin="0,4,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBox x:Name="UpdatesFolderBox" Grid.Column="0" Height="32"
+                                         IsReadOnly="True"
+                                         Foreground="{DynamicResource FG0Brush}"
+                                         Background="{DynamicResource BG0Brush}"
+                                         VerticalContentAlignment="Center"
+                                         Padding="8,0"
+                                         Text="No folder selected"/>
+                                <Button Grid.Column="1" x:Name="UpdatesBrowseBtn"
+                                        Content="Browse folder…" Margin="8,0,0,0"
+                                        Style="{StaticResource DefaultButtonStyle}"
+                                        Click="UpdatesBrowse_Click"/>
+                            </Grid>
+                            <TextBlock x:Name="UpdatesManualHint"
+                                       Margin="0,6,0,0"
+                                       FontSize="11.5"
+                                       Foreground="{DynamicResource FG2Brush}"
+                                       Text="Drop the LCU + every preceding checkpoint CU + (optional) KB5054156 in one folder. DISM auto-resolves the prerequisite chain."
+                                       TextWrapping="Wrap"/>
+                        </StackPanel>
+
+                        <!-- Resolved package list — shared between Auto and Manual -->
+                        <StackPanel x:Name="UpdatesResolvedPanel" Margin="0,12,0,0"
+                                    h:PanelSpacing.Spacing="4"/>
+                    </StackPanel>
+                </Border>
+
                 <!-- ══ Language Pack Injection ═══════════════════════════════ -->
                 <Border Style="{StaticResource CardStyle}">
                     <StackPanel>

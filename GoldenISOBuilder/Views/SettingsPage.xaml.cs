@@ -125,6 +125,20 @@ public partial class SettingsPage : UserControl
 
     private System.Windows.Threading.DispatcherTimer? _saveStatusTimer;
 
+    // Guard so initial IsChecked assignment during LoadIntoUi doesn't trigger
+    // the on-change handler and re-write the setting.
+    private bool _suppressAutoFetchPersist;
+
+    private void AutoFetchToggle_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_suppressAutoFetchPersist) return;
+        var value = AutoFetchToggle.IsChecked == true;
+        GoldenISOBuilder.Helpers.AppSettingsLoader.SaveEnableAutoFetchFeatures(value);
+        // Mirror onto the live session so Step 2 picks it up the next time
+        // it becomes visible without needing an app restart.
+        BuildSession.Current.EnableAutoFetchFeatures = value;
+    }
+
     private void SaveSettings_Click(object sender, RoutedEventArgs e)
     {
         // Collect every UI control into _settings
@@ -525,6 +539,15 @@ public partial class SettingsPage : UserControl
         BuildCompleteToastToggle.IsChecked = _settings.BuildCompleteToast;
         ErrorAlertsToggle.IsChecked        = _settings.ErrorAlerts;
         SoundOnCompleteToggle.IsChecked    = _settings.SoundOnComplete;
+
+        // Auto-fetch toggle is persisted directly via AppSettingsLoader (separate
+        // from _settings) because the change must take effect immediately —
+        // flipping it on/off enables/disables the Step 2 Updates &amp; Drivers panels
+        // without needing a Save click.
+        _suppressAutoFetchPersist          = true;
+        AutoFetchToggle.IsChecked          =
+            GoldenISOBuilder.Helpers.AppSettingsLoader.ReadEnableAutoFetchFeatures();
+        _suppressAutoFetchPersist          = false;
 
         // Compression dropdown — pick the matching item by Tag
         for (int i = 0; i < CompressionCombo.Items.Count; i++)

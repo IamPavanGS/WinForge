@@ -9,6 +9,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using GoldenISOBuilder.Models;
 using Microsoft.Win32;
+using Catalog = GoldenISOBuilder.Services.Catalog;
 
 namespace GoldenISOBuilder.Views;
 
@@ -126,6 +127,253 @@ public partial class Step2Page : UserControl
         RefreshLangPacksPanel();
         RefreshDriversPanel();
         RefreshDeploymentScriptsPanel();
+
+        // Auto-fetch features card: visible only when the master toggle is on
+        // (set on Settings page). Refreshed every time the page becomes visible
+        // so flipping the toggle in Settings reflects without an app restart.
+        IsVisibleChanged += (_, ev) =>
+        {
+            if ((bool)ev.NewValue) RefreshAutoFetchVisibility();
+        };
+        RefreshAutoFetchVisibility();
+        RefreshUpdatesResolvedPanel();
+    }
+
+    // ── Auto-fetch (Windows Updates) ─────────────────────────────────────────
+    //
+    // Renders the new "Windows Updates" card above the Language Packs section.
+    // Two modes: Auto (Microsoft Update Catalog via Phase 1-2 plumbing) and
+    // Manual (folder of MSU files — today's behaviour for power users).
+    //
+    // All state persists on BuildSession.UpdatesMsuPaths.
+
+    private List<Catalog.MsUpdate> _availableUpdates = new();
+    private Catalog.CatalogCacheManager?  _cache;
+    private Catalog.ResumeableDownloader? _downloader;
+    private Catalog.MsUpdateService?      _msUpdates;
+
+    private void RefreshAutoFetchVisibility()
+    {
+        bool on =
+            GoldenISOBuilder.Helpers.AppSettingsLoader.ReadEnableAutoFetchFeatures();
+        BuildSession.Current.EnableAutoFetchFeatures = on;
+        UpdatesCard.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+        if (on)
+        {
+            // Update the detected-build label from the current session.
+            var s = BuildSession.Current;
+            if (s.SelectedImage != null && !string.IsNullOrEmpty(s.SelectedImage.Name))
+            {
+                UpdatesDetectedBuild.Text =
+                    $"ISO: {s.SelectedImage.Name} ({s.SelectedArch})";
+            }
+            else
+            {
+                UpdatesDetectedBuild.Text =
+                    "ISO not yet analysed — pick a source ISO in Step 1 first.";
+            }
+        }
+    }
+
+    private void UpdatesMode_Changed(object sender, RoutedEventArgs e)
+    {
+        if (UpdatesAutoPanel == null || UpdatesManualPanel == null) return;
+        bool auto = UpdatesAutoMode.IsChecked == true;
+        UpdatesAutoPanel.Visibility   = auto ? Visibility.Visible   : Visibility.Collapsed;
+        UpdatesManualPanel.Visibility = auto ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private async void UpdatesRefresh_Click(object sender, RoutedEventArgs e)
+    {
+        UpdatesRefreshBtn.IsEnabled = false;
+        UpdatesStatusText.Text = "Downloading Microsoft Update catalog (~900 MB on first run, cached for 7 days)…";
+        UpdatesProgress.Visibility = Visibility.Visible;
+        UpdatesProgress.IsIndeterminate = false;
+        UpdatesProgress.Value = 0;
+
+        try
+        {
+            EnsureCatalogServices();
+            var progress = new Progress<Catalog.DownloadProgress>(p =>
+            {
+                if (p.TotalBytes.HasValue && p.TotalBytes.Value > 0)
+                {
+                    UpdatesProgress.Value =
+                        (double)p.BytesDownloaded / p.TotalBytes.Value * 100;
+                }
+                UpdatesStatusText.Text =
+                    $"Downloaded {p.BytesDownloaded / 1024 / 1024} MB" +
+                    (p.TotalBytes.HasValue ? $" / {p.TotalBytes.Value / 1024 / 1024} MB" : "") +
+                    (p.Mbps.HasValue ? $" — {p.Mbps.Value:F1} Mbps" : "");
+            });
+
+            await _msUpdates!.EnsureCatalogAsync(progress);
+            UpdatesStatusText.Text = "Reading catalog… (this can take 30–90s on first run)";
+            UpdatesProgress.IsIndeterminate = true;
+
+            // For Phase 5a we surface a coarse filter: every "Windows 11"
+            // cumulative + the 25H2 enablement package. Build-specific
+            // filtering arrives in a later phase once we wire SelectedImage
+            // build detection through to the MSU set.
+            var all = await _msUpdates.EnumerateAsync("Windows 11");
+            _availableUpdates = all
+                .Where(u => !string.IsNullOrEmpty(u.DownloadUrl))
+                .OrderByDescending(u => u.Title)
+                .ToList();
+
+            PopulateTargetCombo();
+            UpdatesStatusText.Text = $"Catalog ready — {_availableUpdates.Count} Windows 11 updates available.";
+        }
+        catch (Exception ex)
+        {
+            UpdatesStatusText.Text = "Catalog refresh failed: " + ex.Message;
+        }
+        finally
+        {
+            UpdatesProgress.Visibility = Visibility.Collapsed;
+            UpdatesProgress.IsIndeterminate = false;
+            UpdatesRefreshBtn.IsEnabled = true;
+        }
+    }
+
+    private void PopulateTargetCombo()
+    {
+        UpdatesTargetCombo.Items.Clear();
+        if (_availableUpdates.Count == 0)
+        {
+            UpdatesTargetCombo.Items.Add(new ComboBoxItem
+            {
+                Content = "(no updates found — click Refresh catalog)"
+            });
+            UpdatesFetchBtn.IsEnabled = false;
+            return;
+        }
+        foreach (var u in _availableUpdates.Take(40))   // cap for sanity
+        {
+            UpdatesTargetCombo.Items.Add(new ComboBoxItem
+            {
+                Content = string.IsNullOrEmpty(u.KbArticleId)
+                    ? u.Title
+                    : $"{u.KbArticleId} — {u.Title}",
+                Tag = u
+            });
+        }
+        UpdatesTargetCombo.SelectedIndex = 0;
+        UpdatesFetchBtn.IsEnabled = true;
+    }
+
+    private void UpdatesTarget_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        UpdatesFetchBtn.IsEnabled =
+            UpdatesTargetCombo.SelectedItem is ComboBoxItem ci && ci.Tag is Catalog.MsUpdate;
+    }
+
+    private async void UpdatesFetch_Click(object sender, RoutedEventArgs e)
+    {
+        if (UpdatesTargetCombo.SelectedItem is not ComboBoxItem ci ||
+            ci.Tag is not Catalog.MsUpdate u ||
+            string.IsNullOrEmpty(u.DownloadUrl))
+            return;
+
+        UpdatesFetchBtn.IsEnabled = false;
+        UpdatesProgress.Visibility = Visibility.Visible;
+        UpdatesProgress.IsIndeterminate = false;
+        UpdatesProgress.Value = 0;
+        UpdatesStatusText.Text = $"Downloading {u.KbArticleId}…";
+
+        try
+        {
+            EnsureCatalogServices();
+            var key = (u.KbArticleId.Length > 0 ? u.KbArticleId : "update") +
+                      System.IO.Path.GetExtension(new Uri(u.DownloadUrl!).LocalPath);
+            var dest = _cache!.GetEntryPath(
+                Catalog.CatalogCacheManager.Category.WindowsUpdates, key);
+
+            var progress = new Progress<Catalog.DownloadProgress>(p =>
+            {
+                if (p.TotalBytes.HasValue && p.TotalBytes.Value > 0)
+                    UpdatesProgress.Value =
+                        (double)p.BytesDownloaded / p.TotalBytes.Value * 100;
+            });
+            var result = await _downloader!.DownloadAsync(
+                u.DownloadUrl!, dest, expectedSha256: u.Sha256, progress);
+
+            _cache.WriteManifest(dest, new Catalog.CacheManifest
+            {
+                SourceUrl     = u.DownloadUrl!,
+                Sha256        = result.Sha256,
+                SizeBytes     = result.SizeBytes,
+                DownloadedUtc = DateTime.UtcNow,
+                ExpiresUtc    = DateTime.UtcNow.AddDays(30),
+                Vendor        = "Microsoft",
+                Notes         = u.Title
+            });
+
+            if (!BuildSession.Current.UpdatesMsuPaths.Contains(dest))
+                BuildSession.Current.UpdatesMsuPaths.Add(dest);
+            RefreshUpdatesResolvedPanel();
+
+            UpdatesStatusText.Text =
+                $"Fetched {u.KbArticleId} ({result.SizeBytes / 1024 / 1024} MB). " +
+                "Will be slipstreamed during the build.";
+        }
+        catch (Exception ex)
+        {
+            UpdatesStatusText.Text = "Download failed: " + ex.Message;
+        }
+        finally
+        {
+            UpdatesProgress.Visibility = Visibility.Collapsed;
+            UpdatesFetchBtn.IsEnabled = true;
+        }
+    }
+
+    private void UpdatesBrowse_Click(object sender, RoutedEventArgs e)
+    {
+        var dlg = new Microsoft.Win32.OpenFolderDialog
+        {
+            Title = "Select folder containing MSU/CAB update packages"
+        };
+        if (dlg.ShowDialog() != true) return;
+
+        UpdatesFolderBox.Text = dlg.FolderName;
+        var msus = Directory.EnumerateFiles(dlg.FolderName, "*.msu",
+                       SearchOption.TopDirectoryOnly)
+                   .Concat(Directory.EnumerateFiles(dlg.FolderName, "*.cab",
+                       SearchOption.TopDirectoryOnly))
+                   .ToList();
+
+        BuildSession.Current.UpdatesMsuPaths.Clear();
+        BuildSession.Current.UpdatesMsuPaths.AddRange(msus);
+        RefreshUpdatesResolvedPanel();
+        UpdatesManualHint.Text = msus.Count > 0
+            ? $"Picked up {msus.Count} update file(s)."
+            : "No .msu or .cab files found in the selected folder.";
+    }
+
+    private void RefreshUpdatesResolvedPanel()
+    {
+        if (UpdatesResolvedPanel == null) return;
+        UpdatesResolvedPanel.Children.Clear();
+        foreach (var msu in BuildSession.Current.UpdatesMsuPaths)
+        {
+            var row = new TextBlock
+            {
+                Text       = "  • " + System.IO.Path.GetFileName(msu),
+                Foreground = (System.Windows.Media.Brush)
+                                FindResource("FG1Brush"),
+                FontSize   = 11.5,
+                ToolTip    = msu
+            };
+            UpdatesResolvedPanel.Children.Add(row);
+        }
+    }
+
+    private void EnsureCatalogServices()
+    {
+        _cache      ??= new Catalog.CatalogCacheManager();
+        _downloader ??= new Catalog.ResumeableDownloader();
+        _msUpdates  ??= new Catalog.MsUpdateService(_cache, _downloader);
     }
 
     // ── Wallpaper ─────────────────────────────────────────────────────────────
