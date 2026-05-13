@@ -753,9 +753,15 @@ public partial class Step2Page : UserControl
                 {
                     // Collect the reason — final status message lists every
                     // failure rather than each one being overwritten by the
-                    // final "Done" line.
-                    var why = (_activeVendorService as Catalog.LenovoDriverService)?
-                              .LastAttemptLog;
+                    // final "Done" line. Each service exposes a LastAttemptLog
+                    // explaining what went wrong.
+                    var why = _activeVendorService switch
+                    {
+                        Catalog.LenovoDriverService l => l.LastAttemptLog,
+                        Catalog.DellDriverService   d => d.LastAttemptLog,
+                        Catalog.HpDriverService     h => h.LastAttemptLog,
+                        _                             => null
+                    };
                     if (string.IsNullOrEmpty(why))
                         why = $"no {osCode} driver pack published (vendor returned nothing).";
                     failures.AppendLine($"  • {model.Name} ({sid}): {why}");
@@ -795,6 +801,28 @@ public partial class Step2Page : UserControl
                     Notes         = $"{pack.Model} {pack.OsVersion} {pack.Version}"
                 });
 
+                // Lenovo packs are self-extracting EXEs, not folders DISM can
+                // /Add-Driver /Recurse directly. Extract before staging.
+                var localPath = dest;
+                if (pack.Vendor == Catalog.DriverVendor.Lenovo)
+                {
+                    DriverStatusText.Text =
+                        $"Extracting Lenovo SoftPaq for {model.Name}…";
+                    try
+                    {
+                        var extractDir = dest + ".extracted";
+                        await Catalog.LenovoSoftPaqExtractor.ExtractAsync(
+                            dest, extractDir);
+                        localPath = extractDir;
+                    }
+                    catch (Exception ex)
+                    {
+                        failures.AppendLine(
+                            $"  • {model.Name} ({sid}): downloaded but extract failed — {ex.Message}");
+                        continue;
+                    }
+                }
+
                 var sel = new DriverPackSelection
                 {
                     Vendor              = pack.Vendor.ToString(),
@@ -803,7 +831,7 @@ public partial class Step2Page : UserControl
                     OsVersion           = pack.OsVersion,
                     PackVersion         = pack.Version,
                     DownloadUrl         = pack.DownloadUrl,
-                    LocalCabPath        = dest,
+                    LocalCabPath        = localPath,
                     Sha256              = result.Sha256,
                     SizeBytes           = result.SizeBytes,
                     InjectWinPECritical = true

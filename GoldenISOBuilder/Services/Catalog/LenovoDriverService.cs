@@ -4,46 +4,55 @@ using System.Xml.Linq;
 namespace GoldenISOBuilder.Services.Catalog;
 
 /// <summary>
-/// Lenovo driver-pack catalogue access. Lenovo publishes one XML per
-/// machine-type at:
-///   https://download.lenovo.com/catalog/&lt;MachineType&gt;_Win11.xml
-///   https://download.lenovo.com/catalog/&lt;MachineType&gt;_Win10.xml  (fallback;
-///         many catalogues are still named Win10 but contain Win11-compatible
-///         packages internally via &lt;Dependencies&gt;&lt;_OS&gt;WIN11&lt;/_OS&gt;).
+/// Reads Lenovo's <b>CDRT SCCM driver-pack catalogue</b> at
+/// <c>https://download.lenovo.com/cdrt/td/catalogv2.xml</c>. This is the
+/// canonical source for OS-deployment-ready bundled driver packs — the
+/// Dell-equivalent of DriverPackCatalog.cab. Maintained by Lenovo's Customer
+/// Deployment Readiness Toolkit team; consumed by Maurice Daly's Driver
+/// Automation Tool, MSEndpointMgr DAT, and Lenovo's own LCSM PowerShell
+/// module (<c>Get-LnvDriverPack</c>).
 ///
-/// There is no first-party master list of machine types. Lenovo discovery is
-/// model-by-model — the user looks up their MT on the laptop's underside
-/// label or in SMBIOS. We surface a free-text MT entry and validate by
-/// attempting to fetch the catalogue.
+/// Earlier versions of this service hit the wrong catalogue
+/// (<c>download.lenovo.com/catalog/&lt;MT&gt;_&lt;OS&gt;.xml</c>), which is the
+/// Update Retriever / Thin Installer SoftPaq feed — a list of individual
+/// driver components designed for in-OS update agents, not OSD slipstreaming.
+/// Switching to catalogv2.xml gives Lenovo the same one-click UX as Dell.
 ///
-/// Schema (simplified):
-///   &lt;Packages&gt;
-///     &lt;Package id="…"&gt;
-///       &lt;Title&gt;&lt;Desc id="EN"&gt;Driver Pack for Win 11&lt;/Desc&gt;&lt;/Title&gt;
-///       &lt;Version&gt;...&lt;/Version&gt;
-///       &lt;ReleaseDate&gt;2025-03-10&lt;/ReleaseDate&gt;
-///       &lt;Files&gt;
-///         &lt;Installer&gt;&lt;Name&gt;...&lt;/Name&gt;&lt;CRC&gt;...&lt;/CRC&gt;&lt;/Installer&gt;
-///       &lt;/Files&gt;
-///       &lt;Dependencies&gt;&lt;_OS&gt;WIN11&lt;/_OS&gt;&lt;/Dependencies&gt;
-///     &lt;/Package&gt;
-///   &lt;/Packages&gt;
+/// Schema (verified live 2026-05-13):
+///   &lt;ModelList version="1.0"&gt;
+///     &lt;Model name="ThinkPad T495" arch="AMD"&gt;
+///       &lt;Types&gt;&lt;Type&gt;20NJ&lt;/Type&gt;&lt;Type&gt;20NK&lt;/Type&gt;&lt;/Types&gt;
+///       &lt;BIOS …/&gt;
+///       &lt;SCCM os="win11" version="24H2" date="2023-03-30"
+///             crc="060d6b…" md5="be8b55…"&gt;
+///         https://download.lenovo.com/pccbbs/mobiles/tp_t495_…exe
+///       &lt;/SCCM&gt;
+///       &lt;HSA … /&gt;
+///     &lt;/Model&gt;
+///   &lt;/ModelList&gt;
+///
+/// Coverage limit: ThinkPad / ThinkCentre / ThinkStation only. IdeaPad,
+/// Legion, ThinkBook, Yoga consumer SKUs are NOT in this catalogue — Lenovo
+/// doesn't publish bundled OSD packs for those (the per-driver SoftPaq feed
+/// + Lenovo Vantage at runtime is the supported path). The UI surfaces this
+/// explicitly when a missing MT is requested.
 /// </summary>
 public sealed class LenovoDriverService : IDriverPackService
 {
-    private const string CatalogUrlTemplate =
-        "https://download.lenovo.com/catalog/{0}_{1}.xml";
+    public const string CatalogUrl =
+        "https://download.lenovo.com/cdrt/td/catalogv2.xml";
 
-    private static readonly TimeSpan CacheLifetime = TimeSpan.FromDays(7);
+    private static readonly TimeSpan CacheLifetime = TimeSpan.FromHours(24);
 
     private readonly CatalogCacheManager _cache;
     private readonly ResumeableDownloader _downloader;
 
-    /// <summary>
-    /// Per-call diagnostic trail. Filled in by GetDriverPackAsync so the UI
-    /// can show "Tried 21F8_Win11.xml → 404; Tried 21F8_Win10.xml → 404" when
-    /// no pack is found, instead of just "0 packs staged".
-    /// </summary>
+    private XDocument? _catalog;
+    private DateTime _catalogDownloadedUtc;
+
+    /// <summary>Per-call diagnostic trail for the UI to surface when the
+    /// fetch returns null. The UI shows this verbatim in the Step 2 status
+    /// text so the admin knows exactly what happened.</summary>
     public string LastAttemptLog { get; private set; } = "";
 
     public LenovoDriverService(CatalogCacheManager cache,
@@ -55,203 +64,188 @@ public sealed class LenovoDriverService : IDriverPackService
 
     public DriverVendor Vendor => DriverVendor.Lenovo;
 
-    /// <summary>
-    /// No-op for the global catalogue (there isn't one). Per-MT XML files are
-    /// fetched on demand via <see cref="GetDriverPackAsync"/>.
-    /// </summary>
-    public Task EnsureCatalogAsync(IProgress<DownloadProgress>? progress = null,
-                                   CancellationToken ct = default)
-        => Task.CompletedTask;
-
-    /// <summary>
-    /// Returns the small built-in seed list of common Lenovo MTs. Real-world
-    /// usage: admin types the MT off the laptop label / SMBIOS, we fetch the
-    /// catalogue lazily. The seed list is just there so the UI has something
-    /// to render in the picker before the user types.
-    /// </summary>
-    public Task<IReadOnlyList<DriverPackModel>> ListModelsAsync(
+    public async Task EnsureCatalogAsync(
+        IProgress<DownloadProgress>? progress = null,
         CancellationToken ct = default)
     {
-        IReadOnlyList<DriverPackModel> models = SeedMachineTypes
-            .Select(m => new DriverPackModel(
-                DriverVendor.Lenovo, m.Mt, m.Name, m.Family))
-            .OrderBy(m => m.Brand ?? "")
-            .ThenBy(m => m.Name)
-            .ToList();
-        return Task.FromResult(models);
-    }
-
-    public async Task<DriverPack?> GetDriverPackAsync(
-        string systemId, string osVersion, CancellationToken ct = default)
-    {
-        var log = new System.Text.StringBuilder();
-        int   xmlsLoaded = 0;
-        // Probe Win11 first, fall back to Win10 (Lenovo's older naming
-        // convention still publishes Win11-compatible packages).
-        foreach (var os in new[] { "Win11", "Win10" })
+        const string key = "catalogv2.xml";
+        if (!_cache.TryGetValid(CatalogCacheManager.Category.Lenovo, key,
+                                out var xmlPath, out var manifest))
         {
-            var url = string.Format(CatalogUrlTemplate, systemId, os);
-            var (doc, err) = await TryFetchAsync(url, systemId, os, ct);
-            if (doc == null)
+            var result = await _downloader.DownloadAsync(
+                CatalogUrl, xmlPath, expectedSha256: null, progress, ct);
+            _cache.WriteManifest(xmlPath, new CacheManifest
             {
-                log.Append($"Tried {systemId}_{os}.xml → {err}; ");
-                continue;
-            }
-            xmlsLoaded++;
-
-            var pack = SelectDriverPack(doc, systemId, os, url);
-            if (pack != null)
-            {
-                LastAttemptLog = $"OK from {systemId}_{os}.xml";
-                return pack;
-            }
-            log.Append($"{systemId}_{os}.xml loaded but contains individual driver SoftPaqs not a bundled Driver Pack; ");
-        }
-
-        // If we *did* load at least one XML but couldn't find a bundled pack,
-        // it's the canonical Lenovo case: their Update Retriever feed lists
-        // individual drivers, not pre-bundled packs the way Dell does. Surface
-        // the actionable path the user should take.
-        if (xmlsLoaded > 0)
-        {
-            LastAttemptLog =
-                log.ToString().TrimEnd(' ', ';') +
-                ".  Lenovo's per-MT catalogue lists individual driver SoftPaqs " +
-                "rather than a single bundled pack (unlike Dell). Download the " +
-                "pre-built driver pack manually from support.lenovo.com/drivers/" +
-                $"{systemId.ToLowerInvariant()} (search 'driver pack ISO/CAB' or " +
-                "'OS deployment'), then use the manual Driver Injection card above.";
+                SourceUrl     = CatalogUrl,
+                Sha256        = result.Sha256,
+                SizeBytes     = result.SizeBytes,
+                DownloadedUtc = DateTime.UtcNow,
+                ExpiresUtc    = DateTime.UtcNow.Add(CacheLifetime),
+                Vendor        = "Lenovo",
+                Notes         = "Lenovo CDRT SCCM driver-pack catalogue"
+            });
+            _catalogDownloadedUtc = DateTime.UtcNow;
         }
         else
         {
-            LastAttemptLog = log.ToString().TrimEnd(' ', ';');
+            _catalogDownloadedUtc = manifest?.DownloadedUtc ?? DateTime.UtcNow;
         }
-        return null;
+
+        _catalog = XDocument.Load(xmlPath);
     }
 
-    private async Task<(XDocument? doc, string err)> TryFetchAsync(
-        string url, string mt, string os, CancellationToken ct)
+    public Task<IReadOnlyList<DriverPackModel>> ListModelsAsync(
+        CancellationToken ct = default)
     {
-        var key = Path.Combine(mt, $"{mt}_{os}.xml");
-        if (!_cache.TryGetValid(CatalogCacheManager.Category.Lenovo, key,
-                                out var xmlPath, out _))
+        EnsureLoaded();
+
+        // Each <Model> may have multiple <Type> children — each MT becomes a
+        // separate row in the picker so the user can filter by their actual
+        // 4-char Machine Type. Brand grouping = first word of @name.
+        var models = new List<DriverPackModel>();
+        foreach (var modelEl in _catalog!.Descendants("Model"))
         {
-            try
+            ct.ThrowIfCancellationRequested();
+            var name  = modelEl.Attribute("name")?.Value?.Trim() ?? "";
+            if (string.IsNullOrEmpty(name)) continue;
+            var brand = name.Split(' ', 2)[0];   // ThinkPad / ThinkCentre / ThinkStation
+
+            foreach (var typeEl in modelEl.Descendants("Type"))
             {
-                var r = await _downloader.DownloadAsync(url, xmlPath,
-                            expectedSha256: null, progress: null, ct);
-                _cache.WriteManifest(xmlPath, new CacheManifest
-                {
-                    SourceUrl     = url,
-                    Sha256        = r.Sha256,
-                    SizeBytes     = r.SizeBytes,
-                    DownloadedUtc = DateTime.UtcNow,
-                    ExpiresUtc    = DateTime.UtcNow.Add(CacheLifetime),
-                    Vendor        = "Lenovo",
-                    Notes         = $"Catalogue for {mt} ({os})"
-                });
-            }
-            catch (IOException ex)
-            {
-                // 404 / network — try the other OS variant. Return reason
-                // so the UI can show it.
-                var msg = ex.InnerException?.Message ?? ex.Message;
-                if (msg.Contains("404")) return (null, "404 (no catalogue published)");
-                return (null, msg.Length > 60 ? msg[..60] + "…" : msg);
+                var mt = typeEl.Value?.Trim();
+                if (string.IsNullOrEmpty(mt)) continue;
+                models.Add(new DriverPackModel(
+                    DriverVendor.Lenovo, mt, name, brand));
             }
         }
 
-        try { return (XDocument.Load(xmlPath), ""); }
-        catch (Exception ex) { return (null, "XML parse: " + ex.Message); }
+        IReadOnlyList<DriverPackModel> result = models
+            .OrderBy(m => m.Brand ?? "")
+            .ThenBy(m => m.Name)
+            .ThenBy(m => m.SystemId)
+            .ToList();
+        return Task.FromResult(result);
     }
 
-    private static DriverPack? SelectDriverPack(
-        XDocument doc, string mt, string os, string sourceUrl)
+    public Task<DriverPack?> GetDriverPackAsync(
+        string systemId, string osVersion, CancellationToken ct = default)
     {
-        // Prefer packages whose title contains "Driver Pack" (Lenovo's canonical
-        // naming) and that target Win11 in <Dependencies>.
-        DriverPack? best = null;
-        DateTime bestDate = DateTime.MinValue;
+        EnsureLoaded();
 
-        foreach (var pkg in doc.Descendants("Package"))
+        // Find every <Model> that lists this MT in its <Type>s, then pick the
+        // most appropriate <SCCM> child. Preferences:
+        //   1. Exact os ("win11") AND version match (the user's target build).
+        //   2. Exact os ("win11"), any version (Lenovo recycles older packs).
+        //   3. Anything else => no match, with a clear reason.
+        var wantOs = MapOsCode(osVersion);
+
+        var candidates = new List<(XElement Model, XElement Sccm, DateTime Date)>();
+
+        foreach (var modelEl in _catalog!.Descendants("Model"))
         {
-            var title = pkg.Element("Title")?.Element("Desc")?.Value ?? "";
-            if (!title.Contains("Driver Pack", StringComparison.OrdinalIgnoreCase))
-                continue;
+            ct.ThrowIfCancellationRequested();
+            var matchesMt = modelEl.Descendants("Type")
+                .Any(t => string.Equals(t.Value?.Trim(), systemId,
+                                        StringComparison.OrdinalIgnoreCase));
+            if (!matchesMt) continue;
 
-            var depOs = pkg.Descendants("_OS").FirstOrDefault()?.Value ?? "";
-            if (os == "Win11" &&
-                !depOs.Contains("WIN11", StringComparison.OrdinalIgnoreCase) &&
-                !title.Contains("11", StringComparison.OrdinalIgnoreCase))
-                continue;
-
-            var installer = pkg.Descendants("Installer").FirstOrDefault();
-            var fileName  = installer?.Element("Name")?.Value;
-            if (string.IsNullOrEmpty(fileName)) continue;
-
-            DateTime.TryParse(pkg.Element("ReleaseDate")?.Value, out var date);
-            long.TryParse(installer?.Element("Size")?.Value, out var size);
-
-            // Installer URLs are usually given in <LocalPath> (relative to
-            // the catalogue host) or as a bare file name resolved against
-            // the catalogue URL. Resolve against the source.
-            var local = pkg.Element("LocalPath")?.Value
-                        ?? pkg.Descendants("LocalPath").FirstOrDefault()?.Value
-                        ?? Combine(sourceUrl, fileName);
-
-            var sha = installer?.Element("SHA256")?.Value
-                      ?? installer?.Element("Sha256")?.Value;
-            var crc = installer?.Element("CRC")?.Value;
-
-            var pack = new DriverPack(
-                Vendor:       DriverVendor.Lenovo,
-                Model:        $"Machine Type {mt}",
-                SystemId:     mt,
-                OsVersion:    os,
-                Version:      pkg.Element("Version")?.Value ?? "",
-                ReleaseDate:  date,
-                DownloadUrl:  local,
-                SizeBytes:    size,
-                Sha256:       sha?.ToLowerInvariant(),
-                Md5:          null,
-                Filename:     fileName);
-
-            if (pack.ReleaseDate > bestDate)
+            foreach (var sccm in modelEl.Descendants("SCCM"))
             {
-                best     = pack;
-                bestDate = pack.ReleaseDate;
+                var os = sccm.Attribute("os")?.Value?.Trim();
+                if (!string.Equals(os, wantOs, StringComparison.OrdinalIgnoreCase))
+                    continue;
+                DateTime.TryParse(sccm.Attribute("date")?.Value, out var date);
+                candidates.Add((modelEl, sccm, date));
             }
         }
 
-        return best;
+        if (candidates.Count == 0)
+        {
+            // Find out whether the MT was even in the catalogue.
+            var anyMt = _catalog.Descendants("Type")
+                                .Any(t => string.Equals(
+                                    t.Value?.Trim(), systemId,
+                                    StringComparison.OrdinalIgnoreCase));
+            LastAttemptLog = anyMt
+                ? $"MT {systemId} present in catalogue but no {wantOs} driver " +
+                  "pack published. Lenovo's CDRT team usually adds Win11 packs " +
+                  "within weeks of model release; try Refresh, or use the manual " +
+                  "Driver Injection card above with a pack from support.lenovo.com."
+                : $"MT {systemId} not in Lenovo CDRT catalogue " +
+                  $"(downloaded {_catalogDownloadedUtc:yyyy-MM-dd}). " +
+                  "The CDRT catalogue covers ThinkPad / ThinkCentre / ThinkStation only — " +
+                  "IdeaPad / Legion / Yoga consumer SKUs are not included. " +
+                  "Use the manual Driver Injection card above.";
+            return Task.FromResult<DriverPack?>(null);
+        }
+
+        // Prefer exact-version match if the user passed something specific.
+        // Step2Page passes "Win11" (build-less) so this lookup mostly takes
+        // the newest pack for any version. Still, support the case where a
+        // future caller passes "Win11 24H2" or similar.
+        var requestedVersion = ExtractVersionToken(osVersion);
+        var best = candidates
+            .OrderByDescending(c =>
+                requestedVersion != null &&
+                string.Equals(c.Sccm.Attribute("version")?.Value, requestedVersion,
+                              StringComparison.OrdinalIgnoreCase))
+            .ThenByDescending(c => c.Date)
+            .First();
+
+        var url = best.Sccm.Value.Trim();
+        if (string.IsNullOrEmpty(url) ||
+            !Uri.TryCreate(url, UriKind.Absolute, out var parsed))
+        {
+            LastAttemptLog = $"catalogue listed an empty / malformed pack URL for MT {systemId}.";
+            return Task.FromResult<DriverPack?>(null);
+        }
+
+        var name        = best.Model.Attribute("name")?.Value?.Trim() ?? systemId;
+        var version     = best.Sccm.Attribute("version")?.Value?.Trim() ?? "";
+        var md5         = best.Sccm.Attribute("md5")?.Value?.Trim();
+        var crc         = best.Sccm.Attribute("crc")?.Value?.Trim();   // sha256 in CDRT schema
+        var filename    = Path.GetFileName(parsed.LocalPath);
+
+        // Pack size isn't published in catalogv2.xml — leave 0, the downloader
+        // reports the actual Content-Length once it starts.
+        LastAttemptLog = $"matched {name} ({systemId}) Win11 {version} → {filename}";
+        return Task.FromResult<DriverPack?>(new DriverPack(
+            Vendor:       DriverVendor.Lenovo,
+            Model:        name,
+            SystemId:     systemId,
+            OsVersion:    osVersion,
+            Version:      version,
+            ReleaseDate:  best.Date,
+            DownloadUrl:  url,
+            SizeBytes:    0,
+            Sha256:       crc,    // 'crc' attribute is actually SHA-256 per CDRT
+            Md5:          md5,
+            Filename:     filename));
     }
 
-    private static string Combine(string sourceUrl, string fileName)
+    private static string MapOsCode(string osVersion)
     {
-        try
-        {
-            var baseUri = new Uri(sourceUrl);
-            return new Uri(baseUri, fileName).ToString();
-        }
-        catch
-        {
-            return fileName;
-        }
+        // Caller passes "Win11" / "win11" / "Windows11" / etc. CDRT uses
+        // lowercase "win11" / "win10".
+        var v = osVersion.Trim().ToLowerInvariant();
+        if (v.Contains("11")) return "win11";
+        if (v.Contains("10")) return "win10";
+        return v;
     }
 
-    // Small built-in seed list. The UI also exposes a free-text MT entry for
-    // models not pre-populated here.
-    private static readonly (string Mt, string Name, string Family)[] SeedMachineTypes =
+    private static string? ExtractVersionToken(string osVersion)
     {
-        ("21HD", "ThinkPad T14 Gen 4",      "ThinkPad"),
-        ("21HE", "ThinkPad T16 Gen 2",      "ThinkPad"),
-        ("21JJ", "ThinkPad X1 Carbon Gen12","ThinkPad"),
-        ("21M9", "ThinkPad X1 Carbon Gen13","ThinkPad"),
-        ("21F8", "ThinkPad L14 Gen 4",      "ThinkPad"),
-        ("21F9", "ThinkPad L15 Gen 4",      "ThinkPad"),
-        ("21KK", "ThinkPad P14s Gen 4",     "ThinkPad"),
-        ("11GR", "ThinkCentre M75q",        "ThinkCentre"),
-        ("12L8", "ThinkCentre M70q Gen 4",  "ThinkCentre"),
-        ("30G9", "ThinkStation P3 Tower",   "ThinkStation"),
-    };
+        // Pull a version-style token from inputs like "Win11 24H2".
+        var m = System.Text.RegularExpressions.Regex.Match(
+            osVersion, @"\d{2}[Hh]\d");
+        return m.Success ? m.Value.ToUpperInvariant() : null;
+    }
+
+    private void EnsureLoaded()
+    {
+        if (_catalog == null)
+            throw new InvalidOperationException(
+                "LenovoDriverService.EnsureCatalogAsync must be awaited before " +
+                "ListModelsAsync / GetDriverPackAsync.");
+    }
 }

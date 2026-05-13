@@ -26,41 +26,112 @@ public sealed class HpDriverService : IDriverPackService
     public DriverVendor Vendor => DriverVendor.HP;
 
     private readonly CatalogCacheManager _cache;
+    private readonly ResumeableDownloader _downloader;
     private List<DriverPackModel>? _models;
 
+    public string LastAttemptLog { get; private set; } = "";
+
     public HpDriverService(CatalogCacheManager cache,
-                           ResumeableDownloader _ = null!)
+                           ResumeableDownloader downloader)
     {
-        // The downloader is accepted for API symmetry with Dell/Lenovo but HP
-        // doesn't expose a downloadable catalogue — CMSL handles fetching.
-        _cache = cache;
+        _cache      = cache;
+        _downloader = downloader;
     }
 
+    // HP publishes the CMSL installer EXE at the FTP mirror; the developer
+    // portal documents this version pin. Inno Setup; silent flags below.
+    // Bumping the version is a one-line change.
+    private const string CmslInstallerUrl =
+        "https://ftp.ext.hp.com/pub/caps-softpaq/cmit/hp-cmsl-1.7.3.exe";
+    private const string CmslInstallerFileName = "hp-cmsl-1.7.3.exe";
+
     /// <summary>
-    /// Verifies HPCMSL is installed and (if not) installs it. Population of
-    /// the in-memory model list happens lazily on first ListModelsAsync.
+    /// Verifies HPCMSL is installed and (if not) installs it via HP's Inno-
+    /// Setup EXE. Earlier versions called <c>Install-Module HPCMSL
+    /// -AcceptLicense</c> which fails on stock Windows 11 (PowerShellGet
+    /// 1.0.0.1 predates the <c>-AcceptLicense</c> parameter; bootstrapping a
+    /// newer PowerShellGet requires a process restart which we can't do
+    /// mid-PowerShell-invocation). The EXE bypasses PowerShellGet entirely.
     /// </summary>
     public async Task EnsureCatalogAsync(
         IProgress<DownloadProgress>? progress = null,
         CancellationToken ct = default)
     {
+        // Probe: any HPCMSL version present is enough for our use case.
         var probe = await RunPsAsync(
             "if (Get-Module -ListAvailable -Name HPCMSL) { 'present' } else { 'missing' }",
             ct);
         if (probe.StdOut.Trim().Equals("present", StringComparison.OrdinalIgnoreCase))
+        {
+            LastAttemptLog = "HPCMSL already installed.";
             return;
+        }
 
-        // Install for current user — no admin elevation needed.
-        var install = await RunPsAsync(
-            "try { " +
-            "Install-PackageProvider -Name NuGet -Force -Scope CurrentUser -ErrorAction Stop | Out-Null; " +
-            "Install-Module -Name HPCMSL -Scope CurrentUser -Force -AcceptLicense -ErrorAction Stop; " +
-            "'installed' } catch { 'failed: ' + $_.Exception.Message }",
-            ct,
-            longRunning: true);
-        if (!install.StdOut.Trim().StartsWith("installed", StringComparison.OrdinalIgnoreCase))
+        // Download the installer to the catalogue cache so we can retry on
+        // bad networks without re-fetching.
+        var installerPath = _cache.GetEntryPath(
+            CatalogCacheManager.Category.HP, CmslInstallerFileName);
+        if (!File.Exists(installerPath))
+        {
+            var result = await _downloader.DownloadAsync(
+                CmslInstallerUrl, installerPath, expectedSha256: null, progress, ct);
+            _cache.WriteManifest(installerPath, new CacheManifest
+            {
+                SourceUrl     = CmslInstallerUrl,
+                Sha256        = result.Sha256,
+                SizeBytes     = result.SizeBytes,
+                DownloadedUtc = DateTime.UtcNow,
+                ExpiresUtc    = DateTime.UtcNow.AddDays(365),
+                Vendor        = "HP",
+                Notes         = "HP CMSL installer"
+            });
+        }
+
+        // Run silently. /VERYSILENT suppresses all UI and license prompts;
+        // /NORESTART blocks reboot. Inno Setup, returns 0 on success.
+        var psi = new ProcessStartInfo
+        {
+            FileName               = installerPath,
+            Arguments              = "/VERYSILENT /NORESTART /SUPPRESSMSGBOXES",
+            UseShellExecute        = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError  = true,
+            CreateNoWindow         = true,
+        };
+        using var p = Process.Start(psi)
+            ?? throw new InvalidOperationException("Could not start HP CMSL installer.");
+
+        // CMSL installer runs the .NET DSC bootstrapper + sets PSModulePath;
+        // typically completes in 30-60 s on a normal machine.
+        using var killCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        killCts.CancelAfter(TimeSpan.FromMinutes(5));
+        try { await p.WaitForExitAsync(killCts.Token); }
+        catch (OperationCanceledException)
+        {
+            try { p.Kill(entireProcessTree: true); } catch { }
+            throw new TimeoutException("HP CMSL installer exceeded 5-minute timeout.");
+        }
+        if (p.ExitCode != 0)
             throw new InvalidOperationException(
-                "HP CMSL install failed: " + install.StdOut + "\n" + install.StdErr);
+                $"HP CMSL installer exited {p.ExitCode}. " +
+                "Try downloading hp-cmsl manually from " +
+                "https://ftp.ext.hp.com/pub/caps-softpaq/cmit/hp-cmsl.html");
+
+        // Re-probe. The new PSModulePath may not be visible to a freshly-
+        // spawned powershell.exe immediately — it's a system-wide change
+        // that propagates via the per-process environment. We rely on the
+        // EXE installer setting PSModulePath in the registry; new powershell
+        // processes after install see it.
+        var reprobe = await RunPsAsync(
+            "if (Get-Module -ListAvailable -Name HPCMSL) { 'present' } else { 'missing' }",
+            ct);
+        if (!reprobe.StdOut.Trim().Equals("present", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException(
+                "HP CMSL installer reported success but the module is not " +
+                "discoverable. Restart the app and try again — installer-set " +
+                "PSModulePath may need a process refresh.");
+
+        LastAttemptLog = "HPCMSL installed via hp-cmsl EXE.";
     }
 
     public async Task<IReadOnlyList<DriverPackModel>> ListModelsAsync(
