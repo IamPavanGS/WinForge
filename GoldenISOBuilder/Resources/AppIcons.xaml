@@ -58,5 +58,8 @@
     <Geometry x:Key="PauseIcon">M6,4 H10 V20 H6 Z M14,4 H18 V20 H14 Z</Geometry>
     <Geometry x:Key="StopIcon">M5,5 H19 V19 H5 Z</Geometry>
 
+    <Geometry x:Key="MonitorIcon">M2,3 H22 Q22,3 22,5 V15 Q22,17 20,17 H13 V19 H17 V21 H7 V19 H11 V17 H2 Q2,17 2,15 V5 Q2,3 2,3 Z M2,13 H22</Geometry>
+    <Geometry x:Key="CameraIcon">M23,19 A2,2 0 0 1 21,21 H3 A2,2 0 0 1 1,19 V8 A2,2 0 0 1 3,6 H7 L9,3 H15 L17,6 H21 A2,2 0 0 1 23,8 Z M9,13 A3,3 0 1 0 15,13 A3,3 0 1 0 9,13</Geometry>
+
 </ResourceDictionary>
 

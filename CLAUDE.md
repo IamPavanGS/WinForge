@@ -184,3 +184,59 @@ Installed at `C:\GIB\` inside the image. On first user login:
 | Build log | `<OutputPath>\build-<timestamp>.log` |
 | Validation report | `<OutputPath>\ValidationReport_<timestamp>.txt` |
 | Crash log | `%LOCALAPPDATA%\GoldenISOBuilder\crash.log` |
+
+## Test in VM page (`Views\TestVmPage.xaml[.cs]`, `Services\HyperVService.cs`)
+
+The "Test in VM" feature lets the user boot the built ISO inside Hyper-V. **Important design constraints — don't fight these:**
+
+- **The in-app preview is intentionally a read-only thumbnail.** It calls Hyper-V WMI `Msvm_VirtualSystemManagementService.GetVirtualSystemThumbnailImage`. That API is a still-image snapshot, NOT a video stream — Hyper-V Manager's own preview pane uses the same API at ~4 FPS for the same reason. Do not try to make this "live video". Real-time interactive video is only available through `vmconnect.exe` (RDP/Enhanced Session).
+- **Interactive control is delegated to `vmconnect.exe` in a separate window.** Clicking the in-app preview, or the `Fullscreen` / `Connect via RDP` toolbar buttons, calls `HyperVService.LaunchVmConnect()`.
+- **Do NOT re-attempt embedding `vmconnect.exe` or `MsTscAx` inside the WPF window.** This was tried and abandoned:
+  - HwndHost reparenting of `vmconnect.exe`: vmconnect's GPU/DirectComposition rendering is tied to its original top-level window, so reparenting yields a black surface even though input works.
+  - Hosting `MsRdpClient10NotSafeForScripting` ActiveX via WindowsFormsHost + AxHost: on this user's Windows build, `IMsRdpExtendedSettings` returns `E_NOINTERFACE`, breaking the PCB / pre-auth credential flow. White-flash → disconnect.
+  - The deleted files `Services\EmbeddedVmConnectHost.cs`, `Services\EmbeddedRdpVmHost.cs`, `Services\EmbedRdpLogger.cs` exist in git history if you need the prior research.
+
+### Thumbnail capture performance
+
+`HyperVService.TryCaptureBgr565(w, h, buffer)` writes the thumbnail directly into a caller-provided Bgr565 byte buffer. The UI side keeps a reused `WriteableBitmap` + buffer and writes via `WritePixels` — this avoids per-tick allocation and `Image.Source` replacement (which caused visible flicker).
+
+- The service caches `Msvm_VirtualSystemManagementService` and the per-VM `Msvm_ComputerSystem` (`_thumbSvc`, `_thumbVm`) so a tick costs only the thumbnail call itself, not the ~100 ms of WMI lookups. Cache is invalidated in `StopAndDeleteAsync` and on any capture error.
+- Capture size is fixed at 1024×768. Hyper-V re-rasterises whenever requested dimensions change, so varying sizes (e.g. passing `ActualWidth`/`ActualHeight`) produced jitter. The WPF Image scales via `Stretch="Uniform"` + `RenderOptions.BitmapScalingMode="LowQuality"`.
+- Tick interval is 250 ms; ticks are guarded by `_previewBusy` so async captures cannot overlap.
+
+### vmconnect window management — focus-or-launch
+
+`HyperVService.LaunchVmConnect()` is **not** "always spawn a new window". `vmconnect.exe` does no deduplication on its own — every launch creates a new top-level RDP window pointed at the same VM. The service therefore:
+
+1. If `_vmConnectProc` is alive → restore (if minimised) and `SetForegroundWindow` its main window.
+2. Else, fallback: `EnumWindows` for a window title containing `"<VMName> on localhost"` (covers the case where vmconnect was launched from Hyper-V Manager outside our app) → focus it.
+3. Else → `Process.Start("vmconnect.exe localhost <VMName>")` and track the new process.
+
+`KillTrackedVmConnect()` is called at the start of `StopAndDeleteAsync` — closing the console **before** the VM disappears prevents vmconnect from popping a "VM is no longer available" Watson dialog.
+
+### TestVmPage ISO field
+
+- `_selectedIsoPath` is auto-populated from `BuildSession.Current.LastBuiltIsoPath` (set by `BuildEngine.RunAsync` after a successful build) — both on first load and on every `IsVisibleChanged → visible`, so a freshly built ISO appears in the field when the user navigates here after a build.
+- The `IsoPathBox` `TextBox` uses an inline `ControlTemplate` that strips the default WPF TextBox chrome down to just a `PART_ContentHost` ScrollViewer. Without this, the default template's background bleeds through as a colour difference inside the wrapping `Border`.
+
+### `StartVmBtn` gating
+
+`UpdateStartButtonEnabled()` is the **only** code path that should set `StartVmBtn.IsEnabled`. It enables only when (Hyper-V available) ∧ (VM state == Idle) ∧ (ISO selected and exists), and assigns a tooltip explaining the disabled reason. Call it from every state-changing handler (ISO picked, VM state change, Hyper-V availability check).
+
+## App startup (`App.xaml.cs`, `SplashHost.cs`)
+
+The splash screen runs on its **own STA thread** via `SplashHost.Start()`. The WPF BAML parse for `MainWindow.xaml` blocks the main UI thread for several seconds; without a separate dispatcher, the splash freezes at "Loading…". `SplashHost.SetStatus()` and `FadeOutAndCloseAsync()` marshal via the splash thread's dispatcher.
+
+`HyperVService.ReapOrphanedVmsAsync()` is fired **after** `MainWindow.Show()` (not during startup) so a flaky PowerShell from a prior crash can't block the window from appearing. A Win32 Job Object (`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`) is created in `HyperVService` and every spawned `powershell.exe` is assigned to it via `AssignProcessToJobObject`, so child processes die with the app.
+
+## Step 6 build progress page (`Views\Step6Page.xaml[.cs]`)
+
+`CinematicView` is the default visualisation; `PipelineView` is one click away on the segmented toggle in the page header. Don't flip these without checking with the user — the default was deliberately set to cinematic so non-power-users aren't dropped straight into a dense pipeline log.
+
+## Publishing & installer
+
+**Single-file publish (WPF gotcha):** plain `PublishSingleFile=true` leaves native DLLs (`D3DCompiler_47_cor3.dll`, `PresentationNative_cor3.dll`, `wpfgfx_cor3.dll`, `PenImc_cor3.dll`, `vcruntime140_cor3.dll`) alongside the exe. Add `-p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true` to embed them into the exe. The resulting `GoldenISOBuilder.exe` is ~75 MB; `GIBFirstBoot.exe` remains as a separate ~70 MB file next to it (the build engine copies it into ISOs at runtime).
+
+**Inno Setup installer:** `Installer\ALEImageForge.iss` bundles both exes into a single setup. Compile with `%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe Installer\ALEImageForge.iss`. The installer is `PrivilegesRequired=admin` (the app needs admin for DISM) and uses `AppMutex=Global\ALEImageForge_RunningInstance` to block upgrade while the app is running. Output: `Installer\Output\ALEImageForge-Setup-<version>.exe`.
+
+When bumping `MyAppVersion` in the `.iss`, also bump the assembly/file version if you add one — the `AppMutex` does not protect against side-by-side installs of two different `MyAppVersion` values, only against installing over a running instance.

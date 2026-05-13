@@ -2,6 +2,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Threading;
 using GoldenISOBuilder.Helpers;
+using GoldenISOBuilder.Services;
 
 namespace GoldenISOBuilder;
 
@@ -19,45 +20,48 @@ public partial class App : Application
 
         base.OnStartup(e);   // no StartupUri — window creation is manual below
 
-        // ── Show splash immediately ──────────────────────────────────────────
-        var splash = new SplashWindow();
-        splash.Show();
+        // ── Show splash on its own STA thread ────────────────────────────────
+        // Keeps splash animated and responsive even while this thread is busy
+        // constructing MainWindow (BAML parse of all wizard pages can block
+        // this thread for several seconds on first launch).
+        SplashHost.Start();
 
-        // ── Synchronous initialisation (fast, but give splash time to paint) ─
-        splash.SetStatus("Registering notifications…");
+        // ── Synchronous initialisation ───────────────────────────────────────
+        SplashHost.SetStatus("Registering notifications…");
         ToastHelper.Initialize();
 
-        splash.SetStatus("Loading settings…");
+        SplashHost.SetStatus("Loading settings…");
         AppSettingsLoader.Apply();   // applies theme + default paths
 
-        // ── Hand off to async bootstrap so the splash stays responsive ───────
-        _ = BootstrapAsync(splash);
+        // ── Bootstrap MainWindow ─────────────────────────────────────────────
+        _ = BootstrapAsync();
     }
 
-    /// <summary>
-    /// Waits for the minimum splash display time, then shows MainWindow and
-    /// fades the splash out. Runs on the UI thread via async/await so the
-    /// WPF dispatcher keeps processing — the splash animation stays smooth.
-    /// </summary>
-    private static async Task BootstrapAsync(SplashWindow splash)
+    private static async Task BootstrapAsync()
     {
-        // Guarantee the splash is visible for at least 1.8 s even on fast machines.
-        // This prevents an ugly flash where the splash barely appears before vanishing.
-        await Task.Delay(1800);
+        // Guarantee the splash is visible for at least 1.5 s even on fast
+        // machines, otherwise it flashes by before the user registers it.
+        await Task.Delay(1500);
 
-        splash.SetStatus("Ready");
+        SplashHost.SetStatus("Loading wizard…");
 
-        // Brief pause so the "Ready" text is readable before the window appears.
-        await Task.Delay(150);
-
-        // Create and show the main window
+        // Heavy BAML parse — blocks the main UI thread, but the splash is on
+        // its own thread so it stays animated.
         var main = new MainWindow();
+
+        SplashHost.SetStatus("Ready");
+        await Task.Delay(200);
+
         main.Show();
         main.Activate();
 
-        // Fade out the splash (returns once the animation completes and the
-        // window is closed — typically ~400 ms).
-        await splash.FadeOutAndCloseAsync();
+        await SplashHost.FadeOutAndCloseAsync();
+
+        // Deferred startup cleanup: reap orphan GIB-Test-* VMs and leftover
+        // VHDX folders from previous crashed sessions. This can take 30+ s
+        // when there's a multi-GB VHDX to delete, so we run it AFTER the
+        // window is up so it never blocks launch.
+        _ = Task.Run(() => HyperVService.Instance.ReapOrphanedVmsAsync());
     }
 
     private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)

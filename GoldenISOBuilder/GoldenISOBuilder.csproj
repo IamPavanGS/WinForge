@@ -25,6 +25,10 @@
     Publish output path (with RuntimeIdentifier=win-x64 in csproj):
       bin\x64\<Config>\net8.0-windows\win-x64\publish\GIBFirstBoot.exe
   -->
+  <ItemGroup>
+    <PackageReference Include="System.Management" Version="8.0.0" />
+  </ItemGroup>
+
   <Target Name="PublishAndCopyGIBFirstBoot" AfterTargets="Build">
     <Exec Command="dotnet publish &quot;$(MSBuildThisFileDirectory)..\GIBFirstBoot\GIBFirstBoot.csproj&quot; -c $(Configuration) -r win-x64 --self-contained true -p:PublishSingleFile=true --nologo -v quiet"
           ConsoleToMSBuild="true"

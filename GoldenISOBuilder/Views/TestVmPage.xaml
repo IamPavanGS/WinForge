@@ -1,0 +1,563 @@
+<UserControl x:Class="GoldenISOBuilder.Views.TestVmPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:h="clr-namespace:GoldenISOBuilder.Helpers"
+             Background="{DynamicResource BG0Brush}"
+             FontFamily="Segoe UI">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- ═══ HEADER ═══ -->
+        <Border Grid.Row="0"
+                BorderBrush="{DynamicResource LineSoftBrush}" BorderThickness="0,0,0,1"
+                Padding="14,8,14,8" Background="{DynamicResource BG1Brush}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- ISO icon + label -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal"
+                            VerticalAlignment="Center" h:PanelSpacing.Spacing="6"
+                            Margin="0,0,8,0">
+                    <Path Style="{StaticResource IconPath}" Data="{StaticResource DiscIcon}"
+                          Stroke="{DynamicResource FG2Brush}" Width="13" Height="13"/>
+                    <TextBlock Text="ISO to test:" FontSize="11.5"
+                               Foreground="{DynamicResource FG2Brush}"
+                               VerticalAlignment="Center"/>
+                </StackPanel>
+
+                <!-- Path text box -->
+                <Border Grid.Column="1"
+                        Background="{DynamicResource BG0Brush}"
+                        BorderBrush="{DynamicResource LineBrush}"
+                        BorderThickness="1" CornerRadius="5"
+                        ClipToBounds="True">
+                    <TextBox x:Name="IsoPathBox"
+                             Height="28"
+                             Padding="8,0"
+                             FontFamily="Consolas, Cascadia Code, Courier New"
+                             FontSize="11"
+                             Foreground="{DynamicResource FG1Brush}"
+                             Background="Transparent"
+                             BorderThickness="0"
+                             VerticalContentAlignment="Center"
+                             IsReadOnly="True"
+                             Text="No ISO selected — click Browse to choose"
+                             Cursor="Hand"
+                             MouseLeftButtonUp="IsoPathBox_Click"
+                             CaretBrush="Transparent"
+                             FocusVisualStyle="{x:Null}"
+                             SnapsToDevicePixels="True">
+                        <TextBox.Template>
+                            <ControlTemplate TargetType="TextBox">
+                                <ScrollViewer x:Name="PART_ContentHost"
+                                              Background="Transparent"
+                                              Focusable="False"
+                                              VerticalScrollBarVisibility="Hidden"
+                                              HorizontalScrollBarVisibility="Hidden"/>
+                            </ControlTemplate>
+                        </TextBox.Template>
+                    </TextBox>
+                </Border>
+
+                <!-- Browse button -->
+                <Button Grid.Column="2" x:Name="BrowseIsoBtn"
+                        Style="{StaticResource DefaultButtonStyle}"
+                        Height="28" Padding="10,0" FontSize="11.5"
+                        Margin="6,0,0,0"
+                        Click="BrowseIso_Click">
+                    <StackPanel Orientation="Horizontal" h:PanelSpacing.Spacing="5">
+                        <Path Style="{StaticResource IconPath}" Data="{StaticResource FolderOpenIcon}"
+                              Stroke="{DynamicResource FG1Brush}" Width="12" Height="12"/>
+                        <TextBlock Text="Browse ISO" Foreground="{DynamicResource FG0Brush}"
+                                   VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+
+                <!-- Back to build -->
+                <Button Grid.Column="3" x:Name="BackToBuildBtn"
+                        Style="{StaticResource GhostButtonStyle}"
+                        Height="28" Margin="12,0,0,0"
+                        Click="BackToBuild_Click">
+                    <StackPanel Orientation="Horizontal" h:PanelSpacing.Spacing="5">
+                        <Path Style="{StaticResource IconPath}" Data="{StaticResource ChevronLeftIcon}"
+                              Stroke="{DynamicResource FG1Brush}" Width="12" Height="12"/>
+                        <TextBlock Text="Back to build" Foreground="{DynamicResource FG1Brush}"/>
+                    </StackPanel>
+                </Button>
+
+            </Grid>
+        </Border>
+
+        <!-- ═══ BODY ═══ -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="220"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- ─── LEFT: VM Viewport ─── -->
+            <Grid Grid.Column="0" Margin="14,8,8,8">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>   <!-- Hyper-V warning -->
+                    <RowDefinition Height="Auto"/>   <!-- specs / start bar -->
+                    <RowDefinition Height="Auto"/>   <!-- VM info bar (shown when running) -->
+                    <RowDefinition Height="*"/>      <!-- screen -->
+                    <RowDefinition Height="Auto"/>   <!-- toolbar -->
+                </Grid.RowDefinitions>
+
+                <!-- Hyper-V unavailable warning (hidden by default) -->
+                <Border x:Name="HvWarningBar" Grid.Row="0"
+                        Background="#2A1A00" BorderBrush="#F59E0B" BorderThickness="1"
+                        CornerRadius="6" Padding="14,10" Margin="0,0,0,8"
+                        Visibility="Collapsed">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Icon -->
+                        <Border Grid.Column="0" Width="28" Height="28" CornerRadius="14"
+                                Background="#F59E0B" VerticalAlignment="Center"
+                                Margin="0,0,12,0">
+                            <Path Style="{StaticResource IconPath}" Data="{StaticResource AlertIcon}"
+                                  Stroke="#2A1A00" StrokeThickness="2"
+                                  Width="14" Height="14"/>
+                        </Border>
+
+                        <!-- Message -->
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Text="Hyper-V is not enabled on this machine"
+                                       Foreground="#F59E0B" FontSize="13" FontWeight="SemiBold"/>
+                            <TextBlock Foreground="#D89E5B" FontSize="11.5"
+                                       Margin="0,2,0,0" TextWrapping="Wrap">
+                                <Run Text="The Test in VM feature needs the Hyper-V role to create and boot virtual machines. "/>
+                                <LineBreak/>
+                                <Run Text="To enable: open "/>
+                                <Run Text="Windows Features" FontWeight="SemiBold"/>
+                                <Run Text=" → check "/>
+                                <Run Text="Hyper-V" FontWeight="SemiBold"/>
+                                <Run Text=" → OK → restart your computer."/>
+                            </TextBlock>
+                        </StackPanel>
+
+                        <!-- Action: open Windows Features -->
+                        <Button Grid.Column="2" x:Name="OpenWindowsFeaturesBtn"
+                                Style="{StaticResource DefaultButtonStyle}"
+                                Height="30" Padding="12,0" FontSize="11.5"
+                                VerticalAlignment="Center"
+                                Margin="16,0,0,0"
+                                Click="OpenWindowsFeatures_Click">
+                            <StackPanel Orientation="Horizontal" h:PanelSpacing.Spacing="6">
+                                <Path Style="{StaticResource IconPath}" Data="{StaticResource SettingsIcon}"
+                                      Stroke="{DynamicResource FG1Brush}" Width="12" Height="12"/>
+                                <TextBlock Text="Open Windows Features"
+                                           Foreground="{DynamicResource FG0Brush}"
+                                           VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                    </Grid>
+                </Border>
+
+                <!-- VM Specs + Start bar (shown when VM not running) -->
+                <Border x:Name="VmSpecsBar" Grid.Row="1"
+                        Background="{DynamicResource BG2Brush}"
+                        BorderBrush="{DynamicResource LineBrush}" BorderThickness="1,1,1,0"
+                        CornerRadius="8,8,0,0" Padding="10,6">
+                    <Grid>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
+                                    h:PanelSpacing.Spacing="12">
+
+                            <!-- RAM -->
+                            <StackPanel Orientation="Horizontal" h:PanelSpacing.Spacing="5"
+                                        VerticalAlignment="Center">
+                                <TextBlock Text="RAM" FontSize="11"
+                                           Foreground="{DynamicResource FG2Brush}" VerticalAlignment="Center"/>
+                                <ComboBox x:Name="RamCombo" Width="80" Height="26" FontSize="11.5"
+                                          SelectedIndex="1">
+                                    <ComboBoxItem Content="4 GB"  Tag="4294967296"/>
+                                    <ComboBoxItem Content="8 GB"  Tag="8589934592"/>
+                                    <ComboBoxItem Content="16 GB" Tag="17179869184"/>
+                                    <ComboBoxItem Content="32 GB" Tag="34359738368"/>
+                                </ComboBox>
+                            </StackPanel>
+
+                            <!-- vCPU -->
+                            <StackPanel Orientation="Horizontal" h:PanelSpacing.Spacing="5"
+                                        VerticalAlignment="Center">
+                                <TextBlock Text="vCPU" FontSize="11"
+                                           Foreground="{DynamicResource FG2Brush}" VerticalAlignment="Center"/>
+                                <ComboBox x:Name="CpuCombo" Width="60" Height="26" FontSize="11.5"
+                                          SelectedIndex="1">
+                                    <ComboBoxItem Content="2" Tag="2"/>
+                                    <ComboBoxItem Content="4" Tag="4"/>
+                                    <ComboBoxItem Content="6" Tag="6"/>
+                                    <ComboBoxItem Content="8" Tag="8"/>
+                                </ComboBox>
+                            </StackPanel>
+
+                            <!-- vTPM -->
+                            <CheckBox x:Name="VtpmCheck" Content="vTPM" IsChecked="True"
+                                      FontSize="11.5" VerticalAlignment="Center"/>
+
+                            <!-- Secure Boot -->
+                            <CheckBox x:Name="SecureBootCheck" Content="Secure Boot" IsChecked="True"
+                                      FontSize="11.5" VerticalAlignment="Center"/>
+
+                        </StackPanel>
+
+                        <!-- Start VM -->
+                        <Button x:Name="StartVmBtn" HorizontalAlignment="Right"
+                                Style="{StaticResource PrimaryButtonStyle}"
+                                Height="28" Padding="14,0" FontSize="11.5"
+                                IsEnabled="False"
+                                ToolTip="Select an ISO first to enable this button"
+                                Click="StartVm_Click">
+                            <StackPanel Orientation="Horizontal" h:PanelSpacing.Spacing="6">
+                                <Path Style="{StaticResource IconPath}" Data="{StaticResource PlayIcon}"
+                                      Stroke="{DynamicResource BG0Brush}" Width="11" Height="11"/>
+                                <TextBlock Text="Start VM" Foreground="{DynamicResource BG0Brush}"
+                                           FontWeight="SemiBold"/>
+                            </StackPanel>
+                        </Button>
+                    </Grid>
+                </Border>
+
+                <!-- VM info strip (shown when Running) — relocated out of the screen border
+                     because WPF cannot composite over the embedded native HWND -->
+                <Border x:Name="VmInfoStrip" Grid.Row="2"
+                        Background="{DynamicResource BG2Brush}"
+                        BorderBrush="{DynamicResource LineBrush}"
+                        BorderThickness="1,0,1,1"
+                        Padding="12,5"
+                        Visibility="Collapsed">
+                    <TextBlock x:Name="VmInfoBar"
+                               FontFamily="Consolas, Cascadia Code, Courier New"
+                               FontSize="11" Foreground="{DynamicResource FG2Brush}"/>
+                </Border>
+
+                <!-- Dark screen + embed mount point -->
+                <Border Grid.Row="3"
+                        Background="#0A0D12"
+                        CornerRadius="0"
+                        BorderBrush="{DynamicResource LineBrush}"
+                        BorderThickness="1,0,1,0"
+                        ClipToBounds="True">
+                    <Grid>
+                        <!-- Live read-only thumbnail (WMI). Click to open vmconnect
+                             for interactive keyboard/mouse control. -->
+                        <Border x:Name="VmEmbedHost"
+                                Background="#0A0D12"
+                                Cursor="Hand"
+                                MouseLeftButtonDown="VmEmbedHost_Click"
+                                ToolTip="Click to open VM console for interactive control"
+                                Visibility="Collapsed">
+                            <Grid>
+                                <Image x:Name="VmScreenImage" Stretch="Uniform"
+                                       RenderOptions.BitmapScalingMode="LowQuality"
+                                       SnapsToDevicePixels="True"/>
+                                <!-- Hint banner — pinned bottom-centre -->
+                                <Border VerticalAlignment="Bottom" HorizontalAlignment="Center"
+                                        Background="#CC0C1320" CornerRadius="4"
+                                        Padding="10,4" Margin="0,0,0,10"
+                                        IsHitTestVisible="False">
+                                    <TextBlock Text="Preview is read-only — click to open VM console for keyboard/mouse"
+                                               FontSize="10.5" Foreground="#AABFD0"/>
+                                </Border>
+                            </Grid>
+                        </Border>
+
+                        <!-- Placeholder (shown when not Running) -->
+                        <StackPanel x:Name="VmPlaceholder"
+                                    VerticalAlignment="Center" HorizontalAlignment="Center"
+                                    h:PanelSpacing.Spacing="12">
+                            <Border Width="72" Height="72" CornerRadius="36"
+                                    Background="#0F1E30" BorderBrush="#1E3A58" BorderThickness="1"
+                                    HorizontalAlignment="Center">
+                                <Path Style="{StaticResource IconPath}" Data="{StaticResource MonitorIcon}"
+                                      Stroke="#2A4060" StrokeThickness="1.5"
+                                      Width="32" Height="32"/>
+                            </Border>
+                            <TextBlock x:Name="PlaceholderText" Text="Select an ISO and click  Start VM"
+                                       Foreground="#2A5070" FontSize="13" FontWeight="Medium"
+                                       HorizontalAlignment="Center"/>
+                            <TextBlock x:Name="PlaceholderSub"
+                                       Text="Configure RAM, vCPU, and security options above, then click Start VM."
+                                       Foreground="#1A3550" FontSize="11.5"
+                                       HorizontalAlignment="Center" TextAlignment="Center"
+                                       TextWrapping="Wrap" MaxWidth="340"/>
+                        </StackPanel>
+
+                        <!-- Crash / disconnect overlay -->
+                        <StackPanel x:Name="VmErrorOverlay"
+                                    VerticalAlignment="Center" HorizontalAlignment="Center"
+                                    h:PanelSpacing.Spacing="10" Visibility="Collapsed">
+                            <Border Width="64" Height="64" CornerRadius="32"
+                                    Background="#2A1A00" BorderBrush="#F05260" BorderThickness="1"
+                                    HorizontalAlignment="Center">
+                                <Path Style="{StaticResource IconPath}" Data="{StaticResource AlertIcon}"
+                                      Stroke="#F05260" StrokeThickness="2"
+                                      Width="28" Height="28"/>
+                            </Border>
+                            <TextBlock Text="VM console disconnected"
+                                       Foreground="#F05260" FontSize="13" FontWeight="SemiBold"
+                                       HorizontalAlignment="Center"/>
+                            <TextBlock x:Name="VmErrorDetail"
+                                       Text="vmconnect.exe exited — the VM is still running."
+                                       Foreground="#AABFD0" FontSize="11.5"
+                                       HorizontalAlignment="Center" TextAlignment="Center"
+                                       TextWrapping="Wrap" MaxWidth="380"/>
+                            <Button x:Name="ReconnectBtn"
+                                    Style="{StaticResource PrimaryButtonStyle}"
+                                    Height="30" Padding="16,0" FontSize="12"
+                                    HorizontalAlignment="Center"
+                                    Margin="0,4,0,0"
+                                    Click="ReconnectBtn_Click">
+                                <StackPanel Orientation="Horizontal" h:PanelSpacing.Spacing="6">
+                                    <Path Style="{StaticResource IconPath}" Data="{StaticResource PlayIcon}"
+                                          Stroke="{DynamicResource BG0Brush}" Width="11" Height="11"/>
+                                    <TextBlock Text="Reconnect" Foreground="{DynamicResource BG0Brush}"
+                                               FontWeight="SemiBold"/>
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <!-- VM toolbar -->
+                <Border Grid.Row="4"
+                        Background="{DynamicResource BG2Brush}"
+                        BorderBrush="{DynamicResource LineBrush}"
+                        BorderThickness="1"
+                        CornerRadius="0,0,8,8"
+                        Padding="10,7">
+                    <DockPanel LastChildFill="False">
+
+                        <!-- Elapsed — docked right -->
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal"
+                                    VerticalAlignment="Center" h:PanelSpacing.Spacing="5"
+                                    Margin="12,0,4,0">
+                            <TextBlock Text="UPTIME" FontSize="10" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource FG3Brush}" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="ElapsedText" Text="00:00"
+                                       FontFamily="Consolas, Cascadia Code, Courier New"
+                                       FontSize="11.5" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource FG0Brush}" VerticalAlignment="Center"/>
+                        </StackPanel>
+
+                        <!-- Action buttons -->
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
+                                    h:PanelSpacing.Spacing="4">
+
+                            <!-- Running pill (visible when VM is running) -->
+                            <Border x:Name="VmRunningPill"
+                                    CornerRadius="5" Padding="10,5"
+                                    Background="#1A1000" BorderBrush="#F59E0B" BorderThickness="1"
+                                    VerticalAlignment="Center" Visibility="Collapsed">
+                                <StackPanel Orientation="Horizontal" h:PanelSpacing.Spacing="6">
+                                    <Ellipse Width="7" Height="7" Fill="#F59E0B" VerticalAlignment="Center"/>
+                                    <TextBlock Text="Running" FontSize="11.5" FontWeight="Medium"
+                                               Foreground="#F59E0B" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Creating pill (visible while VM is being created) -->
+                            <Border x:Name="VmCreatingPill"
+                                    CornerRadius="5" Padding="10,5"
+                                    Background="#1A1000" BorderBrush="#F59E0B" BorderThickness="1"
+                                    VerticalAlignment="Center" Visibility="Collapsed">
+                                <TextBlock Text="Starting…" FontSize="11.5" FontWeight="Medium"
+                                           Foreground="#F59E0B" VerticalAlignment="Center"/>
+                            </Border>
+
+                            <Button Style="{StaticResource DefaultButtonStyle}"
+                                    Height="28" Padding="10,0" FontSize="11.5"
+                                    Content="Reset" Click="VmReset_Click"/>
+
+                            <Button Style="{StaticResource DefaultButtonStyle}"
+                                    Height="28" Padding="10,0" FontSize="11.5"
+                                    Content="Ctrl+Alt+Del" Click="VmCtrlAltDel_Click"/>
+
+                            <Button Style="{StaticResource DefaultButtonStyle}"
+                                    Height="28" Padding="8,0" FontSize="11.5"
+                                    Click="VmSnapshot_Click">
+                                <StackPanel Orientation="Horizontal" h:PanelSpacing.Spacing="5">
+                                    <Path Style="{StaticResource IconPath}" Data="{StaticResource CameraIcon}"
+                                          Stroke="{DynamicResource FG1Brush}" Width="12" Height="12"/>
+                                    <TextBlock Text="Snapshot" Foreground="{DynamicResource FG0Brush}"
+                                               FontSize="11.5" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+
+                            <!-- Stop VM (only when running) -->
+                            <Button x:Name="StopVmBtn"
+                                    Style="{StaticResource DefaultButtonStyle}"
+                                    Height="28" Padding="10,0" FontSize="11.5"
+                                    Visibility="Collapsed"
+                                    Click="StopVm_Click">
+                                <StackPanel Orientation="Horizontal" h:PanelSpacing.Spacing="5">
+                                    <Path Style="{StaticResource IconPath}" Data="{StaticResource StopIcon}"
+                                          Stroke="{DynamicResource ErrBrush}" Width="11" Height="11"/>
+                                    <TextBlock Text="Stop VM" Foreground="{DynamicResource FG0Brush}"
+                                               VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+
+                            <Button Style="{StaticResource DefaultButtonStyle}"
+                                    Height="28" Padding="10,0" FontSize="11.5"
+                                    Content="Fullscreen" Click="VmFullscreen_Click"/>
+
+                            <Button Style="{StaticResource PrimaryButtonStyle}"
+                                    Height="28" Padding="10,0" FontSize="11.5"
+                                    Content="Connect via RDP" Click="VmRdp_Click"/>
+                        </StackPanel>
+
+                    </DockPanel>
+                </Border>
+            </Grid>
+
+            <!-- ─── RIGHT: Telemetry + Event Log ─── -->
+            <Border Grid.Column="1"
+                    BorderBrush="{DynamicResource LineSoftBrush}" BorderThickness="1,0,0,0"
+                    Background="{DynamicResource BG1Brush}">
+                <DockPanel LastChildFill="True">
+
+                    <TextBlock DockPanel.Dock="Top" Text="LIVE TELEMETRY"
+                               Style="{StaticResource GoldEyebrowText}"
+                               Margin="12,8,12,6"/>
+
+                    <!-- 4 sparkline metric cards -->
+                    <StackPanel DockPanel.Dock="Top" Margin="8,0,8,2"
+                                h:PanelSpacing.Spacing="4">
+
+                        <!-- CPU -->
+                        <Border Background="{DynamicResource BG2Brush}"
+                                BorderBrush="{DynamicResource LineSoftBrush}"
+                                BorderThickness="1" CornerRadius="5" Padding="8,5">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="24"/>
+                                </Grid.RowDefinitions>
+                                <Grid Grid.Row="0" Margin="0,0,0,3">
+                                    <TextBlock Text="CPU" FontSize="11"
+                                               Foreground="{DynamicResource FG2Brush}" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="CpuValueText" Text="—"
+                                               FontSize="11" FontWeight="SemiBold"
+                                               Foreground="#F59E0B" HorizontalAlignment="Right"/>
+                                </Grid>
+                                <Canvas x:Name="CpuCanvas" Grid.Row="1"
+                                        Background="Transparent" ClipToBounds="True">
+                                    <Polyline x:Name="CpuLine" Stroke="#F59E0B" StrokeThickness="1.5"
+                                              Fill="Transparent" StrokeLineJoin="Round"/>
+                                </Canvas>
+                            </Grid>
+                        </Border>
+
+                        <!-- RAM -->
+                        <Border Background="{DynamicResource BG2Brush}"
+                                BorderBrush="{DynamicResource LineSoftBrush}"
+                                BorderThickness="1" CornerRadius="5" Padding="8,5">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="24"/>
+                                </Grid.RowDefinitions>
+                                <Grid Grid.Row="0" Margin="0,0,0,3">
+                                    <TextBlock Text="RAM" FontSize="11"
+                                               Foreground="{DynamicResource FG2Brush}" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="RamValueText" Text="—"
+                                               FontSize="11" FontWeight="SemiBold"
+                                               Foreground="#22D3EE" HorizontalAlignment="Right"/>
+                                </Grid>
+                                <Canvas x:Name="RamCanvas" Grid.Row="1"
+                                        Background="Transparent" ClipToBounds="True">
+                                    <Polyline x:Name="RamLine" Stroke="#22D3EE" StrokeThickness="1.5"
+                                              Fill="Transparent" StrokeLineJoin="Round"/>
+                                </Canvas>
+                            </Grid>
+                        </Border>
+
+                        <!-- DISK IO -->
+                        <Border Background="{DynamicResource BG2Brush}"
+                                BorderBrush="{DynamicResource LineSoftBrush}"
+                                BorderThickness="1" CornerRadius="5" Padding="8,5">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="24"/>
+                                </Grid.RowDefinitions>
+                                <Grid Grid.Row="0" Margin="0,0,0,3">
+                                    <TextBlock Text="DISK IO" FontSize="11"
+                                               Foreground="{DynamicResource FG2Brush}" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="DiskValueText" Text="—"
+                                               FontSize="11" FontWeight="SemiBold"
+                                               Foreground="#A78BFA" HorizontalAlignment="Right"/>
+                                </Grid>
+                                <Canvas x:Name="DiskCanvas" Grid.Row="1"
+                                        Background="Transparent" ClipToBounds="True">
+                                    <Polyline x:Name="DiskLine" Stroke="#A78BFA" StrokeThickness="1.5"
+                                              Fill="Transparent" StrokeLineJoin="Round"/>
+                                </Canvas>
+                            </Grid>
+                        </Border>
+
+                        <!-- NETWORK -->
+                        <Border Background="{DynamicResource BG2Brush}"
+                                BorderBrush="{DynamicResource LineSoftBrush}"
+                                BorderThickness="1" CornerRadius="5" Padding="8,5">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="24"/>
+                                </Grid.RowDefinitions>
+                                <Grid Grid.Row="0" Margin="0,0,0,3">
+                                    <TextBlock Text="NETWORK" FontSize="11"
+                                               Foreground="{DynamicResource FG2Brush}" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="NetValueText" Text="—"
+                                               FontSize="11" FontWeight="SemiBold"
+                                               Foreground="#4ADE80" HorizontalAlignment="Right"/>
+                                </Grid>
+                                <Canvas x:Name="NetCanvas" Grid.Row="1"
+                                        Background="Transparent" ClipToBounds="True">
+                                    <Polyline x:Name="NetLine" Stroke="#4ADE80" StrokeThickness="1.5"
+                                              Fill="Transparent" StrokeLineJoin="Round"/>
+                                </Canvas>
+                            </Grid>
+                        </Border>
+
+                    </StackPanel>
+
+                    <!-- Divider -->
+                    <Border DockPanel.Dock="Top" Height="1"
+                            Background="{DynamicResource LineSoftBrush}" Margin="8,4,8,0"/>
+
+                    <TextBlock DockPanel.Dock="Top" Text="EVENT LOG"
+                               Style="{StaticResource GoldEyebrowText}"
+                               Margin="12,6,12,4"/>
+
+                    <!-- Event log scrollable list -->
+                    <ScrollViewer x:Name="EventLogScrollViewer"
+                                  VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled"
+                                  Focusable="False">
+                        <StackPanel x:Name="EventLogPanel" Margin="8,0,8,8"
+                                    h:PanelSpacing.Spacing="1"/>
+                    </ScrollViewer>
+
+                </DockPanel>
+            </Border>
+
+        </Grid>
+    </Grid>
+</UserControl>

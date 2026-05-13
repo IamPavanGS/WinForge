@@ -21,9 +21,9 @@
                            Foreground="{DynamicResource FG0Brush}" FontSize="16" FontWeight="SemiBold" Margin="0,4,0,0"/>
             </StackPanel>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" h:PanelSpacing.Spacing="4">
-                <ToggleButton x:Name="PipelineViewBtn" Content="Pipeline" IsChecked="True"
+                <ToggleButton x:Name="PipelineViewBtn" Content="Pipeline"
                               Style="{StaticResource SegButtonStyle}" Click="PipelineView_Click"/>
-                <ToggleButton x:Name="CinematicViewBtn" Content="Cinematic"
+                <ToggleButton x:Name="CinematicViewBtn" Content="Cinematic" IsChecked="True"
                               Style="{StaticResource SegButtonStyle}" Click="CinematicView_Click"/>
             </StackPanel>
         </Grid>
@@ -36,7 +36,7 @@
         </Grid>
 
         <!-- Pipeline View -->
-        <Grid x:Name="PipelineView" Grid.Row="2" Margin="0,4,0,0">
+        <Grid x:Name="PipelineView" Grid.Row="2" Margin="0,4,0,0" Visibility="Collapsed">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="220" MinWidth="180"/>
                 <ColumnDefinition Width="*"   MinWidth="260"/>
@@ -278,7 +278,7 @@
         </Grid>
 
         <!-- Cinematic View — full-screen status with rotating disc, big stats -->
-        <Grid x:Name="CinematicView" Grid.Row="2" Visibility="Collapsed">
+        <Grid x:Name="CinematicView" Grid.Row="2">
             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" h:PanelSpacing.Spacing="28">
                 <!-- Large Cinematic CD — same design scaled 2× -->
                 <Canvas Width="160" Height="160" HorizontalAlignment="Center"

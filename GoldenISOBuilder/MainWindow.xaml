@@ -92,7 +92,7 @@
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="56"/>
-                <ColumnDefinition Width="240"/>
+                <ColumnDefinition x:Name="NavPanelColumn" Width="240"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
@@ -143,12 +143,19 @@
                                   Stroke="{Binding RelativeSource={RelativeSource AncestorType=Button}, Path=Foreground}"
                                   Width="18" Height="18"/>
                         </Button>
+                        <Button x:Name="NavTestVmBtn" Style="{StaticResource IconRailButtonStyle}"
+                                ToolTip="Test in VM" Margin="0,4,0,0"
+                                Click="NavTestVmBtn_Click">
+                            <Path Style="{StaticResource IconPath}" Data="{StaticResource MonitorIcon}"
+                                  Stroke="{Binding RelativeSource={RelativeSource AncestorType=Button}, Path=Foreground}"
+                                  Width="18" Height="18"/>
+                        </Button>
                     </StackPanel>
                 </DockPanel>
             </Border>
 
             <!-- ===== NAV PANEL ===== -->
-            <Border Grid.Column="1" Background="{DynamicResource BG1Brush}"
+            <Border x:Name="NavPanelBorder" Grid.Column="1" Background="{DynamicResource BG1Brush}"
                     BorderBrush="{DynamicResource LineSoftBrush}" BorderThickness="0,0,1,0">
                 <DockPanel>
                     <!-- Footer: shows current output path + free space on its drive -->
@@ -418,6 +425,7 @@
                 <views:Step5Page         x:Name="PageStep5"        Visibility="Collapsed"/>
                 <views:Step6Page         x:Name="PageStep6"        Visibility="Collapsed"/>
                 <views:SettingsPage x:Name="PageSettings" Visibility="Collapsed"/>
+                <views:TestVmPage   x:Name="PageTestVm"   Visibility="Collapsed"/>
             </Grid>
         </Grid>
     </Grid>

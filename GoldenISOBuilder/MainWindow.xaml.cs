@@ -52,6 +52,7 @@ public partial class MainWindow : Window
         PageStepAdvanced.NavigateRequested   += Navigate;
         PageStep5.NavigateRequested          += Navigate;
         PageStep6.NavigateRequested          += Navigate;
+        PageTestVm.NavigateRequested         += Navigate;
 
         // When any build finishes (success or failure) refresh the Welcome page
         // stats and recent-builds list — BuildHistoryStore was already updated by
@@ -108,7 +109,11 @@ public partial class MainWindow : Window
             _footerTimer.Tick += (_, _) => UpdateFooterDriveBar();
             _footerTimer.Start();
         };
-        Closed += (_, _) => _footerTimer?.Stop();
+        Closed += (_, _) =>
+        {
+            _footerTimer?.Stop();
+            PageTestVm.CleanupVmOnClose();
+        };
     }
 
     /// <summary>
@@ -155,6 +160,7 @@ public partial class MainWindow : Window
             case "wizard":   ShowWizardStep(step);                         break;
             case "progress": PageStep6.Visibility    = Visibility.Visible; break;
             case "settings": PageSettings.Visibility = Visibility.Visible; break;
+            case "testvm":   PageTestVm.Visibility   = Visibility.Visible; break;
         }
     }
 
@@ -172,6 +178,7 @@ public partial class MainWindow : Window
         PageStep5.Visibility         = Visibility.Collapsed;
         PageStep6.Visibility         = Visibility.Collapsed;
         PageSettings.Visibility      = Visibility.Collapsed;
+        PageTestVm.Visibility        = Visibility.Collapsed;
     }
 
     private void ShowWizardStep(int step)
@@ -207,6 +214,11 @@ public partial class MainWindow : Window
                 break;
             case "progress":
                 BreadcrumbProgress.Visibility = Visibility.Visible;
+                BreadcrumbProgress.Text = "Build Progress";
+                break;
+            case "testvm":
+                BreadcrumbProgress.Visibility = Visibility.Visible;
+                BreadcrumbProgress.Text = "Test in VM";
                 break;
             case "settings":
                 BreadcrumbSettings.Visibility = Visibility.Visible;
@@ -220,6 +232,7 @@ public partial class MainWindow : Window
         NavNewBuildBtn.Tag = null;
         NavProgressBtn.Tag = null;
         NavSettingsBtn.Tag = null;
+        NavTestVmBtn.Tag   = null;
 
         switch (_currentPage)
         {
@@ -227,12 +240,18 @@ public partial class MainWindow : Window
             case "wizard":   NavNewBuildBtn.Tag = "active"; break;
             case "progress": NavProgressBtn.Tag = "active"; break;
             case "settings": NavSettingsBtn.Tag = "active"; break;
+            case "testvm":   NavTestVmBtn.Tag   = "active"; break;
         }
     }
 
     private void UpdateNavPanel()
     {
         bool isWizard = _currentPage == "wizard" || _currentPage == "progress";
+        bool isTestVm = _currentPage == "testvm";
+
+        NavPanelBorder.Visibility  = isTestVm ? Visibility.Collapsed : Visibility.Visible;
+        NavPanelColumn.Width       = isTestVm ? new GridLength(0)    : new GridLength(240);
+
         NavWelcomePanel.Visibility = isWizard ? Visibility.Collapsed : Visibility.Visible;
         NavWizardPanel.Visibility  = isWizard ? Visibility.Visible   : Visibility.Collapsed;
         if (isWizard) UpdateWizardStepBadges();
@@ -356,6 +375,9 @@ public partial class MainWindow : Window
             () => PageWelcome.Refresh(),
             System.Windows.Threading.DispatcherPriority.Background);
     }
+
+    private void NavTestVmBtn_Click(object sender, RoutedEventArgs e)
+        => Navigate("testvm");
 
     private void NavSettingsBtn_Click(object sender, RoutedEventArgs e)
         => Navigate("settings");
