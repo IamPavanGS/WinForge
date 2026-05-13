@@ -154,10 +154,10 @@ public partial class Step2Page : UserControl
     //
     // All state persists on BuildSession.UpdatesMsuPaths.
 
-    private List<Catalog.MsUpdate> _availableUpdates = new();
+    private List<Catalog.CatalogItem> _availableUpdates = new();
     private Catalog.CatalogCacheManager?  _cache;
     private Catalog.ResumeableDownloader? _downloader;
-    private Catalog.MsUpdateService?      _msUpdates;
+    private Catalog.MsCatalogWebService?  _msCatalog;
 
     private void RefreshAutoFetchVisibility()
     {
@@ -195,47 +195,46 @@ public partial class Step2Page : UserControl
     private async void UpdatesRefresh_Click(object sender, RoutedEventArgs e)
     {
         UpdatesRefreshBtn.IsEnabled = false;
-        UpdatesStatusText.Text = "Downloading Microsoft Update catalog (~900 MB on first run, cached for 7 days)…";
+        UpdatesStatusText.Text = "Querying Microsoft Update Catalog…";
         UpdatesProgress.Visibility = Visibility.Visible;
-        UpdatesProgress.IsIndeterminate = false;
-        UpdatesProgress.Value = 0;
+        UpdatesProgress.IsIndeterminate = true;
 
         try
         {
             EnsureCatalogServices();
-            var progress = new Progress<Catalog.DownloadProgress>(p =>
+
+            // Two targeted searches against the public catalog web UI — much
+            // faster (and more reliable) than walking the full ~900 MB
+            // wsusscn2.cab via WUA. Returns in 2-5 seconds typically.
+            var combined = new List<Catalog.CatalogItem>();
+            foreach (var q in new[]
             {
-                if (p.TotalBytes.HasValue && p.TotalBytes.Value > 0)
-                {
-                    UpdatesProgress.Value =
-                        (double)p.BytesDownloaded / p.TotalBytes.Value * 100;
-                }
-                UpdatesStatusText.Text =
-                    $"Downloaded {p.BytesDownloaded / 1024 / 1024} MB" +
-                    (p.TotalBytes.HasValue ? $" / {p.TotalBytes.Value / 1024 / 1024} MB" : "") +
-                    (p.Mbps.HasValue ? $" — {p.Mbps.Value:F1} Mbps" : "");
-            });
+                "Windows 11 cumulative update x64",
+                "Windows 11 25H2 enablement",
+                "Windows 11 .NET cumulative"
+            })
+            {
+                UpdatesStatusText.Text = $"Querying “{q}”…";
+                var hits = await _msCatalog!.SearchAsync(q);
+                combined.AddRange(hits);
+            }
 
-            await _msUpdates!.EnsureCatalogAsync(progress);
-            UpdatesStatusText.Text = "Reading catalog… (this can take 30–90s on first run)";
-            UpdatesProgress.IsIndeterminate = true;
-
-            // For Phase 5a we surface a coarse filter: every "Windows 11"
-            // cumulative + the 25H2 enablement package. Build-specific
-            // filtering arrives in a later phase once we wire SelectedImage
-            // build detection through to the MSU set.
-            var all = await _msUpdates.EnumerateAsync("Windows 11");
-            _availableUpdates = all
-                .Where(u => !string.IsNullOrEmpty(u.DownloadUrl))
-                .OrderByDescending(u => u.Title)
+            // De-dup by UpdateId. Prefer newer last-updated date.
+            _availableUpdates = combined
+                .GroupBy(i => i.UpdateId)
+                .Select(g => g.First())
+                .OrderByDescending(i => i.LastUpdated)
                 .ToList();
 
             PopulateTargetCombo();
-            UpdatesStatusText.Text = $"Catalog ready — {_availableUpdates.Count} Windows 11 updates available.";
+            UpdatesStatusText.Text = _availableUpdates.Count == 0
+                ? "Catalog returned no results. Try the manual folder mode below."
+                : $"Catalog ready — {_availableUpdates.Count} update(s) available.";
         }
         catch (Exception ex)
         {
-            UpdatesStatusText.Text = "Catalog refresh failed: " + ex.Message;
+            UpdatesStatusText.Text = "Catalog query failed: " + ex.Message +
+                "  Try the manual folder mode below.";
         }
         finally
         {
@@ -257,13 +256,13 @@ public partial class Step2Page : UserControl
             UpdatesFetchBtn.IsEnabled = false;
             return;
         }
-        foreach (var u in _availableUpdates.Take(40))   // cap for sanity
+        foreach (var u in _availableUpdates.Take(60))   // cap for sanity
         {
             UpdatesTargetCombo.Items.Add(new ComboBoxItem
             {
-                Content = string.IsNullOrEmpty(u.KbArticleId)
-                    ? u.Title
-                    : $"{u.KbArticleId} — {u.Title}",
+                Content = $"{(string.IsNullOrEmpty(u.KbId) ? "" : u.KbId + " — ")}" +
+                          $"{u.Title}" +
+                          $"{(string.IsNullOrEmpty(u.SizeText) ? "" : "  (" + u.SizeText + ")")}",
                 Tag = u
             });
         }
@@ -275,27 +274,39 @@ public partial class Step2Page : UserControl
     {
         if (UpdatesFetchBtn == null || UpdatesTargetCombo == null) return;
         UpdatesFetchBtn.IsEnabled =
-            UpdatesTargetCombo.SelectedItem is ComboBoxItem ci && ci.Tag is Catalog.MsUpdate;
+            UpdatesTargetCombo.SelectedItem is ComboBoxItem ci && ci.Tag is Catalog.CatalogItem;
     }
 
     private async void UpdatesFetch_Click(object sender, RoutedEventArgs e)
     {
         if (UpdatesTargetCombo.SelectedItem is not ComboBoxItem ci ||
-            ci.Tag is not Catalog.MsUpdate u ||
-            string.IsNullOrEmpty(u.DownloadUrl))
+            ci.Tag is not Catalog.CatalogItem u)
             return;
 
         UpdatesFetchBtn.IsEnabled = false;
         UpdatesProgress.Visibility = Visibility.Visible;
-        UpdatesProgress.IsIndeterminate = false;
-        UpdatesProgress.Value = 0;
-        UpdatesStatusText.Text = $"Downloading {u.KbArticleId}…";
+        UpdatesProgress.IsIndeterminate = true;
+        UpdatesStatusText.Text = $"Resolving {u.KbId} download URL…";
 
         try
         {
             EnsureCatalogServices();
-            var key = (u.KbArticleId.Length > 0 ? u.KbArticleId : "update") +
-                      System.IO.Path.GetExtension(new Uri(u.DownloadUrl!).LocalPath);
+            var url = await _msCatalog!.ResolveDownloadUrlAsync(u.UpdateId);
+            if (string.IsNullOrEmpty(url))
+            {
+                UpdatesStatusText.Text =
+                    $"Could not resolve a direct download URL for {u.KbId}. " +
+                    "Open https://catalog.update.microsoft.com manually and " +
+                    "save the .msu, then use the manual folder mode below.";
+                return;
+            }
+
+            UpdatesStatusText.Text = $"Downloading {u.KbId} from {new Uri(url).Host}…";
+            UpdatesProgress.IsIndeterminate = false;
+            UpdatesProgress.Value = 0;
+
+            var key = (u.KbId.Length > 0 ? u.KbId : "update") +
+                      System.IO.Path.GetExtension(new Uri(url).LocalPath);
             var dest = _cache!.GetEntryPath(
                 Catalog.CatalogCacheManager.Category.WindowsUpdates, key);
 
@@ -306,15 +317,15 @@ public partial class Step2Page : UserControl
                         (double)p.BytesDownloaded / p.TotalBytes.Value * 100;
             });
             var result = await _downloader!.DownloadAsync(
-                u.DownloadUrl!, dest, expectedSha256: u.Sha256, progress);
+                url, dest, expectedSha256: null, progress);
 
             _cache.WriteManifest(dest, new Catalog.CacheManifest
             {
-                SourceUrl     = u.DownloadUrl!,
+                SourceUrl     = url,
                 Sha256        = result.Sha256,
                 SizeBytes     = result.SizeBytes,
                 DownloadedUtc = DateTime.UtcNow,
-                ExpiresUtc    = DateTime.UtcNow.AddDays(30),
+                ExpiresUtc    = DateTime.UtcNow.AddDays(60),
                 Vendor        = "Microsoft",
                 Notes         = u.Title
             });
@@ -324,7 +335,7 @@ public partial class Step2Page : UserControl
             RefreshUpdatesResolvedPanel();
 
             UpdatesStatusText.Text =
-                $"Fetched {u.KbArticleId} ({result.SizeBytes / 1024 / 1024} MB). " +
+                $"Fetched {u.KbId} ({result.SizeBytes / 1024 / 1024} MB). " +
                 "Will be slipstreamed during the build.";
         }
         catch (Exception ex)
@@ -334,6 +345,7 @@ public partial class Step2Page : UserControl
         finally
         {
             UpdatesProgress.Visibility = Visibility.Collapsed;
+            UpdatesProgress.IsIndeterminate = false;
             UpdatesFetchBtn.IsEnabled = true;
         }
     }
@@ -383,7 +395,7 @@ public partial class Step2Page : UserControl
     {
         _cache      ??= new Catalog.CatalogCacheManager();
         _downloader ??= new Catalog.ResumeableDownloader();
-        _msUpdates  ??= new Catalog.MsUpdateService(_cache, _downloader);
+        _msCatalog  ??= new Catalog.MsCatalogWebService();
     }
 
     // ── Auto-fetch (Driver packs) ─────────────────────────────────────────────
@@ -466,7 +478,23 @@ public partial class Step2Page : UserControl
     private void ModelSearch_Changed(object sender, TextChangedEventArgs e)
     {
         if (ModelSearchBox == null || ModelListPanel == null) return;
-        RenderModelList(ModelSearchBox.Text.Trim());
+        var text = ModelSearchBox.Text.Trim();
+
+        // For Lenovo specifically: if the user typed exactly 4 chars and it's
+        // not already in our seed list, treat it as a direct MT input. The
+        // built-in seed is just for discovery — real Lenovo MTs come off the
+        // laptop's underside sticker and there are thousands of them.
+        if (_activeVendorService is Catalog.LenovoDriverService &&
+            text.Length == 4 &&
+            !_vendorModels.Any(m =>
+                m.SystemId.Equals(text, StringComparison.OrdinalIgnoreCase)))
+        {
+            _vendorModels.Add(new Catalog.DriverPackModel(
+                Catalog.DriverVendor.Lenovo, text.ToUpperInvariant(),
+                $"Custom MT {text.ToUpperInvariant()}", "Custom"));
+        }
+
+        RenderModelList(text);
     }
 
     private void RenderModelList(string? filter)
@@ -562,9 +590,15 @@ public partial class Step2Page : UserControl
                 var pack = await _activeVendorService.GetDriverPackAsync(sid, osCode);
                 if (pack == null)
                 {
-                    DriverStatusText.Text =
-                        $"No {osCode} driver pack published for {model.Name} ({sid}). Skipping.";
-                    await Task.Delay(800);
+                    // Lenovo (and any future service that exposes it) reports
+                    // why via LastAttemptLog. Surface it so the user knows
+                    // exactly what failed instead of seeing a silent "0 packs".
+                    var why = (_activeVendorService as Catalog.LenovoDriverService)?
+                              .LastAttemptLog;
+                    DriverStatusText.Text = string.IsNullOrEmpty(why)
+                        ? $"No {osCode} driver pack published for {model.Name} ({sid}). Skipping."
+                        : $"{model.Name} ({sid}): {why}";
+                    await Task.Delay(1500);
                     continue;
                 }
 

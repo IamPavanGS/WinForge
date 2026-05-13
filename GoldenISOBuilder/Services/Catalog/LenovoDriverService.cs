@@ -39,6 +39,13 @@ public sealed class LenovoDriverService : IDriverPackService
     private readonly CatalogCacheManager _cache;
     private readonly ResumeableDownloader _downloader;
 
+    /// <summary>
+    /// Per-call diagnostic trail. Filled in by GetDriverPackAsync so the UI
+    /// can show "Tried 21F8_Win11.xml → 404; Tried 21F8_Win10.xml → 404" when
+    /// no pack is found, instead of just "0 packs staged".
+    /// </summary>
+    public string LastAttemptLog { get; private set; } = "";
+
     public LenovoDriverService(CatalogCacheManager cache,
                                ResumeableDownloader downloader)
     {
@@ -77,21 +84,32 @@ public sealed class LenovoDriverService : IDriverPackService
     public async Task<DriverPack?> GetDriverPackAsync(
         string systemId, string osVersion, CancellationToken ct = default)
     {
+        var log = new System.Text.StringBuilder();
         // Probe Win11 first, fall back to Win10 (Lenovo's older naming
         // convention still publishes Win11-compatible packages).
         foreach (var os in new[] { "Win11", "Win10" })
         {
             var url = string.Format(CatalogUrlTemplate, systemId, os);
-            var doc = await TryFetchAsync(url, systemId, os, ct);
-            if (doc == null) continue;
+            var (doc, err) = await TryFetchAsync(url, systemId, os, ct);
+            if (doc == null)
+            {
+                log.Append($"Tried {systemId}_{os}.xml → {err}; ");
+                continue;
+            }
 
             var pack = SelectDriverPack(doc, systemId, os, url);
-            if (pack != null) return pack;
+            if (pack != null)
+            {
+                LastAttemptLog = $"OK from {systemId}_{os}.xml";
+                return pack;
+            }
+            log.Append($"{systemId}_{os}.xml had no Driver Pack entry; ");
         }
+        LastAttemptLog = log.ToString().TrimEnd(' ', ';');
         return null;
     }
 
-    private async Task<XDocument?> TryFetchAsync(
+    private async Task<(XDocument? doc, string err)> TryFetchAsync(
         string url, string mt, string os, CancellationToken ct)
     {
         var key = Path.Combine(mt, $"{mt}_{os}.xml");
@@ -113,15 +131,18 @@ public sealed class LenovoDriverService : IDriverPackService
                     Notes         = $"Catalogue for {mt} ({os})"
                 });
             }
-            catch (IOException)
+            catch (IOException ex)
             {
-                // 404 / network — try the other OS variant.
-                return null;
+                // 404 / network — try the other OS variant. Return reason
+                // so the UI can show it.
+                var msg = ex.InnerException?.Message ?? ex.Message;
+                if (msg.Contains("404")) return (null, "404 (no catalogue published)");
+                return (null, msg.Length > 60 ? msg[..60] + "…" : msg);
             }
         }
 
-        try { return XDocument.Load(xmlPath); }
-        catch { return null; }
+        try { return (XDocument.Load(xmlPath), ""); }
+        catch (Exception ex) { return (null, "XML parse: " + ex.Message); }
     }
 
     private static DriverPack? SelectDriverPack(
