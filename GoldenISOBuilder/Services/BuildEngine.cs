@@ -91,6 +91,7 @@ public class BuildEngine
             new BuildStep { Id = "copyiso",      Title = "Copy ISO contents" },
             new BuildStep { Id = "exportedition",Title = "Export selected edition" },
             new BuildStep { Id = "mountwim",     Title = "Mount install.wim" },
+            new BuildStep { Id = "updates",      Title = "Slipstream Windows updates" },
             new BuildStep { Id = "langpacks",    Title = "Inject language packs" },
             new BuildStep { Id = "drivers",      Title = "Inject drivers" },
             new BuildStep { Id = "wallpaper",    Title = "Inject wallpaper" },
@@ -118,6 +119,13 @@ public class BuildEngine
             OpenLog();
             Log($"=== Golden ISO Build started at {DateTime.Now:yyyy-MM-dd HH:mm:ss} ===");
 
+            // Copy the persisted auto-fetch toggle onto the session so all the
+            // new pipeline branches (SlipstreamUpdatesAsync, the boot.wim split
+            // inside InjectDriversAsync) read one source of truth.
+            _s.EnableAutoFetchFeatures = Helpers.AppSettingsLoader.ReadEnableAutoFetchFeatures();
+            if (_s.EnableAutoFetchFeatures)
+                Log("Auto-fetch features ENABLED (Settings → Auto-fetch).");
+
             // ── Critical steps: failure stops the build ──────────────────────
             await Step("validate",      ValidateAsync);
             await Step("prepare",       PrepareWorkspaceAsync);
@@ -126,6 +134,7 @@ public class BuildEngine
             await Step("mountwim",      MountWimAsync);
 
             // ── Optional steps: failure is logged but build continues ─────────
+            await StepSoft("updates",       SlipstreamUpdatesAsync);
             await StepSoft("langpacks",     InjectLanguagePacksAsync);
             await StepSoft("drivers",       InjectDriversAsync);
             await StepSoft("wallpaper",     InjectWallpaperAsync);
@@ -405,7 +414,114 @@ public class BuildEngine
         await DismAsync($"/Mount-Image /ImageFile:\"{_wimPath}\" /Index:1 /MountDir:\"{_mountDir}\"");
     }
 
-    // ── Step 6: Language Pack Injection ──────────────────────────────────────
+    // ── Step 6: Windows Update slipstream (auto-fetch feature) ───────────────
+    //
+    // Inserts cumulative updates + checkpoint CUs + .NET CUs + the optional
+    // 25H2 enablement package into install.wim before language packs. Gated
+    // behind BuildSession.EnableAutoFetchFeatures so existing builds are
+    // unaffected. Today's MSU set is provided via UpdatesMsuPaths (a list of
+    // absolute paths to .msu/.cab files); Phase 5's UI either auto-fetches
+    // them from Microsoft Update Catalog or lets the admin point at a folder.
+    //
+    // Order matters: drop every prerequisite-chain MSU in a single folder and
+    // DISM /Add-Package auto-resolves SSU → checkpoint(s) → target LCU. The
+    // 25H2 enablement package MUST be applied after /Cleanup-Image per
+    // Microsoft Learn — we detect KB5054156 by filename and apply it last.
+
+    private async Task SlipstreamUpdatesAsync()
+    {
+        if (!_s.EnableAutoFetchFeatures)
+        {
+            Skip("Auto-fetch features disabled in Settings.");
+            return;
+        }
+        if (_s.UpdatesMsuPaths.Count == 0)
+        {
+            Skip("No Windows updates configured.");
+            return;
+        }
+
+        // Validate every path up-front so a missing file doesn't surface mid-
+        // DISM with a confusing error.
+        var present = _s.UpdatesMsuPaths.Where(File.Exists).ToList();
+        if (present.Count != _s.UpdatesMsuPaths.Count)
+        {
+            foreach (var missing in _s.UpdatesMsuPaths.Except(present))
+                Log($"  ! Missing update package, skipping: {missing}");
+        }
+        if (present.Count == 0)
+        {
+            Skip("All configured update packages were missing on disk.");
+            return;
+        }
+
+        // Split off the 25H2 enablement package — it must be applied after
+        // /Cleanup-Image per Microsoft's documented guidance.
+        var ekb = present.FirstOrDefault(
+            p => Path.GetFileName(p).Contains("kb5054156",
+                                              StringComparison.OrdinalIgnoreCase));
+        var coreUpdates = present.Where(p => p != ekb).ToList();
+
+        // Stage core updates into a temp folder so DISM /Add-Package can
+        // auto-resolve the SSU → checkpoint → LCU prerequisite chain. (DISM
+        // only auto-sequences when given a folder whose contents are all
+        // related updates with no extra files.)
+        if (coreUpdates.Count > 0)
+        {
+            var stagingDir = Path.Combine(_workspace, "updates_stage");
+            if (Directory.Exists(stagingDir)) Directory.Delete(stagingDir, true);
+            Directory.CreateDirectory(stagingDir);
+
+            foreach (var msu in coreUpdates)
+            {
+                var dest = Path.Combine(stagingDir, Path.GetFileName(msu));
+                File.Copy(msu, dest, overwrite: true);
+                Log($"  Staged update: {Path.GetFileName(msu)}");
+            }
+
+            Log($"Applying {coreUpdates.Count} core update package(s) " +
+                "(DISM auto-resolves checkpoint chain)…");
+            await DismAsync(
+                $"/Image:\"{_mountDir}\" /Add-Package /PackagePath:\"{stagingDir}\"");
+
+            Log("Running /Cleanup-Image /StartComponentCleanup to shrink WIM…");
+            try
+            {
+                await DismAsync(
+                    $"/Image:\"{_mountDir}\" /Cleanup-Image /StartComponentCleanup");
+            }
+            catch (Exception ex)
+            {
+                // /Cleanup-Image failures are non-fatal — the WIM still works,
+                // it's just larger than ideal.
+                Log($"  ! /Cleanup-Image failed (continuing): {ex.Message}");
+            }
+        }
+
+        // Apply 25H2 eKB after cleanup. KB5054156 flips the feature-flag bit
+        // that activates 25H2 binaries pre-staged by the August 2025 (or
+        // later) LCU; on a base 24H2 WIM with no LCU it's a no-op, so we log
+        // a warning when no LCU was found in the core set.
+        if (ekb != null)
+        {
+            bool hasLcu = coreUpdates.Any(
+                p => Path.GetFileName(p).Contains("cumulative",
+                                                  StringComparison.OrdinalIgnoreCase)
+                  || Path.GetFileName(p).StartsWith("kb",
+                                                    StringComparison.OrdinalIgnoreCase));
+            if (!hasLcu)
+                Log("  ! 25H2 eKB applied without a current LCU in the set — " +
+                    "Microsoft requires the August 2025 LCU or later as a prereq. " +
+                    "Resulting image may still report 24H2.");
+            Log($"Applying 25H2 enablement package: {Path.GetFileName(ekb)}");
+            await DismAsync(
+                $"/Image:\"{_mountDir}\" /Add-Package /PackagePath:\"{ekb}\"");
+        }
+
+        Log($"Update slipstream complete: {present.Count} package(s) applied.");
+    }
+
+    // ── Step 7: Language Pack Injection ──────────────────────────────────────
 
     private async Task InjectLanguagePacksAsync()
     {
@@ -466,7 +582,18 @@ public class BuildEngine
                 // DISM only adds drivers that match the image architecture — mismatched
                 // drivers are silently skipped rather than causing failures.
                 await DismAsync($"/Image:\"{_mountDir}\" /Add-Driver /Driver:\"{folder}\" /Recurse");
-                Log($"  ✓ Drivers added from: {Path.GetFileName(folder.TrimEnd('\\', '/'))}");
+                Log($"  ✓ Drivers added to install.wim from: {Path.GetFileName(folder.TrimEnd('\\', '/'))}");
+
+                // WinPE-critical split: when auto-fetch is on AND the user
+                // flagged this folder, also inject the Net / Storage / HID
+                // subset into boot.wim. Without this, WinPE on Intel 12th-gen+
+                // can't see NVMe SSDs (VMD requires the F6 RST driver).
+                if (_s.EnableAutoFetchFeatures &&
+                    _s.DriverFolderWinPEOnly.TryGetValue(folder, out var winPe) &&
+                    winPe)
+                {
+                    await InjectWinPECriticalDriversAsync(folder);
+                }
                 added++;
             }
             catch (Exception ex)
@@ -476,6 +603,107 @@ public class BuildEngine
             }
         }
         Log($"Driver injection complete. {added}/{_s.DriverFolderPaths.Count} folder(s) processed.");
+    }
+
+    /// <summary>
+    /// WinPE-critical PnP classes per Microsoft Learn ("Customize WinPE boot
+    /// images"): Net, SCSIAdapter, HDC (hard-disk controllers), HIDClass, USB,
+    /// System. WinPE only needs network + storage + input — anything else just
+    /// bloats boot.wim.
+    /// </summary>
+    private static readonly string[] WinPECriticalClasses =
+        ["Net", "SCSIAdapter", "HDC", "HIDClass", "USB", "System"];
+
+    private async Task InjectWinPECriticalDriversAsync(string sourceFolder)
+    {
+        var bootWimPath = Path.Combine(_isoStaging, "sources", "boot.wim");
+        if (!File.Exists(bootWimPath))
+        {
+            Log($"  ! boot.wim not found at {bootWimPath}, skipping WinPE driver injection.");
+            return;
+        }
+
+        // Filter .inf files by their Class= line.
+        var filteredFolder = Path.Combine(_workspace,
+            "winpe_drivers", Path.GetFileName(sourceFolder.TrimEnd('\\', '/')));
+        if (Directory.Exists(filteredFolder)) Directory.Delete(filteredFolder, true);
+        Directory.CreateDirectory(filteredFolder);
+
+        int copied = 0;
+        foreach (var inf in Directory.EnumerateFiles(sourceFolder, "*.inf",
+                                                    SearchOption.AllDirectories))
+        {
+            if (!IsWinPECritical(inf)) continue;
+            // Copy the whole driver directory (the .inf plus its sibling
+            // .sys / .cat / .dll files all need to travel together).
+            var srcDir = Path.GetDirectoryName(inf)!;
+            var relPath = Path.GetRelativePath(sourceFolder, srcDir);
+            var destDir = Path.Combine(filteredFolder, relPath);
+            CopyDirectory(srcDir, destDir);
+            copied++;
+        }
+
+        if (copied == 0)
+        {
+            Log("  ! No WinPE-critical drivers found in this folder.");
+            return;
+        }
+
+        var bootMountDir = Path.Combine(_workspace, "boot_mount");
+        Directory.CreateDirectory(bootMountDir);
+        try
+        {
+            // boot.wim Index 2 is the Windows Setup environment. Index 1 is
+            // the Recovery image — drivers go in both ideally but adding them
+            // to Index 2 is what unblocks "no disks found" failures.
+            Log("  Mounting boot.wim (Index 2)…");
+            await DismAsync($"/Mount-Image /ImageFile:\"{bootWimPath}\" /Index:2 /MountDir:\"{bootMountDir}\"");
+
+            Log($"  Injecting {copied} WinPE-critical driver folder(s) into boot.wim…");
+            await DismAsync($"/Image:\"{bootMountDir}\" /Add-Driver /Driver:\"{filteredFolder}\" /Recurse");
+
+            Log("  Committing boot.wim…");
+            await DismAsync($"/Unmount-Image /MountDir:\"{bootMountDir}\" /Commit");
+            Log("  ✓ boot.wim updated with WinPE-critical drivers.");
+        }
+        catch (Exception ex)
+        {
+            Log($"  ! boot.wim injection failed: {ex.Message}");
+            // Try to discard the half-mounted image so the next run can re-mount.
+            try { await DismAsync($"/Unmount-Image /MountDir:\"{bootMountDir}\" /Discard"); }
+            catch { }
+        }
+    }
+
+    private static bool IsWinPECritical(string infPath)
+    {
+        try
+        {
+            foreach (var rawLine in File.ReadLines(infPath))
+            {
+                var line = rawLine.Trim();
+                if (!line.StartsWith("Class", StringComparison.OrdinalIgnoreCase)) continue;
+                // Match "Class = Net" but not "ClassGuid = ..."
+                var eq = line.IndexOf('=');
+                if (eq <= 0) continue;
+                var key = line[..eq].Trim();
+                if (!key.Equals("Class", StringComparison.OrdinalIgnoreCase)) continue;
+                var value = line[(eq + 1)..].Trim().Trim('"');
+                if (WinPECriticalClasses.Contains(value, StringComparer.OrdinalIgnoreCase))
+                    return true;
+            }
+        }
+        catch { /* unreadable inf — fall through, treat as non-critical */ }
+        return false;
+    }
+
+    private static void CopyDirectory(string source, string destination)
+    {
+        Directory.CreateDirectory(destination);
+        foreach (var file in Directory.EnumerateFiles(source))
+            File.Copy(file, Path.Combine(destination, Path.GetFileName(file)), true);
+        foreach (var dir in Directory.EnumerateDirectories(source))
+            CopyDirectory(dir, Path.Combine(destination, Path.GetFileName(dir)));
     }
 
     // ── Step 8: Wallpaper ────────────────────────────────────────────────────

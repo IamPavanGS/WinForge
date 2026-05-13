@@ -39,6 +39,24 @@ public class BuildSession
     // Drivers: folder paths to inject recursively via DISM /Add-Driver /Recurse
     public List<string>    DriverFolderPaths       { get; set; } = [];
 
+    /// <summary>
+    /// Per-driver-folder injection mode. Parallel array to <see cref="DriverFolderPaths"/>
+    /// (key = folder path, value = true if only WinPE-critical PnP classes should
+    /// be injected into boot.wim alongside install.wim). Folders not present in
+    /// this map default to install-only / full injection — today's behaviour.
+    /// </summary>
+    public Dictionary<string, bool> DriverFolderWinPEOnly { get; set; } = [];
+
+    // ── Auto-fetch features (Phase 4 — gated by EnableAutoFetchFeatures) ─────
+    /// <summary>Windows Update MSU files staged for slipstream into install.wim.
+    /// Populated either by the Phase 5 auto-fetch UI or by a manual folder drop.</summary>
+    public List<string> UpdatesMsuPaths { get; set; } = [];
+
+    /// <summary>OEM driver packs the auto-fetch flow downloaded for this build.
+    /// Each entry's DownloadUrl is the local cache path after fetch; the pipeline
+    /// step extracts and injects via DISM.</summary>
+    public List<DriverPackSelection> AutoFetchedDriverPacks { get; set; } = [];
+
     // ── Step 3: Customizations ────────────────────────────────────────────────
     public List<string> BloatwareToRemove { get; set; } = [];
 
@@ -115,4 +133,13 @@ public class BuildSession
     public string? LastBuiltIsoPath { get; set; }
     public string? LastBuildLogPath { get; set; }
     public string? LastBuildSha256  { get; set; }
+
+    // ── Auto-fetch feature flag (set via Settings page; off by default) ──────
+    /// <summary>Master toggle for the new auto-fetch features (Updates +
+    /// driver-pack auto-download + PnP-class boot.wim filter). When false, the
+    /// pipeline behaves exactly as it did before Phase 4 was merged — the new
+    /// soft step short-circuits and the new fields are ignored. Stored in
+    /// AppSettings rather than the per-profile session, but copied onto the
+    /// session at build start so the engine sees one source of truth.</summary>
+    public bool EnableAutoFetchFeatures { get; set; } = false;
 }
