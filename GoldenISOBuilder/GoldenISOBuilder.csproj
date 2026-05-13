@@ -27,6 +27,11 @@
   -->
   <ItemGroup>
     <PackageReference Include="System.Management" Version="8.0.0" />
+    <!-- WiX DTF (.NET Standard port) — used by Services\Catalog\CabExtractor
+         to structurally read Dell DriverPackCatalog.cab and Microsoft
+         wsusscn2.cab without shelling out to expand.exe. System.IO.Compression
+         does not support CAB on .NET 8. -->
+    <PackageReference Include="WixToolset.Dtf.Compression.Cab" Version="5.0.2" />
   </ItemGroup>
 
   <Target Name="PublishAndCopyGIBFirstBoot" AfterTargets="Build">
