@@ -66,7 +66,12 @@ public partial class Step4Page : UserControl
 
     private void RefreshLoginPreviewWallpaper()
     {
-        var path = BuildSession.Current.WallpaperPath;
+        // This preview simulates the sign-in screen, so prefer the dedicated
+        // lock-screen image when set. Fall back to the desktop wallpaper so
+        // older profiles (no LockScreenPath) keep the prior visual.
+        var path = !string.IsNullOrEmpty(BuildSession.Current.LockScreenPath)
+                 ? BuildSession.Current.LockScreenPath
+                 : BuildSession.Current.WallpaperPath;
         if (!string.IsNullOrEmpty(path) && File.Exists(path))
         {
             try

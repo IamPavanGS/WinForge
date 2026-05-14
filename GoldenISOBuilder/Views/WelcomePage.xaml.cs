@@ -329,6 +329,7 @@ public partial class WelcomePage : UserControl
 
         // ── Step 2: Assets ────────────────────────────────────────────────────
         d.WallpaperPath           = src.WallpaperPath;
+        d.LockScreenPath          = src.LockScreenPath;
         d.StagedApps              = src.StagedApps;
         d.StagedFiles             = src.StagedFiles;
         d.PublicDesktopFiles      = src.PublicDesktopFiles;
@@ -473,6 +474,10 @@ public partial class WelcomePage : UserControl
         // ── Wallpaper ─────────────────────────────────────────────────────────
         if (!string.IsNullOrWhiteSpace(s.WallpaperPath) && !System.IO.File.Exists(s.WallpaperPath))
             issues.Add(("Wallpaper", s.WallpaperPath));
+
+        // ── Lock-screen image ─────────────────────────────────────────────────
+        if (!string.IsNullOrWhiteSpace(s.LockScreenPath) && !System.IO.File.Exists(s.LockScreenPath))
+            issues.Add(("Lock screen image", s.LockScreenPath));
 
         // ── Staged app installers ─────────────────────────────────────────────
         foreach (var app in s.StagedApps)

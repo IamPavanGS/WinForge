@@ -93,6 +93,8 @@ public partial class Step2Page : UserControl
 
         if (!string.IsNullOrEmpty(s.WallpaperPath) && File.Exists(s.WallpaperPath))
             ApplyWallpaper(s.WallpaperPath);
+        if (!string.IsNullOrEmpty(s.LockScreenPath) && File.Exists(s.LockScreenPath))
+            ApplyLockScreen(s.LockScreenPath);
 
         foreach (var app in s.StagedApps)
             _apps.Add(app);
@@ -994,6 +996,86 @@ public partial class Step2Page : UserControl
         {
             WallpaperPreview.Visibility     = Visibility.Collapsed;
             WallpaperPlaceholder.Visibility = Visibility.Visible;
+        }
+    }
+
+    // ── Lock screen image ─────────────────────────────────────────────────────
+    // Independent of the desktop wallpaper picker above. Either picker can be
+    // set / unset on its own; the build engine applies each only when its own
+    // path is configured.
+
+    private void LockScreenDrop_Click(object sender, MouseButtonEventArgs e)
+        => BrowseLockScreen();
+
+    private void LockScreen_DragOver(object sender, DragEventArgs e)
+    {
+        e.Effects = e.Data.GetDataPresent(DataFormats.FileDrop) ? DragDropEffects.Copy : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void LockScreen_Drop(object sender, DragEventArgs e)
+    {
+        if (e.Data.GetData(DataFormats.FileDrop) is string[] files && files.Length > 0)
+            TrySetLockScreen(files[0]);
+    }
+
+    private void LockScreenClear_Click(object sender, RoutedEventArgs e)
+    {
+        BuildSession.Current.LockScreenPath = null;
+        LockScreenDropZone.Visibility    = Visibility.Visible;
+        LockScreenFileRow.Visibility     = Visibility.Collapsed;
+        LockScreenPreview.Visibility     = Visibility.Collapsed;
+        LockScreenPlaceholder.Visibility = Visibility.Visible;
+        LockScreenPreview.Source         = null;
+    }
+
+    private void BrowseLockScreen()
+    {
+        var dlg = new OpenFileDialog
+        {
+            Title  = "Select Lock Screen Image",
+            Filter = "Image files|*.jpg;*.jpeg;*.png;*.bmp|All files|*.*"
+        };
+        if (dlg.ShowDialog() == true)
+            TrySetLockScreen(dlg.FileName);
+    }
+
+    private void TrySetLockScreen(string path)
+    {
+        var ext = Path.GetExtension(path).ToLowerInvariant();
+        if (ext is not (".jpg" or ".jpeg" or ".png" or ".bmp"))
+        {
+            AppDialog.Alert(this, "Please select a JPG, PNG, or BMP image.", "Unsupported Format",
+                AppDialogIcon.Warning);
+            return;
+        }
+        if (!File.Exists(path)) return;
+        ApplyLockScreen(path);
+    }
+
+    private void ApplyLockScreen(string path)
+    {
+        BuildSession.Current.LockScreenPath = path;
+        LockScreenFileLabel.Text = Path.GetFileName(path);
+        LockScreenDropZone.Visibility = Visibility.Collapsed;
+        LockScreenFileRow.Visibility  = Visibility.Visible;
+
+        try
+        {
+            var bmp = new BitmapImage();
+            bmp.BeginInit();
+            bmp.UriSource        = new Uri(path);
+            bmp.CacheOption      = BitmapCacheOption.OnLoad;
+            bmp.DecodePixelWidth = 192;
+            bmp.EndInit();
+            LockScreenPreview.Source        = bmp;
+            LockScreenPreview.Visibility    = Visibility.Visible;
+            LockScreenPlaceholder.Visibility = Visibility.Collapsed;
+        }
+        catch
+        {
+            LockScreenPreview.Visibility     = Visibility.Collapsed;
+            LockScreenPlaceholder.Visibility = Visibility.Visible;
         }
     }
 

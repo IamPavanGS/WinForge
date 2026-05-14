@@ -78,6 +78,9 @@
                                 <Grid><TextBlock Text="Wallpaper" Foreground="{DynamicResource FG2Brush}" FontSize="12"/>
                                       <TextBlock x:Name="V_Wallpaper" HorizontalAlignment="Right" Foreground="{DynamicResource FG0Brush}" FontSize="12" TextTrimming="CharacterEllipsis" MaxWidth="240"/></Grid>
                                 <Border Style="{StaticResource DividerStyle}"/>
+                                <Grid><TextBlock Text="Lock screen image" Foreground="{DynamicResource FG2Brush}" FontSize="12"/>
+                                      <TextBlock x:Name="V_LockScreen" HorizontalAlignment="Right" Foreground="{DynamicResource FG0Brush}" FontSize="12" TextTrimming="CharacterEllipsis" MaxWidth="240"/></Grid>
+                                <Border Style="{StaticResource DividerStyle}"/>
                                 <Grid><TextBlock Text="Applications staged" Foreground="{DynamicResource FG2Brush}" FontSize="12"/>
                                       <TextBlock x:Name="V_Apps" HorizontalAlignment="Right" Foreground="{DynamicResource FG0Brush}" FontSize="12"/></Grid>
                                 <Border Style="{StaticResource DividerStyle}"/>

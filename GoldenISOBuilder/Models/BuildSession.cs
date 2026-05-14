@@ -24,6 +24,11 @@ public class BuildSession
 
     // ── Step 2: Assets ────────────────────────────────────────────────────────
     public string?         WallpaperPath           { get; set; }
+    /// <summary>Optional image for the lock-screen / sign-in / OOBE backgrounds
+    /// (<c>Windows\Web\Screen\img1*.jpg</c>). When null, the build engine leaves
+    /// the Windows defaults in place — independent of WallpaperPath, so admins
+    /// can brand desktop and lock screen separately.</summary>
+    public string?         LockScreenPath          { get; set; }
     public List<StagedApp> StagedApps              { get; set; } = [];
     /// <summary>Kept for backward-compatible loading of old .gibprofile files only.
     /// New code should use <see cref="StagedFiles"/> instead.</summary>

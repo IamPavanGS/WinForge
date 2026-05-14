@@ -36,7 +36,8 @@ public partial class Step5Page : UserControl
         V_Arch.Text       = s.SelectedArch;
         V_Output.Text     = string.IsNullOrEmpty(s.OutputPath) ? "—" : s.OutputPath;
 
-        V_Wallpaper.Text  = string.IsNullOrEmpty(s.WallpaperPath) ? "None" : Path.GetFileName(s.WallpaperPath);
+        V_Wallpaper.Text  = string.IsNullOrEmpty(s.WallpaperPath)  ? "None" : Path.GetFileName(s.WallpaperPath);
+        V_LockScreen.Text = string.IsNullOrEmpty(s.LockScreenPath) ? "None" : Path.GetFileName(s.LockScreenPath);
         V_Apps.Text       = $"{s.StagedApps.Count} application(s)";
         // StagedFiles is the current field; PublicDesktopFiles is the legacy field kept
         // for backward-compatible profile loading only. Show the combined count so

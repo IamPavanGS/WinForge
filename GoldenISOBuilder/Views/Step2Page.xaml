@@ -103,6 +103,87 @@
                     </Grid>
                 </Border>
 
+                <!-- ══ Lock screen image ═════════════════════════════════════════
+                     Independent of wallpaper — leave empty to keep Windows
+                     defaults on the lock / sign-in / OOBE screens. -->
+                <Border Style="{StaticResource CardStyle}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0" Margin="0,0,20,0">
+                            <Grid Margin="0,0,0,12">
+                                <StackPanel>
+                                    <TextBlock Text="Lock screen image" Style="{StaticResource CardTitleText}"/>
+                                    <TextBlock Text="Replaces the lock-screen + sign-in + OOBE backgrounds. Leave empty to keep the Windows default."
+                                               Foreground="{DynamicResource FG2Brush}" FontSize="12" Margin="0,2,0,0"
+                                               TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <!-- Drop zone (visible when no lock-screen image selected) -->
+                            <Border x:Name="LockScreenDropZone" Style="{StaticResource DropZoneStyle}"
+                                    AllowDrop="True" Cursor="Hand"
+                                    MouseLeftButtonDown="LockScreenDrop_Click"
+                                    DragOver="LockScreen_DragOver" Drop="LockScreen_Drop">
+                                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
+                                            Margin="24,22,24,22" h:PanelSpacing.Spacing="6">
+                                    <Path Style="{StaticResource IconPath}" Width="24" Height="24"
+                                          Data="{StaticResource ImageIcon}" Stroke="{DynamicResource FG2Brush}"
+                                          HorizontalAlignment="Center"/>
+                                    <TextBlock Text="Drop image or click to browse"
+                                               Foreground="{DynamicResource FG2Brush}" FontSize="13"
+                                               HorizontalAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- File info row (visible when lock-screen image selected) -->
+                            <Border x:Name="LockScreenFileRow" Style="{StaticResource FilledDropZoneStyle}"
+                                    Visibility="Collapsed" Cursor="Hand"
+                                    MouseLeftButtonDown="LockScreenDrop_Click">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Path Grid.Column="0" Style="{StaticResource IconPath}"
+                                          Width="16" Height="16" Data="{StaticResource ImageIcon}"
+                                          Stroke="{DynamicResource OkBrush}" Margin="0,0,10,0"/>
+                                    <TextBlock x:Name="LockScreenFileLabel" Grid.Column="1"
+                                               Foreground="{DynamicResource FG0Brush}" FontSize="13"
+                                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                    <Button Grid.Column="2" Content="✕" Style="{StaticResource GhostButtonStyle}"
+                                            FontSize="11" Padding="6,2" Margin="8,0,0,0"
+                                            Click="LockScreenClear_Click"/>
+                                </Grid>
+                            </Border>
+
+                            <TextBlock Text="Supported: JPG, PNG, BMP · 1920×1080 or higher recommended"
+                                       Style="{StaticResource FieldHintText}" Margin="0,8,0,0"/>
+                        </StackPanel>
+
+                        <!-- Preview pane -->
+                        <Border Grid.Column="1" Background="{DynamicResource BG3Brush}" CornerRadius="8"
+                                Width="192" Height="108" VerticalAlignment="Top" ClipToBounds="True">
+                            <Grid>
+                                <StackPanel x:Name="LockScreenPlaceholder"
+                                            HorizontalAlignment="Center" VerticalAlignment="Center"
+                                            h:PanelSpacing.Spacing="6">
+                                    <Path Style="{StaticResource IconPath}" Width="28" Height="28"
+                                          Data="{StaticResource ImageIcon}" Stroke="{DynamicResource FG3Brush}"/>
+                                    <TextBlock Text="Preview" Foreground="{DynamicResource FG3Brush}"
+                                               FontSize="11" HorizontalAlignment="Center"/>
+                                </StackPanel>
+                                <Image x:Name="LockScreenPreview" Stretch="UniformToFill"
+                                       Visibility="Collapsed"/>
+                            </Grid>
+                        </Border>
+                    </Grid>
+                </Border>
+
                 <!-- ══ Windows Updates (auto-fetch — toggled in Settings) ═════════
                      Visible only when EnableAutoFetchFeatures is on. Lets the
                      admin either point at a folder of .msu files (existing

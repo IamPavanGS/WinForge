@@ -757,49 +757,70 @@ public class BuildEngine
 
     private async Task InjectWallpaperAsync()
     {
-        if (string.IsNullOrEmpty(_s.WallpaperPath) || !File.Exists(_s.WallpaperPath))
-        {
-            Skip("No wallpaper configured.");
-            return;
-        }
+        // Desktop wallpaper and lock-screen are configured independently in
+        // Step 2 — admins can brand each surface separately or leave either
+        // one at the Windows default. Apply only the blocks whose source
+        // image is set.
+        bool didDesktop    = false;
+        bool didLockScreen = false;
 
-        // Win11 24H2/25H2 introduced "Bloom" defaults at img19 (light) and img20 (dark)
-        // alongside the legacy img0. We overwrite all of them so the user's wallpaper
-        // is the new default regardless of which one Windows picks based on theme.
-        // Some Windows builds ship only a subset of these (e.g. img0 + img19 but no img20),
-        // so we only attempt to replace files that actually exist — avoids spurious
-        // "file not found" errors in the build log for missing variants.
-        var wallpaperDir = Path.Combine(_mountDir, "Windows", "Web", "Wallpaper", "Windows");
-        Directory.CreateDirectory(wallpaperDir);
-        foreach (var name in new[] { "img0.jpg", "img19.jpg", "img20.jpg" })
+        // ── Desktop wallpaper ─────────────────────────────────────────────
+        // Win11 24H2/25H2 introduced "Bloom" defaults at img19 (light) and
+        // img20 (dark) alongside the legacy img0. We overwrite all of them so
+        // the user's wallpaper is the new default regardless of which one
+        // Windows picks based on theme. Some Windows builds ship only a
+        // subset (e.g. img0 + img19 but no img20), so we only attempt to
+        // replace files that actually exist.
+        if (!string.IsNullOrEmpty(_s.WallpaperPath) && File.Exists(_s.WallpaperPath))
         {
-            var p = Path.Combine(wallpaperDir, name);
-            if (!File.Exists(p))
+            var wallpaperDir = Path.Combine(_mountDir, "Windows", "Web", "Wallpaper", "Windows");
+            Directory.CreateDirectory(wallpaperDir);
+            foreach (var name in new[] { "img0.jpg", "img19.jpg", "img20.jpg" })
             {
-                Log($"  - {name} not present in this Windows build, skipping");
-                continue;
+                var p = Path.Combine(wallpaperDir, name);
+                if (!File.Exists(p))
+                {
+                    Log($"  - {name} not present in this Windows build, skipping");
+                    continue;
+                }
+                await TryReplaceFileWithOwnership(p, _s.WallpaperPath, "wallpaper");
             }
-            await TryReplaceFileWithOwnership(p, _s.WallpaperPath, "wallpaper");
+
+            // 4K variants: img0_*, img19_*, img20_* (multi-resolution per file)
+            var dir4k = Path.Combine(_mountDir, "Windows", "Web", "4K", "Wallpaper", "Windows");
+            if (Directory.Exists(dir4k))
+            {
+                foreach (var pattern in new[] { "img0_*.jpg", "img19_*.jpg", "img20_*.jpg" })
+                    foreach (var f in Directory.GetFiles(dir4k, pattern))
+                        await TryReplaceFileWithOwnership(f, _s.WallpaperPath, "4K wallpaper");
+            }
+            didDesktop = true;
+        }
+        else
+        {
+            Log("  - desktop wallpaper not configured, leaving Windows default in place");
         }
 
-        // 4K variants: img0_*, img19_*, img20_* (multi-resolution per file)
-        var dir4k = Path.Combine(_mountDir, "Windows", "Web", "4K", "Wallpaper", "Windows");
-        if (Directory.Exists(dir4k))
+        // ── Lock-screen / OOBE / sign-in backgrounds ──────────────────────
+        // Win10 used img1*.jpg.  Win11 uses img100.jpg as primary, plus
+        // img101–img105 in 24H2/25H2. The "img1*.jpg" pattern matches both.
+        if (!string.IsNullOrEmpty(_s.LockScreenPath) && File.Exists(_s.LockScreenPath))
         {
-            foreach (var pattern in new[] { "img0_*.jpg", "img19_*.jpg", "img20_*.jpg" })
-                foreach (var f in Directory.GetFiles(dir4k, pattern))
-                    await TryReplaceFileWithOwnership(f, _s.WallpaperPath, "4K wallpaper");
+            var screenDir = Path.Combine(_mountDir, "Windows", "Web", "Screen");
+            if (Directory.Exists(screenDir))
+            {
+                foreach (var f in Directory.GetFiles(screenDir, "img1*.jpg"))
+                    await TryReplaceFileWithOwnership(f, _s.LockScreenPath, "lock-screen");
+            }
+            didLockScreen = true;
+        }
+        else
+        {
+            Log("  - lock-screen image not configured, leaving Windows default in place");
         }
 
-        // Lock screen / OOBE / logon backgrounds.  Win10 used img1*.jpg.  Win11 uses
-        // img100.jpg as primary, plus img101–img105 in 24H2/25H2.  The "img1*.jpg"
-        // pattern matches both eras.
-        var screenDir = Path.Combine(_mountDir, "Windows", "Web", "Screen");
-        if (Directory.Exists(screenDir))
-        {
-            foreach (var f in Directory.GetFiles(screenDir, "img1*.jpg"))
-                await TryReplaceFileWithOwnership(f, _s.WallpaperPath, "lock-screen");
-        }
+        if (!didDesktop && !didLockScreen)
+            Skip("Neither wallpaper nor lock screen configured.");
     }
 
     /// <summary>
@@ -2644,6 +2665,23 @@ exit 0
                 c.Add(new(CAT, "4K wallpaper variants", count4k > 0 ? ValStatus.Pass : ValStatus.Warn,
                     count4k > 0 ? $"{count4k} 4K variant(s) present ✓" : "No 4K variants found."));
             }
+        }
+
+        // ── Lock-screen images ────────────────────────────────────────────
+        // Only validated when the user explicitly configured a lock-screen
+        // image (LockScreenPath set). If they left it null the wallpaper step
+        // intentionally left the Windows defaults — nothing to validate.
+        if (!string.IsNullOrEmpty(_s.LockScreenPath))
+        {
+            var screenDir = Path.Combine(_mountDir, "Windows", "Web", "Screen");
+            int replaced = Directory.Exists(screenDir)
+                ? Directory.GetFiles(screenDir, "img1*.jpg").Length
+                : 0;
+            c.Add(replaced > 0
+                ? new(CAT, "Lock-screen images replaced in WIM", ValStatus.Pass,
+                    $"{replaced} lock-screen file(s) present in Windows\\Web\\Screen ✓")
+                : new(CAT, "Lock-screen images replaced in WIM", ValStatus.Warn,
+                    $"No lock-screen files found in {screenDir} — default Windows lock screen will be used."));
         }
 
         return c;
