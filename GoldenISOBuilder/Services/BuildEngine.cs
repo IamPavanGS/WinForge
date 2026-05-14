@@ -561,13 +561,28 @@ public class BuildEngine
 
     private async Task InjectDriversAsync()
     {
-        if (_s.DriverFolderPaths.Count == 0)
+        // Two sources feed this step:
+        //   1. _s.DriverFolderPaths        — folders the user picked manually
+        //                                    in Step 2 (Driver Injection card).
+        //   2. _s.AutoFetchedDriverPacks   — Dell/HP/Lenovo packs fetched by
+        //                                    the Phase 5b auto-fetch flow.
+        //                                    Each entry's LocalCabPath is the
+        //                                    extracted folder ready for DISM
+        //                                    (extraction happens in Step2Page
+        //                                    before the entry is added).
+        // Either or both may be empty.
+        int manualTotal     = _s.DriverFolderPaths.Count;
+        int autoFetchTotal  = _s.AutoFetchedDriverPacks.Count;
+
+        if (manualTotal == 0 && autoFetchTotal == 0)
         {
             Skip("No drivers configured.");
             return;
         }
 
         int added = 0;
+
+        // ── Manual driver folders ─────────────────────────────────────────
         foreach (var folder in _s.DriverFolderPaths)
         {
             if (!Directory.Exists(folder))
@@ -602,7 +617,39 @@ public class BuildEngine
                 Log($"  ! Failed to inject drivers from {folder}: {ex.Message}");
             }
         }
-        Log($"Driver injection complete. {added}/{_s.DriverFolderPaths.Count} folder(s) processed.");
+
+        // ── Auto-fetched OEM driver packs (Dell / HP / Lenovo) ───────────
+        foreach (var pack in _s.AutoFetchedDriverPacks)
+        {
+            var folder = pack.LocalCabPath;
+            var label  = $"{pack.Vendor} {pack.ModelName} ({pack.SystemId})";
+
+            if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder))
+            {
+                Log($"  ! Auto-fetched pack folder not found, skipping: {label} → {folder}");
+                continue;
+            }
+            try
+            {
+                Log($"  Injecting auto-fetched pack: {label}");
+                await DismAsync($"/Image:\"{_mountDir}\" /Add-Driver /Driver:\"{folder}\" /Recurse");
+                Log($"  ✓ Drivers added to install.wim from {label}");
+
+                // Auto-fetched packs default to WinPE-critical injection so
+                // setup.exe/WinPE can see NVMe + network on modern hardware.
+                // Honour the per-pack flag so a user can disable it later.
+                if (pack.InjectWinPECritical)
+                    await InjectWinPECriticalDriversAsync(folder);
+                added++;
+            }
+            catch (Exception ex)
+            {
+                Log($"  ! Failed to inject auto-fetched pack {label}: {ex.Message}");
+            }
+        }
+
+        Log($"Driver injection complete. {added} source(s) processed " +
+            $"({manualTotal} manual folder(s) + {autoFetchTotal} auto-fetched pack(s)).");
     }
 
     /// <summary>
@@ -2061,6 +2108,7 @@ exit 0
         checks.AddRange(CheckStagedFiles());
         checks.AddRange(CheckBitLockerScript());
         checks.AddRange(CheckDeploymentScripts());
+        checks.AddRange(CheckAutoFetchAssets());
 
         var regChecks = await CheckRegistryAsync();
         checks.AddRange(regChecks);
@@ -2127,25 +2175,52 @@ exit 0
         Log($"Validation: {pass} pass / {warn} warn / {fail} fail");
 
         // ── Save reports (text + HTML) ─────────────────────────────────────
-        try
+        //
+        // Try OutputPath first (the obvious place users look). If that fails
+        // for any reason — folder doesn't exist, no permissions, drive
+        // unmounted — fall back to the workspace so the report still lands
+        // somewhere predictable. Earlier reports were silently lost when the
+        // OutputPath wasn't writable, leaving users with no validation trail.
+        string stamp = generated.ToString("yyyyMMdd-HHmmss");
+        string txtName  = $"ValidationReport_{stamp}.txt";
+        string htmlName = $"ValidationReport_{stamp}.html";
+
+        string? writtenTxt  = null;
+        string? writtenHtml = null;
+        string  htmlBody    = BuildHtmlReport(checks, _s.SelectedEdition ?? "Pro",
+                                _s.IsoSourceLanguage ?? "", _s.SourceIsoPath ?? "",
+                                generated, pass, warn, fail);
+
+        foreach (var dir in EnumerateReportDirs())
         {
-            Directory.CreateDirectory(_s.OutputPath!);
-            string stamp      = generated.ToString("yyyyMMdd-HHmmss");
-            string txtPath    = Path.Combine(_s.OutputPath!, $"ValidationReport_{stamp}.txt");
-            string htmlPath   = Path.Combine(_s.OutputPath!, $"ValidationReport_{stamp}.html");
-
-            await File.WriteAllTextAsync(txtPath, rpt.ToString(), Encoding.UTF8);
-            Log($"Validation report saved: {txtPath}");
-
-            string html = BuildHtmlReport(checks, _s.SelectedEdition ?? "Pro",
-                _s.IsoSourceLanguage ?? "", _s.SourceIsoPath ?? "",
-                generated, pass, warn, fail);
-            await File.WriteAllTextAsync(htmlPath, html, Encoding.UTF8);
-            Log($"HTML report saved: {htmlPath}");
+            try
+            {
+                Directory.CreateDirectory(dir);
+                var txtPath  = Path.Combine(dir, txtName);
+                var htmlPath = Path.Combine(dir, htmlName);
+                await File.WriteAllTextAsync(txtPath,  rpt.ToString(), Encoding.UTF8);
+                await File.WriteAllTextAsync(htmlPath, htmlBody,       Encoding.UTF8);
+                writtenTxt  = txtPath;
+                writtenHtml = htmlPath;
+                break;
+            }
+            catch (Exception ex)
+            {
+                Log($"  ! Could not write validation report to {dir}: {ex.Message}");
+                // Try the next candidate directory.
+            }
         }
-        catch (Exception ex)
+
+        if (writtenTxt != null)
         {
-            Log($"  ! Could not save validation report: {ex.Message}");
+            // Single highly visible line so users can find the file.
+            Log($"=== Validation report saved ===");
+            Log($"    Text: {writtenTxt}");
+            Log($"    HTML: {writtenHtml}");
+        }
+        else
+        {
+            Log("  ! Validation report could not be saved to any candidate directory.");
         }
 
         if (fail > 0)
@@ -2706,6 +2781,95 @@ exit 0
                     ? new(CAT, $"'{fname}' in Startup folder (EveryLogin)", ValStatus.Pass, "")
                     : new(CAT, $"'{fname}' in Startup folder (EveryLogin)", ValStatus.Warn,
                         $"EveryLogin trigger set but file not in Startup: {startupPath}"));
+            }
+        }
+
+        return c;
+    }
+
+    /// <summary>
+    /// Yields candidate directories for the validation report in preference
+    /// order. The first one we can write to wins. OutputPath is preferred
+    /// because that's where users naturally look for build artifacts; the
+    /// workspace + LocalAppData fallbacks exist so the report still lands
+    /// somewhere even if OutputPath is unusable (read-only share, drive
+    /// removed, permissions lost mid-build, etc.).
+    /// </summary>
+    private IEnumerable<string> EnumerateReportDirs()
+    {
+        if (!string.IsNullOrWhiteSpace(_s.OutputPath))
+            yield return _s.OutputPath!;
+        if (!string.IsNullOrWhiteSpace(_workspace))
+            yield return _workspace;
+        // Last-resort: %LOCALAPPDATA%\GoldenISOBuilder\Reports — always
+        // writable on a normal user profile.
+        yield return Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "GoldenISOBuilder", "Reports");
+    }
+
+    /// <summary>
+    /// Validates the new Phase 5b auto-fetch assets — Windows Updates and OEM
+    /// driver packs. Because slipstreaming + driver injection are soft pipeline
+    /// steps (failures are logged but don't halt), the validator's job here is
+    /// to spot the case where the build skipped them silently because the
+    /// source paths went missing between Step 2 and the build run (e.g. user
+    /// cleared the catalogue cache).
+    /// </summary>
+    private List<ValCheck> CheckAutoFetchAssets()
+    {
+        const string CAT = "AUTO-FETCH ASSETS";
+        var c = new List<ValCheck>();
+
+        // ── Windows Update MSUs slated for slipstream ─────────────────────
+        if (_s.UpdatesMsuPaths.Count == 0)
+        {
+            c.Add(new(CAT, "Windows Updates queued", ValStatus.Pass,
+                "None configured — skipping."));
+        }
+        else
+        {
+            int present = _s.UpdatesMsuPaths.Count(File.Exists);
+            int missing = _s.UpdatesMsuPaths.Count - present;
+            c.Add(missing == 0
+                ? new(CAT, $"Windows Updates ({_s.UpdatesMsuPaths.Count})",
+                    ValStatus.Pass, $"{present} MSU file(s) staged for slipstream ✓")
+                : new(CAT, $"Windows Updates ({_s.UpdatesMsuPaths.Count})",
+                    ValStatus.Warn,
+                    $"{present} present, {missing} missing on disk — those updates were skipped at build time. Re-fetch in Step 2 if needed."));
+        }
+
+        // ── OEM driver packs from auto-fetch (Dell / HP / Lenovo) ─────────
+        if (_s.AutoFetchedDriverPacks.Count == 0)
+        {
+            c.Add(new(CAT, "Auto-fetched driver packs", ValStatus.Pass,
+                "None configured — skipping."));
+        }
+        else
+        {
+            foreach (var dp in _s.AutoFetchedDriverPacks)
+            {
+                var label = $"{dp.Vendor} {dp.ModelName} ({dp.SystemId})";
+                bool ok = !string.IsNullOrWhiteSpace(dp.LocalCabPath) &&
+                          Directory.Exists(dp.LocalCabPath);
+                if (!ok)
+                {
+                    c.Add(new(CAT, $"Pack: {label}", ValStatus.Warn,
+                        $"Extracted folder missing at build time — pack was skipped. Path: {dp.LocalCabPath}"));
+                    continue;
+                }
+                int infs = 0;
+                try
+                {
+                    infs = Directory.EnumerateFiles(dp.LocalCabPath, "*.inf",
+                                                   SearchOption.AllDirectories).Count();
+                }
+                catch { /* enumeration race with concurrent cleanup — ignore */ }
+                c.Add(infs > 0
+                    ? new(CAT, $"Pack: {label}", ValStatus.Pass,
+                        $"{infs} .inf file(s) ready for injection ✓")
+                    : new(CAT, $"Pack: {label}", ValStatus.Warn,
+                        "Extracted folder exists but contains no .inf files — pack will produce no drivers."));
             }
         }
 

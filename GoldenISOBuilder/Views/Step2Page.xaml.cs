@@ -823,24 +823,25 @@ public partial class Step2Page : UserControl
                     Notes         = $"{pack.Model} {pack.OsVersion} {pack.Version}"
                 });
 
-                // Lenovo + HP packs are self-extracting EXEs, not folders DISM
-                // can /Add-Driver /Recurse directly. Extract before staging.
-                // (Dell packs are CABs and need a separate path — handled in
-                // BuildEngine.)
+                // All three vendors ship driver packs as wrapped archives /
+                // self-extracting EXEs. DISM /Add-Driver /Recurse needs an
+                // unpacked .inf tree, so extract every pack here before
+                // staging into BuildSession.
                 var localPath = dest;
-                if (pack.Vendor == Catalog.DriverVendor.Lenovo ||
-                    pack.Vendor == Catalog.DriverVendor.HP)
                 {
                     DriverStatusText.Text =
-                        $"Extracting {pack.Vendor} SoftPaq for {model.Name}…";
+                        $"Extracting {pack.Vendor} driver pack for {model.Name}…";
                     try
                     {
                         var extractDir = dest + ".extracted";
                         if (pack.Vendor == Catalog.DriverVendor.Lenovo)
                             await Catalog.LenovoSoftPaqExtractor.ExtractAsync(
                                 dest, extractDir);
-                        else
+                        else if (pack.Vendor == Catalog.DriverVendor.HP)
                             await Catalog.HpSoftPaqExtractor.ExtractAsync(
+                                dest, extractDir);
+                        else  // Dell — .exe self-extractor or .cab
+                            await Catalog.DellSoftPaqExtractor.ExtractAsync(
                                 dest, extractDir);
                         localPath = extractDir;
                     }

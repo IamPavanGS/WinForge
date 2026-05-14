@@ -49,6 +49,27 @@ public partial class Step5Page : UserControl
         V_LangPacks.Text  = s.LanguagePackPaths.Count == 0 ? "None" : $"{s.LanguagePackPaths.Count} pack(s)";
         V_Drivers.Text    = s.DriverFolderPaths.Count == 0 ? "None" : $"{s.DriverFolderPaths.Count} folder(s)";
 
+        // Auto-fetched OEM driver packs — broken down by vendor so the user
+        // sees at a glance what's about to be injected.
+        if (s.AutoFetchedDriverPacks.Count == 0)
+        {
+            V_AutoDrivers.Text = "None";
+        }
+        else
+        {
+            var byVendor = s.AutoFetchedDriverPacks
+                .GroupBy(p => p.Vendor)
+                .OrderBy(g => g.Key)
+                .Select(g => $"{g.Key} ×{g.Count()}");
+            V_AutoDrivers.Text =
+                $"{s.AutoFetchedDriverPacks.Count} pack(s) — {string.Join(", ", byVendor)}";
+        }
+
+        // Windows updates queued for slipstream into install.wim.
+        V_AutoUpdates.Text = s.UpdatesMsuPaths.Count == 0
+            ? "None"
+            : $"{s.UpdatesMsuPaths.Count} update(s)";
+
         V_Bloat.Text          = s.BloatwareToRemove.Count == 0 ? "None" : $"{s.BloatwareToRemove.Count} package(s)";
         V_GroupPolicies.Text  = s.GroupPolicies.Count == 0 ? "None" : $"{s.GroupPolicies.Count} polic{(s.GroupPolicies.Count == 1 ? "y" : "ies")}";
         V_Smb1.Text       = s.DisableSmbV1 ? "Yes" : "No";

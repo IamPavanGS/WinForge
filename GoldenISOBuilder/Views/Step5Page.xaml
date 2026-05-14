@@ -92,6 +92,12 @@
                                 <Border Style="{StaticResource DividerStyle}"/>
                                 <Grid><TextBlock Text="Driver folders" Foreground="{DynamicResource FG2Brush}" FontSize="12"/>
                                       <TextBlock x:Name="V_Drivers" HorizontalAlignment="Right" Foreground="{DynamicResource FG0Brush}" FontSize="12"/></Grid>
+                                <Border Style="{StaticResource DividerStyle}"/>
+                                <Grid><TextBlock Text="Auto-fetched driver packs" Foreground="{DynamicResource FG2Brush}" FontSize="12"/>
+                                      <TextBlock x:Name="V_AutoDrivers" HorizontalAlignment="Right" Foreground="{DynamicResource FG0Brush}" FontSize="12" TextTrimming="CharacterEllipsis" MaxWidth="360"/></Grid>
+                                <Border Style="{StaticResource DividerStyle}"/>
+                                <Grid><TextBlock Text="Windows Updates (slipstream)" Foreground="{DynamicResource FG2Brush}" FontSize="12"/>
+                                      <TextBlock x:Name="V_AutoUpdates" HorizontalAlignment="Right" Foreground="{DynamicResource FG0Brush}" FontSize="12"/></Grid>
                             </StackPanel>
                         </StackPanel>
                     </Border>
