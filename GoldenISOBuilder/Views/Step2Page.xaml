@@ -14,7 +14,7 @@
 
         <!-- Page Header -->
         <StackPanel Grid.Row="0" Margin="40,32,40,0">
-            <TextBlock Text="ASSETS" Style="{StaticResource GoldEyebrowText}"/>
+            <TextBlock Text="ASSETS" Style="{StaticResource GoldEyebrowText}" Foreground="{DynamicResource AssetsAccentBrush}"/>
             <TextBlock Text="Stage wallpaper, first-boot apps, and deployment scripts"
                        Foreground="{DynamicResource FG2Brush}" FontSize="14" Margin="0,4,0,0"/>
         </StackPanel>
@@ -609,6 +609,33 @@
                                            TextWrapping="Wrap" VerticalAlignment="Center"/>
                             </StackPanel>
                         </Border>
+                    </StackPanel>
+                </Border>
+
+                <!-- ══ Custom Fonts ════════════════════════════════════════════
+                     .ttf / .otf / .ttc files copied into \Windows\Fonts and
+                     registered under HKLM\…\Windows NT\…\Fonts so the deployed
+                     OS picks them up at next boot. Useful for corporate
+                     branding fonts (e.g. Hyundai Sans, IBM Plex). -->
+                <Border Style="{StaticResource CardStyle}">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,4">
+                            <StackPanel Margin="0,0,110,0">
+                                <TextBlock Text="Custom Fonts" Style="{StaticResource CardTitleText}"/>
+                                <TextBlock Text="Corporate / branding fonts (.ttf / .otf / .ttc) pre-installed into the image. They appear in every app's font picker on first boot."
+                                           Foreground="{DynamicResource FG2Brush}" FontSize="12" Margin="0,2,0,0"
+                                           TextWrapping="Wrap"/>
+                            </StackPanel>
+                            <Button HorizontalAlignment="Right" VerticalAlignment="Top"
+                                    Content="+ Add Font" Style="{StaticResource GhostButtonStyle}"
+                                    FontSize="12" Click="AddFont_Click"/>
+                        </Grid>
+
+                        <StackPanel x:Name="FontsPanel" h:PanelSpacing.Spacing="6" Margin="0,8,0,0"/>
+
+                        <TextBlock x:Name="FontsEmptyHint"
+                                   Text="No custom fonts added. Click '+ Add Font' to inject .ttf/.otf/.ttc files."
+                                   Foreground="{DynamicResource FG3Brush}" FontSize="12" FontStyle="Italic"/>
                     </StackPanel>
                 </Border>
 

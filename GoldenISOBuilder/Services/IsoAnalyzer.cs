@@ -12,6 +12,7 @@ public class IsoAnalysisResult
     public List<WindowsImageInfo> Images        { get; set; } = [];
     public List<string>           Architectures { get; set; } = [];
     public string                 WindowsVersion{ get; set; } = "";
+    public string                 OsVersion     { get; set; } = ""; // e.g. "25H2"
     public string                 MountedDrive  { get; set; } = "";
     /// <summary>Primary BCP-47 boot language read from sources\lang.ini (e.g. "en-GB").
     /// Empty string when detection failed.</summary>
@@ -45,12 +46,16 @@ public class IsoAnalyzer
             status?.Invoke("Detecting boot language…");
             var bootLangs = ReadBootLanguagesFromLangIni(mountedDrive);
 
+            status?.Invoke("Detecting OS version…");
+            var osVersion = await GetWimOsVersionAsync(wimPath);
+
             return new IsoAnalysisResult
             {
                 Success               = true,
                 Images                = images,
                 Architectures         = archs,
                 WindowsVersion        = DetectWindowsVersion(images),
+                OsVersion             = osVersion,
                 MountedDrive          = mountedDrive,
                 BootLanguage          = bootLangs.FirstOrDefault() ?? "",
                 AvailableBootLanguages = bootLangs
@@ -276,6 +281,43 @@ public class IsoAnalyzer
         }
         catch { /* best-effort — never crash analysis over a missing lang.ini */ }
         return result;
+    }
+
+    // ── OS version detection ─────────────────────────────────────────────────
+
+    private static async Task<string> GetWimOsVersionAsync(string wimPath)
+    {
+        try
+        {
+            var dismExe = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.System), "dism.exe");
+
+            var (output, _, _) = await RunCapturedAsync(
+                dismExe, $"/Get-ImageInfo /WimFile:\"{wimPath}\" /Index:1");
+
+            // DISM prefixes output with its own "Version: 10.0.HOSTBUILD.x" header.
+            // The image OS version appears later, after "Index : 1". Skip past that
+            // anchor so we read the image build, not the host OS build.
+            var anchor = Regex.Match(output, @"Index\s*:\s*1\b");
+            var block  = anchor.Success ? output[anchor.Index..] : output;
+            var m      = Regex.Match(block, @"Version\s*:\s*\d+\.\d+\.(\d+)\.\d+");
+            if (!m.Success || !int.TryParse(m.Groups[1].Value, out int build))
+                return "";
+
+            return build switch
+            {
+                22000                    => "21H2",
+                22621                    => "22H2",
+                22631                    => "23H2",
+                >= 26100 and < 26200     => "24H2",
+                >= 26200                 => "25H2",
+                _                        => ""
+            };
+        }
+        catch
+        {
+            return "";  // best-effort — never fail the ISO analysis over version detection
+        }
     }
 
     // ── Process helpers ──────────────────────────────────────────────────────

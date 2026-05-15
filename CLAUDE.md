@@ -7,6 +7,42 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Do NOT apply piecemeal one-error-at-a-time fixes. If you see a XAML/binding/theme error, audit the entire resource dictionary and related templates in one pass.
 - After a fix attempt, verify the actual outcome (don't assume success from a build passing - confirm the GUI/dialog actually launches correctly).
 
+## Zero Blast Radius Rule — MANDATORY for every edit
+
+This project has a 2-hour ISO build cycle. A bug introduced in any edit can go undetected until a full build is attempted, costing hours and requiring another full rebuild to fix. Every other feature in the app is currently working. The cost of a regression is extremely high.
+
+### Before making any edit
+
+1. **Read every file you will touch in full** — not just the target function. Understand the surrounding code, existing patterns, and all callers before writing a single line.
+2. **Search for all callers of any function you modify or remove.** Use Grep across the whole solution. Removing or renaming something that is called elsewhere silently breaks the build.
+3. **Understand the data flow end-to-end** — trace how data enters the function, how it is transformed, and how the result is consumed downstream. A regex that matches the wrong line (e.g. DISM's own header vs the image version) is a logic bug that compiles cleanly but produces wrong results.
+4. **Check for shared state** — `BuildSession.Current` is global. Writing a new property is safe; mutating an existing one mid-flow can corrupt session state for other pages.
+
+### Rules for additive changes (new properties, new methods, new files)
+
+- New `BuildSession` properties must have a safe default so old `.gibprofile` files deserialize without error. Always initialise with `= ""`, `= false`, `= 0`, or `= []`.
+- New methods must be wrapped in `try/catch` if they call external processes (DISM, PowerShell, net I/O) — never let a new best-effort feature crash an existing flow. Return a safe default (`""`, `false`, `null`) from the `catch`.
+- New DISM calls must be read-only queries (`/Get-*` only). Never add a mutating DISM call (`/Add-*`, `/Remove-*`, `/Commit`) outside the BuildEngine pipeline.
+
+### Rules for modifying existing functions
+
+- **Touch only the lines required.** Do not reformat, rename, or reorganise surrounding code "while you are there". Every additional line changed is a new surface for a bug.
+- **Regex patterns against external process output** (DISM, PowerShell, reg.exe): the output always has a header section before the data section. A pattern that matches the first occurrence in the full output will often hit the header, not the data. Always anchor the regex to the correct section of the output (e.g. find the `Index : 1` line first, then search the substring after it).
+- **Do not change method signatures** of existing public/internal methods — other pages call them by signature. Adding an overload is safe; changing a parameter type or count is not.
+- **Do not add `status?.Invoke(...)` calls** inside loops or hot paths — they marshal to the UI thread and can cause visible lag on slow machines.
+
+### Self-check before submitting any edit
+
+Answer these questions mentally before finalising each edit:
+
+| Question | Why it matters |
+|---|---|
+| Does every code path in my change return a safe value on failure? | External calls (DISM, HTTP) can fail; a thrown exception inside ISO analysis aborts the entire scan |
+| If this property is missing from an old `.gibprofile`, does loading the profile still work? | Users load profiles from previous versions constantly |
+| Did I read the full output format of any external tool I'm parsing? | Tools print headers before data; first-match regex hits the header |
+| Is the method I removed referenced anywhere else in the solution? | Grep first — the compiler will catch it but only at build time, not at edit time |
+| Does my change affect any code path outside the feature I was asked to fix? | If yes, stop and re-scope the edit |
+
 ## UI/UX Conventions
 
 ### Mobile/Touch UI Rules

@@ -11,6 +11,8 @@ public class BuildSession
     // ── Step 1: Source & Output ───────────────────────────────────────────────
     public string? SourceIsoPath   { get; set; }
     public string? MountedIsoDrive { get; set; }
+    /// <summary>Windows 11 version detected from WIM metadata (e.g. "25H2"). Empty when unknown.</summary>
+    public string  IsoOsVersion    { get; set; } = "";
 
     public List<WindowsImageInfo> AvailableImages { get; set; } = [];
     public WindowsImageInfo?      SelectedImage   { get; set; }
@@ -113,6 +115,51 @@ public class BuildSession
     public string OrgName          { get; set; } = "";
     public string RegisteredOwner  { get; set; } = "";
     public string ComputerPrefix   { get; set; } = "";
+    /// <summary>Hostname template token. Default <c>"{PREFIX}{SERIAL}"</c> matches
+    /// the original behaviour byte-for-byte. Other supported templates resolved
+    /// at first boot: <c>{PREFIX}{LAST6_SERIAL}</c>, <c>{PREFIX}{LAST6_MAC}</c>,
+    /// <c>{PREFIX}{ASSETTAG}</c>. The default branch emits the existing
+    /// PowerShell line unchanged; non-default templates use a separate
+    /// resolver so a bug in the new code can't break the default case.</summary>
+    public string HostnameTemplate { get; set; } = "{PREFIX}{SERIAL}";
+
+    // ── Windows 11 UX & privacy baseline (Phase 6) ────────────────────────────
+    // Each toggle independently writes a fixed policy registry value to the
+    // offline SOFTWARE hive. All default false so existing builds are
+    // unchanged unless the admin opts in.
+    /// <summary>Disable the Copilot taskbar icon and block invocation
+    /// (<c>TurnOffWindowsCopilot=1</c>).</summary>
+    public bool DisableCopilot          { get; set; } = false;
+    /// <summary>Disable Windows 11 24H2+ Recall (AI screen-capture).
+    /// Sets both <c>DisableAIDataAnalysis=1</c> and
+    /// <c>AllowRecallEnablement=0</c>.</summary>
+    public bool DisableRecall           { get; set; } = false;
+    /// <summary>Remove the Widgets / News &amp; Interests pane
+    /// (<c>AllowNewsAndInterests=0</c>).</summary>
+    public bool DisableWidgets          { get; set; } = false;
+    /// <summary>Hide the consumer Teams Chat icon
+    /// (<c>ConfigureChatIcon=3</c>).</summary>
+    public bool DisableChatIcon         { get; set; } = false;
+    /// <summary>Block the "Welcome experience" tour, Spotlight promotions,
+    /// and Microsoft Store consumer ads
+    /// (<c>DisableWindowsConsumerFeatures=1</c>).</summary>
+    public bool DisableConsumerFeatures { get; set; } = false;
+
+    /// <summary>Run <c>OneDriveSetup.exe /uninstall</c> at first boot (both
+    /// 64-bit and 32-bit copies). Catches the per-user installer that the
+    /// provisioned-package match in <see cref="BloatwareToRemove"/> doesn't
+    /// always reach.</summary>
+    public bool UninstallOneDrive { get; set; } = false;
+
+    /// <summary>Trusted certificates staged into the WIM and imported via
+    /// <c>certutil -addstore</c> at first boot. Each entry carries its own
+    /// target store (Root / Intermediate / TrustedPublisher).</summary>
+    public List<CertificateEntry> Certificates { get; set; } = [];
+
+    /// <summary>Custom fonts (.ttf / .otf / .ttc) staged into Windows\Fonts
+    /// and registered under HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts.</summary>
+    public List<FontEntry> Fonts { get; set; } = [];
+
     public string ProductKey       { get; set; } = "";
     public bool   SkipOobe         { get; set; } = true;
     public int    AutoLogonCount   { get; set; } = 0;

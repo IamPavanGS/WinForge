@@ -427,8 +427,6 @@ public partial class MainWindow : Window
 
         var okBrush  = (Brush)FindResource("OkBrush");
         var errBrush = (Brush)FindResource("ErrBrush");
-        var fg0Brush = (Brush)FindResource("FG0Brush");
-        var fg3Brush = (Brush)FindResource("FG3Brush");
 
         foreach (var rec in records.AsEnumerable().Reverse().Take(5))
         {
@@ -448,18 +446,18 @@ public partial class MainWindow : Window
             {
                 Text          = name,
                 FontSize      = 11.5,
-                Foreground    = fg0Brush,
                 TextTrimming  = TextTrimming.CharacterEllipsis,
                 VerticalAlignment = VerticalAlignment.Center
             };
+            nameBlock.SetResourceReference(TextBlock.ForegroundProperty, "FG0Brush");
 
             var dateBlock = new TextBlock
             {
-                Text       = rec.CompletedAt.ToString("dd MMM  HH:mm"),
-                FontSize   = 10.5,
-                Foreground = fg3Brush,
-                Margin     = new Thickness(14, 1, 0, 0)
+                Text   = rec.CompletedAt.ToString("dd MMM  HH:mm"),
+                FontSize = 10.5,
+                Margin = new Thickness(14, 1, 0, 0)
             };
+            dateBlock.SetResourceReference(TextBlock.ForegroundProperty, "FG3Brush");
 
             var textStack = new StackPanel();
             textStack.Children.Add(nameBlock);

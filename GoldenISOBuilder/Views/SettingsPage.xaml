@@ -298,17 +298,16 @@
                             </Grid>
                             <Border Style="{StaticResource DividerStyle}" Margin="0,0,0,16"/>
 
-                            <!-- Auto-fetch Updates &amp; Drivers (experimental) — gates the new
-                                 Windows Update slipstream + OEM driver-pack auto-download
-                                 features. Off by default so existing builds are unaffected. -->
+                            <!-- Auto-fetch Updates &amp; Drivers -->
                             <Grid>
-                                <StackPanel>
-                                    <TextBlock Text="Auto-fetch Updates &amp; Drivers (experimental)"
+                                <StackPanel Margin="0,0,60,0">
+                                    <TextBlock Text="Auto-fetch Updates &amp; Drivers"
                                                Foreground="{DynamicResource FG0Brush}" FontSize="13"/>
-                                    <TextBlock Text="Enable the Windows Update slipstream panel and the Dell/HP/Lenovo driver-pack auto-download in Step 2. Off keeps the wizard exactly as it was."
+                                    <TextBlock Text="Enables the Windows Update slipstream panel and Dell/HP/Lenovo driver-pack auto-download in Step 2."
                                                Foreground="{DynamicResource FG2Brush}" FontSize="11" TextWrapping="Wrap"/>
                                 </StackPanel>
-                                <CheckBox x:Name="AutoFetchToggle" HorizontalAlignment="Right" IsChecked="False"
+                                <CheckBox x:Name="AutoFetchToggle" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                          IsChecked="True"
                                           Style="{StaticResource ToggleSwitchStyle}"
                                           Checked="AutoFetchToggle_Changed"
                                           Unchecked="AutoFetchToggle_Changed"/>

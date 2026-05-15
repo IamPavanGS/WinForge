@@ -312,6 +312,7 @@ public partial class Step1Page : UserControl
         // Persist to session
         BuildSession.Current.SourceIsoPath   = isoPath;
         BuildSession.Current.MountedIsoDrive = result.MountedDrive;
+        BuildSession.Current.IsoOsVersion    = result.OsVersion;
         BuildSession.Current.AvailableImages = result.Images;
 
         // Update ISO info strip

@@ -35,8 +35,8 @@ public static class AppSettingsLoader
         public string WimCompression           { get; set; } = "max";
 
         /// <summary>Master toggle for the Windows-Update + driver-pack auto-fetch
-        /// features. Off by default so existing builds are unaffected.</summary>
-        public bool   EnableAutoFetchFeatures  { get; set; } = false;
+        /// features. On by default.</summary>
+        public bool   EnableAutoFetchFeatures  { get; set; } = true;
     }
 
     /// <summary>

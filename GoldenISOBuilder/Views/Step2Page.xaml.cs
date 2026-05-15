@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.IO;
 using System.Text.RegularExpressions;
 using System.Windows;
@@ -21,6 +21,7 @@ public partial class Step2Page : UserControl
     private readonly List<StagedFile> _stagedFiles       = [];
     private readonly List<string>    _languagePacks      = [];
     private readonly List<string>    _driverFolders      = [];
+    private readonly List<FontEntry> _fonts              = [];
     private readonly List<DeploymentScript> _deploymentScripts = [];
 
     // Language pack folder-scan state
@@ -119,6 +120,9 @@ public partial class Step2Page : UserControl
         foreach (var d in s.DriverFolderPaths)
             _driverFolders.Add(d);
 
+        foreach (var f in s.Fonts)
+            _fonts.Add(f);
+
         IncludeDeploymentToggle.IsChecked = s.IncludeDeploymentScripts;
 
         foreach (var sc in s.DeploymentScripts)
@@ -128,6 +132,7 @@ public partial class Step2Page : UserControl
         RefreshPublicFilesPanel();
         RefreshLangPacksPanel();
         RefreshDriversPanel();
+        RefreshFontsPanel();
         RefreshDeploymentScriptsPanel();
 
         // Auto-fetch features card: visible only when the master toggle is on
@@ -142,8 +147,8 @@ public partial class Step2Page : UserControl
 
         // Set vendor dropdown to Dell now that all controls referenced by
         // Vendor_Changed exist. Doing this in XAML via IsSelected="True" fires
-        // SelectionChanged during InitializeComponent — before ModelListPanel
-        // is constructed — and crashes the whole MainWindow ctor.
+        // SelectionChanged during InitializeComponent -- before ModelListPanel
+        // is constructed -- and crashes the whole MainWindow ctor.
         if (VendorCombo != null && VendorCombo.SelectedIndex < 0)
             VendorCombo.SelectedIndex = 0;
     }
@@ -152,7 +157,7 @@ public partial class Step2Page : UserControl
     //
     // Renders the new "Windows Updates" card above the Language Packs section.
     // Two modes: Auto (Microsoft Update Catalog via Phase 1-2 plumbing) and
-    // Manual (folder of MSU files — today's behaviour for power users).
+    // Manual (folder of MSU files -- today's behaviour for power users).
     //
     // All state persists on BuildSession.UpdatesMsuPaths.
 
@@ -182,7 +187,7 @@ public partial class Step2Page : UserControl
             else
             {
                 UpdatesDetectedBuild.Text =
-                    "ISO not yet analysed — pick a source ISO in Step 1 first.";
+                    "ISO not yet analysed -- pick a source ISO in Step 1 first.";
             }
         }
     }
@@ -198,7 +203,7 @@ public partial class Step2Page : UserControl
     private async void UpdatesRefresh_Click(object sender, RoutedEventArgs e)
     {
         UpdatesRefreshBtn.IsEnabled = false;
-        UpdatesStatusText.Text = "Querying Microsoft Update Catalog…";
+        UpdatesStatusText.Text = "Querying Microsoft Update Catalog...";
         UpdatesProgress.Visibility = Visibility.Visible;
         UpdatesProgress.IsIndeterminate = true;
 
@@ -206,34 +211,53 @@ public partial class Step2Page : UserControl
         {
             EnsureCatalogServices();
 
-            // Two targeted searches against the public catalog web UI — much
+            var win11Ver = BuildSession.Current.IsoOsVersion;
+            var vTag     = win11Ver.Length > 0 ? " version " + win11Ver : "";
+            var vLabel   = win11Ver.Length > 0 ? win11Ver : "25H2";
+
+            // Two targeted searches against the public catalog web UI -- much
             // faster (and more reliable) than walking the full ~900 MB
             // wsusscn2.cab via WUA. Returns in 2-5 seconds typically.
             var combined = new List<Catalog.CatalogItem>();
             foreach (var q in new[]
             {
-                "Windows 11 cumulative update x64",
-                "Windows 11 25H2 enablement",
-                "Windows 11 .NET cumulative"
+                "Windows 11" + vTag + " cumulative update x64",
+                "Windows 11 " + vLabel + " enablement",
+                "Windows 11" + vTag + " .NET cumulative"
             })
             {
-                UpdatesStatusText.Text = $"Querying “{q}”…";
+                UpdatesStatusText.Text = "Querying \"" + q + "\"...";
                 var hits = await _msCatalog!.SearchAsync(q);
                 combined.AddRange(hits);
             }
 
             // De-dup by UpdateId. Prefer newer last-updated date.
-            _availableUpdates = combined
+            var deduped = combined
                 .GroupBy(i => i.UpdateId)
                 .Select(g => g.First())
                 .OrderByDescending(i => i.LastUpdated)
                 .ToList();
 
+            // Drop results that explicitly target a different Windows 11 version.
+            // Items without a "version X" tag in the title pass through unchanged.
+            if (win11Ver.Length > 0)
+            {
+                var otherVersions = new[] { "22H2", "23H2", "24H2", "25H2", "26H2" }
+                    .Where(v => v != win11Ver);
+                deduped = deduped
+                    .Where(u => !otherVersions.Any(v =>
+                        u.Title.Contains("version " + v, StringComparison.OrdinalIgnoreCase)))
+                    .ToList();
+            }
+
+            _availableUpdates = deduped;
+
             RenderUpdatesList(UpdatesSearchBox?.Text?.Trim());
             UpdatesExportBtn.IsEnabled = _availableUpdates.Count > 0;
+            var verSuffix = win11Ver.Length > 0 ? " for Windows 11 " + win11Ver : "";
             UpdatesStatusText.Text = _availableUpdates.Count == 0
                 ? "Catalog returned no results. Try the manual folder mode below."
-                : $"Catalog ready — {_availableUpdates.Count} update(s) available. Tick any number to slipstream.";
+                : "Catalog ready -- " + _availableUpdates.Count + " update(s) available" + verSuffix + ". Tick any number to slipstream.";
         }
         catch (Exception ex)
         {
@@ -296,7 +320,7 @@ public partial class Step2Page : UserControl
     }
 
     private static string Trim(string s, int max) =>
-        s.Length <= max ? s : s[..max] + "…";
+        s.Length <= max ? s : s[..max] + "...";
 
     private static string FormatEta(double seconds)
     {
@@ -353,7 +377,7 @@ public partial class Step2Page : UserControl
         }
         else
         {
-            sb.AppendLine($"ALE Image Forge — Windows Update list ({DateTime.Now:yyyy-MM-dd HH:mm})");
+            sb.AppendLine($"ALE Image Forge -- Windows Update list ({DateTime.Now:yyyy-MM-dd HH:mm})");
             sb.AppendLine($"Total available: {_availableUpdates.Count}    Selected: {_selectedUpdateIds.Count}");
             sb.AppendLine(new string('─', 100));
             sb.AppendLine($"{"Sel",-4}{"KB",-13}{"Title",-70}{"Size",-12}{"Updated"}");
@@ -369,7 +393,7 @@ public partial class Step2Page : UserControl
             }
             sb.AppendLine();
             sb.AppendLine("Selected updates will be slipstreamed into install.wim during the build.");
-            sb.AppendLine("UpdateID column omitted in text mode — choose CSV for the GUIDs.");
+            sb.AppendLine("UpdateID column omitted in text mode -- choose CSV for the GUIDs.");
         }
 
         try
@@ -415,7 +439,7 @@ public partial class Step2Page : UserControl
             {
                 idx++;
                 UpdatesStatusText.Text =
-                    $"[{idx}/{selected.Count}] Resolving {u.KbId} download URL…";
+                    $"[{idx}/{selected.Count}] Resolving {u.KbId} download URL...";
                 UpdatesProgress.IsIndeterminate = true;
 
                 try
@@ -429,7 +453,7 @@ public partial class Step2Page : UserControl
                     }
 
                     UpdatesStatusText.Text =
-                        $"[{idx}/{selected.Count}] Starting download of {u.KbId}…";
+                        $"[{idx}/{selected.Count}] Starting download of {u.KbId}...";
                     UpdatesProgress.IsIndeterminate = false;
                     UpdatesProgress.Value = 0;
 
@@ -445,7 +469,7 @@ public partial class Step2Page : UserControl
                             UpdatesProgress.Value =
                                 (double)p.BytesDownloaded / p.TotalBytes.Value * 100;
 
-                        // Rich status text: [i/n] KB12345 — 425 MB / 871 MB (49%) — 12.5 Mbps — 35s left
+                        // Rich status text: [i/n] KB12345 -- 425 MB / 871 MB (49%) -- 12.5 Mbps -- 35s left
                         string size = $"{p.BytesDownloaded / 1024 / 1024} MB";
                         string pct  = "";
                         string eta  = "";
@@ -457,13 +481,13 @@ public partial class Step2Page : UserControl
                             {
                                 var remainingBits = (p.TotalBytes.Value - p.BytesDownloaded) * 8.0;
                                 var seconds       = remainingBits / (p.Mbps.Value * 1_000_000);
-                                eta               = "  —  " + FormatEta(seconds) + " left";
+                                eta               = "  --  " + FormatEta(seconds) + " left";
                             }
                         }
                         string speed = p.Mbps.HasValue
-                            ? $"  —  {p.Mbps.Value:F1} Mbps" : "";
+                            ? $"  --  {p.Mbps.Value:F1} Mbps" : "";
                         UpdatesStatusText.Text =
-                            $"[{idx}/{selected.Count}] {u.KbId}  —  {size}{pct}{speed}{eta}";
+                            $"[{idx}/{selected.Count}] {u.KbId}  --  {size}{pct}{speed}{eta}";
                     });
                     var result = await _downloader!.DownloadAsync(
                         url, dest, expectedSha256: null, progress);
@@ -572,7 +596,7 @@ public partial class Step2Page : UserControl
 
     private void Vendor_Changed(object sender, SelectionChangedEventArgs e)
     {
-        // Vendor changed — wipe the previous model list and selection.
+        // Vendor changed -- wipe the previous model list and selection.
         // Guard against the firing that happens during XAML parse when
         // ComboBox first picks its initial item: controls referenced below
         // appear later in the XAML and aren't constructed yet at that point.
@@ -593,7 +617,7 @@ public partial class Step2Page : UserControl
             return;
 
         DriverRefreshBtn.IsEnabled = false;
-        DriverStatusText.Text = $"Loading {vendorTag} catalogue…";
+        DriverStatusText.Text = $"Loading {vendorTag} catalogue...";
         DriverProgress.Visibility = Visibility.Visible;
         DriverProgress.IsIndeterminate = true;
 
@@ -619,7 +643,7 @@ public partial class Step2Page : UserControl
             RenderModelList(filter: null);
 
             DriverStatusText.Text =
-                $"{_vendorModels.Count} {vendorTag} model(s) available — type to search, tick up to 3.";
+                $"{_vendorModels.Count} {vendorTag} model(s) available -- type to search, tick up to 3.";
         }
         catch (Exception ex)
         {
@@ -642,7 +666,7 @@ public partial class Step2Page : UserControl
 
         // For Lenovo specifically: if the user typed exactly 4 chars and it's
         // not already in our seed list, treat it as a direct MT input. The
-        // built-in seed is just for discovery — real Lenovo MTs come off the
+        // built-in seed is just for discovery -- real Lenovo MTs come off the
         // laptop's underside sticker and there are thousands of them.
         if (_activeVendorService is Catalog.LenovoDriverService &&
             text.Length == 4 &&
@@ -725,7 +749,7 @@ public partial class Step2Page : UserControl
         DriverProgress.Visibility = Visibility.Visible;
         DriverProgress.IsIndeterminate = false;
         DriverStatusText.Text =
-            $"Resolving {_selectedSystemIds.Count} driver pack(s)…";
+            $"Resolving {_selectedSystemIds.Count} driver pack(s)...";
 
         var failures = new System.Text.StringBuilder();
         int okPacks = 0;
@@ -749,11 +773,11 @@ public partial class Step2Page : UserControl
                     _                            => "W11"
                 };
 
-                DriverStatusText.Text = $"Resolving driver pack for {model.Name}…";
+                DriverStatusText.Text = $"Resolving driver pack for {model.Name}...";
                 var pack = await _activeVendorService.GetDriverPackAsync(sid, osCode);
                 if (pack == null)
                 {
-                    // Collect the reason — final status message lists every
+                    // Collect the reason -- final status message lists every
                     // failure rather than each one being overwritten by the
                     // final "Done" line. Each service exposes a LastAttemptLog
                     // explaining what went wrong.
@@ -771,7 +795,7 @@ public partial class Step2Page : UserControl
                 }
 
                 DriverStatusText.Text =
-                    $"Downloading {pack.Filename} for {model.Name} ({pack.SizeBytes / 1024 / 1024} MB)…";
+                    $"Downloading {pack.Filename} for {model.Name} ({pack.SizeBytes / 1024 / 1024} MB)...";
 
                 var key = $"{pack.Vendor}/{sid}/{pack.Filename}";
                 var dest = _cache!.GetEntryPath(
@@ -789,7 +813,7 @@ public partial class Step2Page : UserControl
                         DriverProgress.Value =
                             (double)p.BytesDownloaded / p.TotalBytes.Value * 100;
 
-                    // Rich status: model — 425 MB / 871 MB (49%) — 12.5 Mbps — 35s left
+                    // Rich status: model -- 425 MB / 871 MB (49%) -- 12.5 Mbps -- 35s left
                     string size = $"{p.BytesDownloaded / 1024 / 1024} MB";
                     string pct  = "";
                     string eta  = "";
@@ -802,14 +826,14 @@ public partial class Step2Page : UserControl
                         {
                             var remainingBits = (p.TotalBytes.Value - p.BytesDownloaded) * 8.0;
                             var seconds       = remainingBits / (p.Mbps.Value * 1_000_000);
-                            eta               = "  —  " + FormatEta(seconds) + " left";
+                            eta               = "  --  " + FormatEta(seconds) + " left";
                         }
                     }
                     if (p.Mbps.HasValue && p.Mbps.Value > 0.1)
-                        spd = $"  —  {p.Mbps.Value:F1} Mbps";
+                        spd = $"  --  {p.Mbps.Value:F1} Mbps";
 
                     DriverStatusText.Text =
-                        $"Downloading {pack.Filename} for {model.Name} — {size}{pct}{spd}{eta}";
+                        $"Downloading {pack.Filename} for {model.Name} -- {size}{pct}{spd}{eta}";
                 });
                 var result = await _downloader!.DownloadAsync(
                     pack.DownloadUrl, dest, expectedSha256: pack.Sha256, progress);
@@ -832,7 +856,7 @@ public partial class Step2Page : UserControl
                 var localPath = dest;
                 {
                     DriverStatusText.Text =
-                        $"Extracting {pack.Vendor} driver pack for {model.Name}…";
+                        $"Extracting {pack.Vendor} driver pack for {model.Name}...";
                     try
                     {
                         var extractDir = dest + ".extracted";
@@ -842,7 +866,7 @@ public partial class Step2Page : UserControl
                         else if (pack.Vendor == Catalog.DriverVendor.HP)
                             await Catalog.HpSoftPaqExtractor.ExtractAsync(
                                 dest, extractDir);
-                        else  // Dell — .exe self-extractor or .cab
+                        else  // Dell -- .exe self-extractor or .cab
                             await Catalog.DellSoftPaqExtractor.ExtractAsync(
                                 dest, extractDir);
                         localPath = extractDir;
@@ -850,7 +874,7 @@ public partial class Step2Page : UserControl
                     catch (Exception ex)
                     {
                         failures.AppendLine(
-                            $"  • {model.Name} ({sid}): downloaded but extract failed — {ex.Message}");
+                            $"  • {model.Name} ({sid}): downloaded but extract failed -- {ex.Message}");
                         continue;
                     }
                 }
@@ -887,7 +911,7 @@ public partial class Step2Page : UserControl
             else if (okPacks == 0)
                 DriverStatusText.Text =
                     "No packs fetched. Reason(s):\n" + failures.ToString().TrimEnd() +
-                    "\nFor Lenovo: check the 4-char Machine Type on the laptop's underside sticker and type it into the search box — the seed list is reference only.";
+                    "\nFor Lenovo: check the 4-char Machine Type on the laptop's underside sticker and type it into the search box -- the seed list is reference only.";
             else
                 DriverStatusText.Text =
                     $"Fetched {okPacks} pack(s); {failures.ToString().Split('\n').Count(l => l.Trim().Length > 0)} failed:\n" +
@@ -912,7 +936,7 @@ public partial class Step2Page : UserControl
         {
             var row = new TextBlock
             {
-                Text       = $"  • {p.Vendor}  {p.ModelName} ({p.SystemId}) — v{p.PackVersion}, " +
+                Text       = $"  • {p.Vendor}  {p.ModelName} ({p.SystemId}) -- v{p.PackVersion}, " +
                              $"{p.SizeBytes / 1024 / 1024} MB",
                 Foreground = (System.Windows.Media.Brush)FindResource("FG1Brush"),
                 FontSize   = 11.5,
@@ -1097,7 +1121,7 @@ public partial class Step2Page : UserControl
             Name     = Path.GetFileNameWithoutExtension(path),
             FilePath = path,
             Type     = isMsi ? "msi" : "exe",
-            // MSI: leave Args empty — GIBFirstBoot auto-adds /qn /norestart, user only adds extras.
+            // MSI: leave Args empty -- GIBFirstBoot auto-adds /qn /norestart, user only adds extras.
             // EXE: default to /S (NSIS/Inno) which works for most installers.
             Args     = isMsi ? "" : "/S"
         };
@@ -1169,7 +1193,7 @@ public partial class Step2Page : UserControl
         };
         var browseBtn = new Button
         {
-            Content = "…",
+            Content = "...",
             Style   = (Style?)Application.Current.Resources["DefaultButtonStyle"],
             Padding = new Thickness(8, 4, 8, 4),
             MinWidth = 32,
@@ -1177,7 +1201,7 @@ public partial class Step2Page : UserControl
         };
 
         // ── MST transform line (only meaningful for MSI installers) ───────────────
-        // Layout: [chip TextBlock — click to add/change] [✕ clear button when set]
+        // Layout: [chip TextBlock -- click to add/change] [✕ clear button when set]
         var mstLine = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -1284,10 +1308,10 @@ public partial class Step2Page : UserControl
             Text       = app.Args,
             Style      = (Style?)Application.Current.Resources["MonoTextInputStyle"],
             Margin     = new Thickness(0, 0, 8, 0),
-            ToolTip    = "Space-separated flags — no commas, no quotes around the whole string.\n" +
+            ToolTip    = "Space-separated flags -- no commas, no quotes around the whole string.\n" +
                          "Just type them exactly as you would on a command line.\n\n" +
                          "── MSI installers ──\n" +
-                         "GIBFirstBoot adds /qn /norestart automatically — leave this BLANK for a\n" +
+                         "GIBFirstBoot adds /qn /norestart automatically -- leave this BLANK for a\n" +
                          "standard silent install. Only add EXTRA flags here, e.g.:\n" +
                          "  REBOOT=ReallySuppress       suppress all reboot logic\n" +
                          "  ALLUSERS=1                  install for all users\n" +
@@ -1426,7 +1450,7 @@ public partial class Step2Page : UserControl
         nameLabel.SetResourceReference(TextBlock.ForegroundProperty, "FG0Brush");
         Grid.SetColumn(nameLabel, 1);
 
-        // Destination folder TextBox — editable, relative path inside the image
+        // Destination folder TextBox -- editable, relative path inside the image
         var destBox = new TextBox
         {
             Text                     = sf.DestinationFolder,
@@ -1485,24 +1509,24 @@ public partial class Step2Page : UserControl
         ScanLanguagePackFolder(dlg.FolderName);
     }
 
-    // ── Whitelist patterns — only real LP files match, all FoD noise is ignored ──
+    // ── Whitelist patterns -- only real LP files match, all FoD noise is ignored ──
     //
-    // Pattern A — Core LP, underscore format (this ISO):
+    // Pattern A -- Core LP, underscore format (this ISO):
     //   Microsoft-Windows-Client-Language-Pack_x64_fr-fr.cab
     //
-    // Pattern B — Core LP, tilde format (other ISOs / older builds):
-    //   Microsoft-Windows-Client-LanguagePack-Package~31bf…~amd64~fr-FR~10.0.x.cab
+    // Pattern B -- Core LP, tilde format (other ISOs / older builds):
+    //   Microsoft-Windows-Client-LanguagePack-Package~31bf...~amd64~fr-FR~10.0.x.cab
     //
-    // Pattern C — Language Features (Basic / Handwriting / OCR / Speech / TTS):
-    //   Microsoft-Windows-LanguageFeatures-Basic-fr-fr-Package~31bf…~amd64~~.cab
+    // Pattern C -- Language Features (Basic / Handwriting / OCR / Speech / TTS):
+    //   Microsoft-Windows-LanguageFeatures-Basic-fr-fr-Package~31bf...~amd64~~.cab
     //
     private static readonly Regex[] _lpPatterns =
     [
-        // A: underscore Core LP   — locale is last segment before .cab
+        // A: underscore Core LP   -- locale is last segment before .cab
         new Regex(@"^Microsoft-Windows-Client-Language-Pack_[^_]+_([a-z]{2}[_\-][a-z]{2,}(?:[_\-][a-z]{2,})?)\.cab$",
             RegexOptions.IgnoreCase | RegexOptions.Compiled),
 
-        // B: tilde Core LP   — locale is 4th tilde-segment
+        // B: tilde Core LP   -- locale is 4th tilde-segment
         new Regex(@"^Microsoft-Windows-Client-LanguagePack-Package~[^~]+~[^~]+~([a-z]{2}[_\-][a-z]{2,}(?:[_\-][a-z]{2,})?)~",
             RegexOptions.IgnoreCase | RegexOptions.Compiled),
 
@@ -1533,7 +1557,7 @@ public partial class Step2Page : UserControl
             var filename = Path.GetFileName(cab);
             string? code = null;
 
-            // Try each whitelist pattern in order — first match wins
+            // Try each whitelist pattern in order -- first match wins
             foreach (var pattern in _lpPatterns)
             {
                 var m = pattern.Match(filename);
@@ -1543,7 +1567,7 @@ public partial class Step2Page : UserControl
                 break;
             }
 
-            if (code is null) continue;  // not a real LP file — skip
+            if (code is null) continue;  // not a real LP file -- skip
 
             if (!_langGroupsScanned.TryGetValue(code, out var list))
             {
@@ -1583,7 +1607,7 @@ public partial class Step2Page : UserControl
 
     private UIElement BuildLangGroupRow(string langCode, List<string> cabs)
     {
-        // Row outer border — doubles as the clickable hit-test area
+        // Row outer border -- doubles as the clickable hit-test area
         var outerBorder = new Border
         {
             CornerRadius    = new CornerRadius(6),
@@ -1594,7 +1618,7 @@ public partial class Step2Page : UserControl
             Tag = (langCode, cabs, true)
         };
 
-        // Local helper — updates all visuals atomically.
+        // Local helper -- updates all visuals atomically.
         // Unchecked state uses SetResourceReference so colours follow theme switches.
         // Checked state uses a semi-transparent accent tint (works in both themes).
         void ApplyVisual(bool chk)
@@ -1709,7 +1733,7 @@ public partial class Step2Page : UserControl
         bool has(string kw) => cabs.Any(c =>
             Path.GetFileName(c).Contains(kw, StringComparison.OrdinalIgnoreCase));
 
-        // Core LP — matches both underscore format (Language-Pack_x64_) and tilde format (LanguagePack-Package~)
+        // Core LP -- matches both underscore format (Language-Pack_x64_) and tilde format (LanguagePack-Package~)
         if (cabs.Any(c =>
         {
             var n = Path.GetFileName(c);
@@ -1921,7 +1945,7 @@ public partial class Step2Page : UserControl
         {
             Process.Start(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true });
         }
-        catch { /* ignore – browser may not be available */ }
+        catch { /* ignore - browser may not be available */ }
         e.Handled = true;
     }
 
@@ -1937,6 +1961,128 @@ public partial class Step2Page : UserControl
 
         RefreshDriversPanel();
         BuildSession.Current.DriverFolderPaths = [.. _driverFolders];
+    }
+
+    // ── Custom fonts ──────────────────────────────────────────────────────────
+
+    private void AddFont_Click(object sender, RoutedEventArgs e)
+    {
+        var dlg = new OpenFileDialog
+        {
+            Title       = "Select font file(s)",
+            Filter      = "Font files|*.ttf;*.otf;*.ttc|All files|*.*",
+            Multiselect = true
+        };
+        if (dlg.ShowDialog() != true) return;
+
+        foreach (var path in dlg.FileNames)
+        {
+            // Skip duplicates by source path.
+            if (_fonts.Any(f => string.Equals(f.SourcePath, path,
+                                              StringComparison.OrdinalIgnoreCase)))
+                continue;
+            _fonts.Add(new FontEntry
+            {
+                SourcePath  = path,
+                DisplayName = Path.GetFileNameWithoutExtension(path),
+            });
+        }
+        RefreshFontsPanel();
+        BuildSession.Current.Fonts = [.. _fonts];
+    }
+
+    private void RefreshFontsPanel()
+    {
+        FontsPanel.Children.Clear();
+        FontsEmptyHint.Visibility = _fonts.Count == 0
+            ? Visibility.Visible : Visibility.Collapsed;
+
+        for (int i = 0; i < _fonts.Count; i++)
+            FontsPanel.Children.Add(BuildFontRow(_fonts[i], i));
+    }
+
+    private UIElement BuildFontRow(FontEntry font, int index)
+    {
+        var row = new Border
+        {
+            CornerRadius    = new CornerRadius(6),
+            BorderThickness = new Thickness(1),
+            Padding         = new Thickness(12, 8, 10, 8)
+        };
+        row.SetResourceReference(Border.BackgroundProperty,  "BG2Brush");
+        row.SetResourceReference(Border.BorderBrushProperty, "LineBrush");
+
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(220) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        // Filename + path (read-only)
+        var info = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        var nameLabel = new TextBlock
+        {
+            Text         = Path.GetFileName(font.SourcePath),
+            ToolTip      = font.SourcePath,
+            FontSize     = 13,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+        nameLabel.SetResourceReference(TextBlock.ForegroundProperty, "FG0Brush");
+        var subLabel = new TextBlock
+        {
+            Text         = font.SourcePath,
+            FontSize     = 10,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+        subLabel.SetResourceReference(TextBlock.ForegroundProperty, "FG2Brush");
+        info.Children.Add(nameLabel);
+        info.Children.Add(subLabel);
+        Grid.SetColumn(info, 0);
+        grid.Children.Add(info);
+
+        // Display name -- editable, auto-filled from filename. The user can
+        // override if the font's published display name differs from its
+        // filename (common in pro fonts shipped as "FONT_REG.ttf" etc.).
+        var displayBox = new TextBox
+        {
+            Text              = font.DisplayName,
+            Margin            = new Thickness(8, 0, 8, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            ToolTip           = "Friendly name shown in apps' font picker",
+            Style             = (Style)Application.Current.Resources["TextInputStyle"],
+        };
+        int capturedDisplayIdx = index;
+        displayBox.TextChanged += (_, _) =>
+        {
+            if (capturedDisplayIdx >= _fonts.Count) return;
+            _fonts[capturedDisplayIdx].DisplayName = displayBox.Text.Trim();
+            BuildSession.Current.Fonts = [.. _fonts];
+        };
+        Grid.SetColumn(displayBox, 1);
+        grid.Children.Add(displayBox);
+
+        // Remove button
+        int capturedIdx = index;
+        var removeBtn = new Button
+        {
+            Content             = "✕",
+            Style               = (Style)Application.Current.Resources["GhostButtonStyle"],
+            FontSize            = 12,
+            Padding             = new Thickness(6, 2, 6, 2),
+            VerticalAlignment   = VerticalAlignment.Center,
+            FocusVisualStyle    = null,
+        };
+        removeBtn.Click += (_, _) =>
+        {
+            if (capturedIdx < _fonts.Count)
+                _fonts.RemoveAt(capturedIdx);
+            RefreshFontsPanel();
+            BuildSession.Current.Fonts = [.. _fonts];
+        };
+        Grid.SetColumn(removeBtn, 2);
+        grid.Children.Add(removeBtn);
+
+        row.Child = grid;
+        return row;
     }
 
     private void RefreshDriversPanel()
@@ -2177,6 +2323,7 @@ public partial class Step2Page : UserControl
         s.StagedFiles             = [.. _stagedFiles];
         s.LanguagePackPaths       = [.. _languagePacks];
         s.DriverFolderPaths       = [.. _driverFolders];
+        s.Fonts                   = [.. _fonts];
         s.DeploymentScripts        = [.. _deploymentScripts];
         s.IncludeDeploymentScripts = IncludeDeploymentToggle.IsChecked == true;
 

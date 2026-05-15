@@ -48,7 +48,7 @@
                 </Border>
                 <TextBlock Text="ALE Image Forge" FontSize="12" FontWeight="SemiBold"
                            Foreground="{DynamicResource FG0Brush}" VerticalAlignment="Center"/>
-                <TextBlock Text=" v2.4.1" FontSize="12" FontWeight="Normal"
+                <TextBlock Text=" v2.4.5" FontSize="12" FontWeight="Normal"
                            Foreground="{DynamicResource FG2Brush}" VerticalAlignment="Center"/>
             </StackPanel>
 
@@ -121,33 +121,33 @@
                         <Button x:Name="NavHomeBtn" Style="{StaticResource IconRailButtonStyle}"
                                 ToolTip="Home" Click="NavHomeBtn_Click" Tag="active">
                             <Path Style="{StaticResource IconPath}" Data="{StaticResource DiscIcon}"
-                                  Stroke="{Binding RelativeSource={RelativeSource AncestorType=Button}, Path=Foreground}"
+                                  Stroke="{DynamicResource Gold1Brush}"
                                   Width="18" Height="18"/>
                         </Button>
                         <Button x:Name="NavNewBuildBtn" Style="{StaticResource IconRailButtonStyle}"
                                 ToolTip="New Build" Click="NavNewBuildBtn_Click" Margin="0,4,0,0">
                             <Path Style="{StaticResource IconPath}" Data="{StaticResource PlusIcon}"
-                                  Stroke="{Binding RelativeSource={RelativeSource AncestorType=Button}, Path=Foreground}"
+                                  Stroke="{DynamicResource SourceAccentBrush}"
                                   Width="18" Height="18"/>
                         </Button>
                         <Button x:Name="NavProgressBtn" Style="{StaticResource IconRailButtonStyle}"
                                 ToolTip="Build Progress" Click="NavProgressBtn_Click" Margin="0,4,0,0">
                             <Path Style="{StaticResource IconPath}" Data="{StaticResource CpuIcon}"
-                                  Stroke="{Binding RelativeSource={RelativeSource AncestorType=Button}, Path=Foreground}"
+                                  Stroke="{DynamicResource BuildAccentBrush}"
                                   Width="18" Height="18"/>
                         </Button>
                         <Button x:Name="NavHistoryBtn" Style="{StaticResource IconRailButtonStyle}"
                                 ToolTip="Build History" Margin="0,4,0,0"
                                 Click="NavHistoryBtn_Click">
                             <Path Style="{StaticResource IconPath}" Data="{StaticResource HistoryIcon}"
-                                  Stroke="{Binding RelativeSource={RelativeSource AncestorType=Button}, Path=Foreground}"
+                                  Stroke="{DynamicResource InfoBrush}"
                                   Width="18" Height="18"/>
                         </Button>
                         <Button x:Name="NavTestVmBtn" Style="{StaticResource IconRailButtonStyle}"
                                 ToolTip="Test in VM" Margin="0,4,0,0"
                                 Click="NavTestVmBtn_Click">
                             <Path Style="{StaticResource IconPath}" Data="{StaticResource MonitorIcon}"
-                                  Stroke="{Binding RelativeSource={RelativeSource AncestorType=Button}, Path=Foreground}"
+                                  Stroke="{DynamicResource TestVmAccentBrush}"
                                   Width="18" Height="18"/>
                         </Button>
                     </StackPanel>
@@ -274,7 +274,7 @@
                                                 <TextBlock Text="Source &amp; Output" FontSize="12.5" FontWeight="Medium" Foreground="{DynamicResource FG0Brush}"/>
                                                 <TextBlock Text="ISO + working dir" FontSize="11" Foreground="{DynamicResource FG2Brush}"/>
                                             </StackPanel>
-                                            <Path Grid.Column="2" Style="{StaticResource IconPath}" Data="{StaticResource DiscIcon}" Stroke="{DynamicResource FG3Brush}" StrokeThickness="1.5" Width="14" Height="14" VerticalAlignment="Center"/>
+                                            <Path Grid.Column="2" Style="{StaticResource IconPath}" Data="{StaticResource DiscIcon}" Stroke="{DynamicResource SourceAccentBrush}" StrokeThickness="1.5" Width="14" Height="14" VerticalAlignment="Center"/>
                                         </Grid>
                                     </Button>
                                     <!-- Step 2 -->
@@ -289,7 +289,7 @@
                                                 <TextBlock Text="Assets" FontSize="12.5" FontWeight="Medium" Foreground="{DynamicResource FG1Brush}"/>
                                                 <TextBlock Text="Wallpaper, drivers, apps" FontSize="11" Foreground="{DynamicResource FG2Brush}"/>
                                             </StackPanel>
-                                            <Path Grid.Column="2" Style="{StaticResource IconPath}" Data="{StaticResource BoxIcon}" Stroke="{DynamicResource FG3Brush}" StrokeThickness="1.5" Width="14" Height="14" VerticalAlignment="Center"/>
+                                            <Path Grid.Column="2" Style="{StaticResource IconPath}" Data="{StaticResource BoxIcon}" Stroke="{DynamicResource AssetsAccentBrush}" StrokeThickness="1.5" Width="14" Height="14" VerticalAlignment="Center"/>
                                         </Grid>
                                     </Button>
                                     <!-- Step 3 -->
@@ -304,7 +304,7 @@
                                                 <TextBlock Text="Customizations" FontSize="12.5" FontWeight="Medium" Foreground="{DynamicResource FG1Brush}"/>
                                                 <TextBlock Text="Bloatware, hardening" FontSize="11" Foreground="{DynamicResource FG2Brush}"/>
                                             </StackPanel>
-                                            <Path Grid.Column="2" Style="{StaticResource IconPath}" Data="{StaticResource LayersIcon}" Stroke="{DynamicResource FG3Brush}" StrokeThickness="1.5" Width="14" Height="14" VerticalAlignment="Center"/>
+                                            <Path Grid.Column="2" Style="{StaticResource IconPath}" Data="{StaticResource LayersIcon}" Stroke="{DynamicResource CustomAccentBrush}" StrokeThickness="1.5" Width="14" Height="14" VerticalAlignment="Center"/>
                                         </Grid>
                                     </Button>
                                     <!-- Step 4 -->
@@ -319,7 +319,7 @@
                                                 <TextBlock Text="Admin Account" FontSize="12.5" FontWeight="Medium" Foreground="{DynamicResource FG1Brush}"/>
                                                 <TextBlock Text="Credentials" FontSize="11" Foreground="{DynamicResource FG2Brush}"/>
                                             </StackPanel>
-                                            <Path Grid.Column="2" Style="{StaticResource IconPath}" Data="{StaticResource UserIcon}" Stroke="{DynamicResource FG3Brush}" StrokeThickness="1.5" Width="14" Height="14" VerticalAlignment="Center"/>
+                                            <Path Grid.Column="2" Style="{StaticResource IconPath}" Data="{StaticResource UserIcon}" Stroke="{DynamicResource AdminAccentBrush}" StrokeThickness="1.5" Width="14" Height="14" VerticalAlignment="Center"/>
                                         </Grid>
                                     </Button>
                                     <!-- Step 5: Registry -->
@@ -334,7 +334,7 @@
                                                 <TextBlock Text="Registry Changes" FontSize="12.5" FontWeight="Medium" Foreground="{DynamicResource FG1Brush}"/>
                                                 <TextBlock Text="Offline hive injection" FontSize="11" Foreground="{DynamicResource FG2Brush}"/>
                                             </StackPanel>
-                                            <Path Grid.Column="2" Style="{StaticResource IconPath}" Data="{StaticResource ShieldIcon}" Stroke="{DynamicResource FG3Brush}" StrokeThickness="1.5" Width="14" Height="14" VerticalAlignment="Center"/>
+                                            <Path Grid.Column="2" Style="{StaticResource IconPath}" Data="{StaticResource ShieldIcon}" Stroke="{DynamicResource RegistryAccentBrush}" StrokeThickness="1.5" Width="14" Height="14" VerticalAlignment="Center"/>
                                         </Grid>
                                     </Button>
                                     <!-- Step 6: Advanced -->
@@ -349,7 +349,7 @@
                                                 <TextBlock Text="Advanced Options" FontSize="12.5" FontWeight="Medium" Foreground="{DynamicResource FG1Brush}"/>
                                                 <TextBlock Text="Features, OEM, power" FontSize="11" Foreground="{DynamicResource FG2Brush}"/>
                                             </StackPanel>
-                                            <Path Grid.Column="2" Style="{StaticResource IconPath}" Data="{StaticResource LayersIcon}" Stroke="{DynamicResource FG3Brush}" StrokeThickness="1.5" Width="14" Height="14" VerticalAlignment="Center"/>
+                                            <Path Grid.Column="2" Style="{StaticResource IconPath}" Data="{StaticResource LayersIcon}" Stroke="{DynamicResource Gold1Brush}" StrokeThickness="1.5" Width="14" Height="14" VerticalAlignment="Center"/>
                                         </Grid>
                                     </Button>
                                     <!-- Step 7: Review -->
@@ -364,7 +364,7 @@
                                                 <TextBlock Text="Review" FontSize="12.5" FontWeight="Medium" Foreground="{DynamicResource FG1Brush}"/>
                                                 <TextBlock Text="Pre-flight checks" FontSize="11" Foreground="{DynamicResource FG2Brush}"/>
                                             </StackPanel>
-                                            <Path Grid.Column="2" Style="{StaticResource IconPath}" Data="{StaticResource CheckCircleIcon}" Stroke="{DynamicResource FG3Brush}" StrokeThickness="1.5" Width="14" Height="14" VerticalAlignment="Center"/>
+                                            <Path Grid.Column="2" Style="{StaticResource IconPath}" Data="{StaticResource CheckCircleIcon}" Stroke="{DynamicResource ReviewAccentBrush}" StrokeThickness="1.5" Width="14" Height="14" VerticalAlignment="Center"/>
                                         </Grid>
                                     </Button>
                                     <!-- Step 8: Build -->
@@ -379,7 +379,7 @@
                                                 <TextBlock Text="Build" FontSize="12.5" FontWeight="Medium" Foreground="{DynamicResource FG1Brush}"/>
                                                 <TextBlock Text="Run pipeline" FontSize="11" Foreground="{DynamicResource FG2Brush}"/>
                                             </StackPanel>
-                                            <Path Grid.Column="2" Style="{StaticResource IconPath}" Data="{StaticResource ZapIcon}" Stroke="{DynamicResource FG3Brush}" StrokeThickness="1.5" Width="14" Height="14" VerticalAlignment="Center"/>
+                                            <Path Grid.Column="2" Style="{StaticResource IconPath}" Data="{StaticResource ZapIcon}" Stroke="{DynamicResource BuildAccentBrush}" StrokeThickness="1.5" Width="14" Height="14" VerticalAlignment="Center"/>
                                         </Grid>
                                     </Button>
                                 </StackPanel>
