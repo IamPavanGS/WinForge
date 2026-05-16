@@ -732,12 +732,34 @@ public class BuildEngine
             Log("  Mounting boot.wim (Index 2)…");
             await DismAsync($"/Mount-Image /ImageFile:\"{bootWimPath}\" /Index:2 /MountDir:\"{bootMountDir}\"");
 
-            Log($"  Injecting {copied} WinPE-critical driver folder(s) into boot.wim…");
-            await DismAsync($"/Image:\"{bootMountDir}\" /Add-Driver /Driver:\"{filteredFolder}\" /Recurse");
+            // Inject one INF at a time. A single /Recurse call returns exit 50
+            // (ERROR_NOT_SUPPORTED) and injects nothing if any driver in the batch is
+            // not WinPE-compatible. Per-INF injection lets the compatible drivers land.
+            var infs     = Directory.EnumerateFiles(filteredFolder, "*.inf",
+                               SearchOption.AllDirectories).ToList();
+            var injected = 0;
+            var skipped  = 0;
+            Log($"  Injecting {infs.Count} WinPE-critical INF(s) into boot.wim…");
+            foreach (var inf in infs)
+            {
+                try
+                {
+                    await DismAsync($"/Image:\"{bootMountDir}\" /Add-Driver /Driver:\"{inf}\"");
+                    injected++;
+                }
+                catch
+                {
+                    Log($"  ! Skipped {Path.GetFileName(inf)} (not injectable into WinPE)");
+                    skipped++;
+                }
+            }
 
-            Log("  Committing boot.wim…");
+            Log($"  Committing boot.wim ({injected} injected, {skipped} skipped)…");
             await DismAsync($"/Unmount-Image /MountDir:\"{bootMountDir}\" /Commit");
-            Log("  ✓ boot.wim updated with WinPE-critical drivers.");
+            if (injected > 0)
+                Log($"  ✓ boot.wim: {injected} WinPE driver(s) injected.");
+            else
+                Log($"  ! boot.wim: all {skipped} driver(s) were WinPE-incompatible, none injected.");
         }
         catch (Exception ex)
         {
