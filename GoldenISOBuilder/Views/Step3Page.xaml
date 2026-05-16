@@ -14,7 +14,7 @@
 
         <!-- Page Header -->
         <StackPanel Grid.Row="0" Margin="40,32,40,0">
-            <TextBlock Text="CUSTOMIZATIONS" Style="{StaticResource GoldEyebrowText}"/>
+            <TextBlock Text="CUSTOMIZATIONS" Style="{StaticResource GoldEyebrowText}" Foreground="{DynamicResource CustomAccentBrush}"/>
             <TextBlock Text="Remove bloatware, manage features, and harden your image"
                        Foreground="{DynamicResource FG2Brush}" FontSize="14" Margin="0,4,0,0"/>
         </StackPanel>
@@ -33,7 +33,7 @@
                         <StackPanel x:Name="ScanPrompt" h:PanelSpacing.Spacing="12">
                             <StackPanel Orientation="Horizontal" h:PanelSpacing.Spacing="12">
                                 <Path Style="{StaticResource IconPath}" Width="20" Height="20"
-                                      Data="{StaticResource DiscIcon}" Stroke="{DynamicResource Gold1Brush}"/>
+                                      Data="{StaticResource DiscIcon}" Stroke="{DynamicResource CustomAccentBrush}"/>
                                 <StackPanel>
                                     <TextBlock Text="Scan ISO for Installed Packages &amp; Features"
                                                Foreground="{DynamicResource FG0Brush}"
@@ -90,7 +90,7 @@
                     <Expander.Header>
                         <StackPanel Orientation="Horizontal" h:PanelSpacing.Spacing="10">
                             <Path Style="{StaticResource IconPath}" Width="16" Height="16"
-                                  Data="{StaticResource TrashIcon}" Stroke="{DynamicResource Gold1Brush}"/>
+                                  Data="{StaticResource TrashIcon}" Stroke="{DynamicResource CustomAccentBrush}"/>
                             <TextBlock Text="Bloatware Removal" Foreground="{DynamicResource FG0Brush}"
                                        FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center"/>
                             <Border Style="{StaticResource PillStyle}" Margin="4,0,0,0">
@@ -152,6 +152,21 @@
                                 </ScrollViewer>
                             </Border>
                         </StackPanel>
+
+                        <!-- OneDrive uninstall toggle — independent of the provisioned-
+                             package list above. The provisioned match doesn't always
+                             reach the per-user OneDriveSetup.exe installer. -->
+                        <Border Background="{DynamicResource BG3Brush}" CornerRadius="6" Padding="14,10">
+                            <Grid>
+                                <StackPanel Margin="0,0,68,0">
+                                    <TextBlock Text="Uninstall OneDrive at first boot" Foreground="{DynamicResource FG0Brush}" FontSize="13"/>
+                                    <TextBlock Text="Runs OneDriveSetup.exe /uninstall (both 64-bit and 32-bit copies) from SetupComplete.cmd. Catches the per-user installer that the provisioned-package match above doesn't always reach."
+                                               Foreground="{DynamicResource FG2Brush}" FontSize="11" TextWrapping="Wrap"/>
+                                </StackPanel>
+                                <CheckBox x:Name="BloatUninstallOneDrive" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                          IsChecked="False" Style="{StaticResource ToggleSwitchStyle}"/>
+                            </Grid>
+                        </Border>
                     </StackPanel>
                 </Expander>
 
@@ -160,7 +175,7 @@
                     <Expander.Header>
                         <StackPanel Orientation="Horizontal" h:PanelSpacing.Spacing="10">
                             <Path Style="{StaticResource IconPath}" Width="16" Height="16"
-                                  Data="{StaticResource SettingsIcon}" Stroke="{DynamicResource Gold1Brush}"/>
+                                  Data="{StaticResource SettingsIcon}" Stroke="{DynamicResource CustomAccentBrush}"/>
                             <TextBlock Text="Windows Features" Foreground="{DynamicResource FG0Brush}"
                                        FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center"/>
                             <Border Style="{StaticResource PillStyle}" Margin="4,0,0,0">
@@ -252,7 +267,7 @@
                     <Expander.Header>
                         <StackPanel Orientation="Horizontal" h:PanelSpacing.Spacing="10">
                             <Path Style="{StaticResource IconPath}" Width="16" Height="16"
-                                  Data="{StaticResource ShieldIcon}" Stroke="{DynamicResource Gold1Brush}"/>
+                                  Data="{StaticResource ShieldIcon}" Stroke="{DynamicResource CustomAccentBrush}"/>
                             <TextBlock Text="Security &amp; Hardening" Foreground="{DynamicResource FG0Brush}"
                                        FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center"/>
                         </StackPanel>
@@ -341,12 +356,38 @@
                     </StackPanel>
                 </Expander>
 
+                <!-- ══ Trusted Certificates ═══════════════════════════════════
+                     Multi-row table. Each row = one .cer / .crt file + target
+                     Windows store. Imported at first boot via certutil. -->
+                <Expander Style="{StaticResource AccordionStyle}" IsExpanded="False">
+                    <Expander.Header>
+                        <StackPanel Orientation="Horizontal" h:PanelSpacing.Spacing="10">
+                            <Path Style="{StaticResource IconPath}" Width="16" Height="16"
+                                  Data="{StaticResource ShieldIcon}" Stroke="{DynamicResource CustomAccentBrush}"/>
+                            <TextBlock Text="Trusted Certificates" Foreground="{DynamicResource FG0Brush}"
+                                       FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                            <Border Style="{StaticResource PillStyle}" Margin="4,0,0,0">
+                                <TextBlock x:Name="CertCountPill" Text="0 cert(s)"/>
+                            </Border>
+                        </StackPanel>
+                    </Expander.Header>
+                    <StackPanel Margin="0,12,0,0" h:PanelSpacing.Spacing="10">
+                        <TextBlock Foreground="{DynamicResource FG2Brush}" FontSize="12" TextWrapping="Wrap"
+                                   Text="Add your organisation's certificate files (.cer / .crt). They are staged into the image and imported via certutil at first boot. Pick the right store: Root for your corporate root CA, Intermediate for issuing CAs, Code-signing for software-publisher certificates."/>
+                        <StackPanel x:Name="CertListPanel" h:PanelSpacing.Spacing="6"/>
+                        <Button x:Name="AddCertBtn" Content="+ Add certificate"
+                                Style="{StaticResource GhostButtonStyle}"
+                                HorizontalAlignment="Left" FontSize="12" Padding="14,6"
+                                Click="AddCert_Click"/>
+                    </StackPanel>
+                </Expander>
+
                 <!-- ══ System Defaults ════════════════════════════════════════ -->
                 <Expander Style="{StaticResource AccordionStyle}" IsExpanded="True">
                     <Expander.Header>
                         <StackPanel Orientation="Horizontal" h:PanelSpacing.Spacing="10">
                             <Path Style="{StaticResource IconPath}" Width="16" Height="16"
-                                  Data="{StaticResource SettingsIcon}" Stroke="{DynamicResource Gold1Brush}"/>
+                                  Data="{StaticResource SettingsIcon}" Stroke="{DynamicResource CustomAccentBrush}"/>
                             <TextBlock Text="System Defaults" Foreground="{DynamicResource FG0Brush}"
                                        FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center"/>
                         </StackPanel>
@@ -382,12 +423,83 @@
                     </StackPanel>
                 </Expander>
 
+                <!-- ══ Windows 11 UX & Privacy baseline ═════════════════════
+                     Each toggle writes one policy registry value. All default
+                     off so existing builds are unchanged unless opted in. -->
+                <Expander Style="{StaticResource AccordionStyle}" IsExpanded="False">
+                    <Expander.Header>
+                        <StackPanel Orientation="Horizontal" h:PanelSpacing.Spacing="10">
+                            <Path Style="{StaticResource IconPath}" Width="16" Height="16"
+                                  Data="{StaticResource ShieldIcon}" Stroke="{DynamicResource CustomAccentBrush}"/>
+                            <TextBlock Text="Windows 11 UX &amp; Privacy baseline" Foreground="{DynamicResource FG0Brush}"
+                                       FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Expander.Header>
+                    <StackPanel Margin="0,12,0,0" h:PanelSpacing.Spacing="10">
+                        <Border Background="{DynamicResource BG3Brush}" CornerRadius="6" Padding="14,10">
+                            <Grid>
+                                <StackPanel Margin="0,0,68,0">
+                                    <TextBlock Text="Disable Copilot" Foreground="{DynamicResource FG0Brush}" FontSize="13"/>
+                                    <TextBlock Text="Removes the Copilot taskbar icon and blocks invocation (TurnOffWindowsCopilot=1). Required where AI assistants aren't yet approved for enterprise use."
+                                               Foreground="{DynamicResource FG2Brush}" FontSize="11" TextWrapping="Wrap"/>
+                                </StackPanel>
+                                <CheckBox x:Name="UxDisableCopilot" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                          IsChecked="False" Style="{StaticResource ToggleSwitchStyle}"/>
+                            </Grid>
+                        </Border>
+                        <Border Background="{DynamicResource BG3Brush}" CornerRadius="6" Padding="14,10">
+                            <Grid>
+                                <StackPanel Margin="0,0,68,0">
+                                    <TextBlock Text="Disable Recall" Foreground="{DynamicResource FG0Brush}" FontSize="13"/>
+                                    <TextBlock Text="Win11 24H2+ AI screen-capture feature. Sets DisableAIDataAnalysis=1 and AllowRecallEnablement=0 to block enablement entirely."
+                                               Foreground="{DynamicResource FG2Brush}" FontSize="11" TextWrapping="Wrap"/>
+                                </StackPanel>
+                                <CheckBox x:Name="UxDisableRecall" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                          IsChecked="False" Style="{StaticResource ToggleSwitchStyle}"/>
+                            </Grid>
+                        </Border>
+                        <Border Background="{DynamicResource BG3Brush}" CornerRadius="6" Padding="14,10">
+                            <Grid>
+                                <StackPanel Margin="0,0,68,0">
+                                    <TextBlock Text="Disable Widgets / News &amp; Interests" Foreground="{DynamicResource FG0Brush}" FontSize="13"/>
+                                    <TextBlock Text="Removes the widgets pane from the taskbar (AllowNewsAndInterests=0)."
+                                               Foreground="{DynamicResource FG2Brush}" FontSize="11" TextWrapping="Wrap"/>
+                                </StackPanel>
+                                <CheckBox x:Name="UxDisableWidgets" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                          IsChecked="False" Style="{StaticResource ToggleSwitchStyle}"/>
+                            </Grid>
+                        </Border>
+                        <Border Background="{DynamicResource BG3Brush}" CornerRadius="6" Padding="14,10">
+                            <Grid>
+                                <StackPanel Margin="0,0,68,0">
+                                    <TextBlock Text="Hide Teams Chat icon" Foreground="{DynamicResource FG0Brush}" FontSize="13"/>
+                                    <TextBlock Text="Hides the consumer Chat icon on the taskbar (ConfigureChatIcon=3)."
+                                               Foreground="{DynamicResource FG2Brush}" FontSize="11" TextWrapping="Wrap"/>
+                                </StackPanel>
+                                <CheckBox x:Name="UxDisableChat" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                          IsChecked="False" Style="{StaticResource ToggleSwitchStyle}"/>
+                            </Grid>
+                        </Border>
+                        <Border Background="{DynamicResource BG3Brush}" CornerRadius="6" Padding="14,10">
+                            <Grid>
+                                <StackPanel Margin="0,0,68,0">
+                                    <TextBlock Text="Disable Consumer Features" Foreground="{DynamicResource FG0Brush}" FontSize="13"/>
+                                    <TextBlock Text="Blocks the &quot;Welcome experience&quot; tour, Spotlight promotions and Microsoft Store consumer ads (DisableWindowsConsumerFeatures=1)."
+                                               Foreground="{DynamicResource FG2Brush}" FontSize="11" TextWrapping="Wrap"/>
+                                </StackPanel>
+                                <CheckBox x:Name="UxDisableConsumer" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                          IsChecked="False" Style="{StaticResource ToggleSwitchStyle}"/>
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+                </Expander>
+
                 <!-- ══ Local Group Policy ════════════════════════════════════ -->
                 <Expander Style="{StaticResource AccordionStyle}" IsExpanded="False">
                     <Expander.Header>
                         <StackPanel Orientation="Horizontal" h:PanelSpacing.Spacing="10">
                             <Path Style="{StaticResource IconPath}" Width="16" Height="16"
-                                  Data="{StaticResource ShieldIcon}" Stroke="{DynamicResource Gold1Brush}"/>
+                                  Data="{StaticResource ShieldIcon}" Stroke="{DynamicResource CustomAccentBrush}"/>
                             <TextBlock Text="Local Group Policy" Foreground="{DynamicResource FG0Brush}"
                                        FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center"/>
                             <Border Style="{StaticResource PillStyle}" Margin="4,0,0,0">

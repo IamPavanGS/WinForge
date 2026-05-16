@@ -410,13 +410,13 @@ public partial class TestVmPage : UserControl
         {
             var metrics = await System.Threading.Tasks.Task.Run(() => _hv.GetMetrics());
 
-            // Use real CPU/RAM; keep disk/net as random walk
+            // All four metrics now read from Hyper-V WMI counters (HyperVService.GetMetrics).
             _cpuVal  = metrics.CpuPercent;
             _ramVal  = _vmRamTotalMb > 0
                 ? Math.Clamp((double)metrics.RamUsedMb / _vmRamTotalMb * 100, 0, 100)
                 : 0;
-            _diskVal = Clamp(_diskVal + _rng.NextDouble() * 30 - 12, 0, 150);
-            _netVal  = Clamp(_netVal  + _rng.NextDouble() * 80 - 30, 0, 1000);
+            _diskVal = Clamp(metrics.DiskBytesPerSec   / 1_048_576.0, 0, 150);    // bytes → MB/s
+            _netVal  = Clamp(metrics.NetworkBitsPerSec / 1_000_000.0, 0, 1000);   // bits  → Mbps (decimal)
 
             _cpuBuf[_bufHead]  = _cpuVal;
             _ramBuf[_bufHead]  = _ramVal;
@@ -483,10 +483,10 @@ public partial class TestVmPage : UserControl
             Text              = DateTime.Now.ToString("HH:mm:ss"),
             FontFamily        = new FontFamily("Consolas, Cascadia Code, Courier New"),
             FontSize          = 10.5,
-            Foreground        = (Brush)FindResource("FG3Brush"),
             VerticalAlignment = VerticalAlignment.Center,
             MinWidth          = 55
         };
+        timeText.SetResourceReference(TextBlock.ForegroundProperty, "FG3Brush");
 
         var levelBorder = new Border
         {
@@ -510,10 +510,10 @@ public partial class TestVmPage : UserControl
         {
             Text              = message,
             FontSize          = 11,
-            Foreground        = (Brush)FindResource("FG1Brush"),
             VerticalAlignment = VerticalAlignment.Center,
             TextWrapping      = TextWrapping.Wrap
         };
+        msgText.SetResourceReference(TextBlock.ForegroundProperty, "FG1Brush");
 
         var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 2) };
         row.Children.Add(timeText);

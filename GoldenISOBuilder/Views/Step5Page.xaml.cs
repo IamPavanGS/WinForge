@@ -71,17 +71,70 @@ public partial class Step5Page : UserControl
             ? "None"
             : $"{s.UpdatesMsuPaths.Count} update(s)";
 
-        V_Bloat.Text          = s.BloatwareToRemove.Count == 0 ? "None" : $"{s.BloatwareToRemove.Count} package(s)";
+        // Trusted certificates — by-store breakdown so the user can see
+        // at a glance which stores get loaded.
+        if (s.Certificates.Count == 0)
+        {
+            V_Certificates.Text = "None";
+        }
+        else
+        {
+            int root  = s.Certificates.Count(c => string.Equals(c.Store, "Root", StringComparison.OrdinalIgnoreCase));
+            int ca    = s.Certificates.Count(c => string.Equals(c.Store, "CA", StringComparison.OrdinalIgnoreCase));
+            int pub   = s.Certificates.Count(c => string.Equals(c.Store, "TrustedPublisher", StringComparison.OrdinalIgnoreCase));
+            var parts = new List<string>();
+            if (root > 0) parts.Add($"{root} root");
+            if (ca   > 0) parts.Add($"{ca} intermediate");
+            if (pub  > 0) parts.Add($"{pub} code-signing");
+            V_Certificates.Text = $"{s.Certificates.Count} cert(s) — {string.Join(", ", parts)}";
+        }
+
+        // Custom fonts
+        V_Fonts.Text = s.Fonts.Count == 0
+            ? "None"
+            : $"{s.Fonts.Count} font file(s)";
+
+        // Bloatware count + OneDrive uninstall hint.
+        string bloatText = s.BloatwareToRemove.Count == 0 ? "None" : $"{s.BloatwareToRemove.Count} package(s)";
+        if (s.UninstallOneDrive)
+            bloatText = bloatText == "None" ? "+ OneDrive uninstall" : bloatText + "  +  OneDrive uninstall";
+        V_Bloat.Text          = bloatText;
         V_GroupPolicies.Text  = s.GroupPolicies.Count == 0 ? "None" : $"{s.GroupPolicies.Count} polic{(s.GroupPolicies.Count == 1 ? "y" : "ies")}";
         V_Smb1.Text       = s.DisableSmbV1 ? "Yes" : "No";
         V_Telemetry.Text  = s.DisableTelemetry ? "Yes" : "No";
         V_DarkMode.Text   = s.DarkMode ? "Enabled" : "Disabled";
         V_BitLocker.Text  = s.EnableBitLocker ? "Enabled — key → C:\\BitLockerRecoveryKey.txt" : "Disabled";
 
+        // Win11 UX baseline — comma-list of which suppressions are active.
+        var win11Parts = new List<string>();
+        if (s.DisableCopilot)           win11Parts.Add("Copilot");
+        if (s.DisableRecall)            win11Parts.Add("Recall");
+        if (s.DisableWidgets)           win11Parts.Add("Widgets");
+        if (s.DisableChatIcon)          win11Parts.Add("Chat icon");
+        if (s.DisableConsumerFeatures)  win11Parts.Add("Consumer features");
+        V_Win11Ux.Text = win11Parts.Count == 0
+            ? "None"
+            : string.Join(", ", win11Parts);
+
         V_AdminUser.Text  = string.IsNullOrEmpty(s.AdminUsername) ? "Administrator" : s.AdminUsername;
         V_AdminPwd.Text   = string.IsNullOrEmpty(s.AdminPassword) ? "(not set)" : new string('●', Math.Min(12, s.AdminPassword.Length));
         V_AutoLogin.Text  = s.AutoLoginEnabled ? "Enabled" : "Disabled";
-        V_Prefix.Text     = string.IsNullOrEmpty(s.ComputerPrefix) ? "(default)" : s.ComputerPrefix;
+        // Hostname: prefix + template hint, e.g. "CORP-  ·  prefix + last 6 of MAC"
+        if (string.IsNullOrEmpty(s.ComputerPrefix))
+        {
+            V_Prefix.Text = "(default Windows-assigned name)";
+        }
+        else
+        {
+            string templateHint = s.HostnameTemplate switch
+            {
+                "{PREFIX}{LAST6_SERIAL}" => "  ·  last 6 of serial",
+                "{PREFIX}{LAST6_MAC}"    => "  ·  last 6 of MAC",
+                "{PREFIX}{ASSETTAG}"     => "  ·  asset tag",
+                _                         => ""    // default = BIOS serial, no extra hint
+            };
+            V_Prefix.Text = s.ComputerPrefix + templateHint;
+        }
 
         V_RegEntries.Text = $"{s.CustomRegistryEntries.Count} entry(ies)";
         // Combine enabled (+) and disabled (−) into one wrapped line.

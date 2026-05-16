@@ -345,6 +345,25 @@ public partial class WelcomePage : UserControl
         // locally under %LOCALAPPDATA%\GoldenISOBuilder\Cache\. Stored paths
         // may be stale if the cache was cleared or the profile was loaded on
         // a different machine; CollectMissingPaths surfaces these to the user.
+        d.HostnameTemplate        = string.IsNullOrWhiteSpace(src.HostnameTemplate)
+                                      ? "{PREFIX}{SERIAL}"
+                                      : src.HostnameTemplate;
+
+        // Windows 11 UX & Privacy baseline
+        d.DisableCopilot          = src.DisableCopilot;
+        d.DisableRecall           = src.DisableRecall;
+        d.DisableWidgets          = src.DisableWidgets;
+        d.DisableChatIcon         = src.DisableChatIcon;
+        d.DisableConsumerFeatures = src.DisableConsumerFeatures;
+
+        // OneDrive per-machine uninstall
+        d.UninstallOneDrive       = src.UninstallOneDrive;
+
+        // Trusted certificates
+        d.Certificates            = src.Certificates ?? [];
+
+        // Custom fonts
+        d.Fonts                   = src.Fonts ?? [];
         d.UpdatesMsuPaths         = src.UpdatesMsuPaths ?? [];
         d.AutoFetchedDriverPacks  = src.AutoFetchedDriverPacks ?? [];
 
@@ -478,6 +497,16 @@ public partial class WelcomePage : UserControl
         // ── Lock-screen image ─────────────────────────────────────────────────
         if (!string.IsNullOrWhiteSpace(s.LockScreenPath) && !System.IO.File.Exists(s.LockScreenPath))
             issues.Add(("Lock screen image", s.LockScreenPath));
+
+        // ── Trusted certificates ──────────────────────────────────────────────
+        foreach (var cert in s.Certificates)
+            if (!string.IsNullOrWhiteSpace(cert.SourcePath) && !System.IO.File.Exists(cert.SourcePath))
+                issues.Add(($"Certificate ({cert.Store})", cert.SourcePath));
+
+        // ── Custom fonts ──────────────────────────────────────────────────────
+        foreach (var font in s.Fonts)
+            if (!string.IsNullOrWhiteSpace(font.SourcePath) && !System.IO.File.Exists(font.SourcePath))
+                issues.Add(("Custom font", font.SourcePath));
 
         // ── Staged app installers ─────────────────────────────────────────────
         foreach (var app in s.StagedApps)

@@ -33,13 +33,18 @@ public static class DellSoftPaqExtractor
 
         // Purge — the Lenovo extractor's defensive pattern. Dell's SFX is more
         // forgiving than Inno's EAbort bug but a clean destination guarantees
-        // the post-extract .inf count reflects only this pack.
-        if (Directory.Exists(destDir))
+        // the post-extract .inf count reflects only this pack. Recursive delete
+        // of a previously-extracted pack is heavy synchronous I/O; off the UI
+        // thread it goes.
+        await Task.Run(() =>
         {
-            try { Directory.Delete(destDir, recursive: true); }
-            catch (IOException) { /* file in use — best-effort */ }
-        }
-        Directory.CreateDirectory(destDir);
+            if (Directory.Exists(destDir))
+            {
+                try { Directory.Delete(destDir, recursive: true); }
+                catch (IOException) { /* file in use — best-effort */ }
+            }
+            Directory.CreateDirectory(destDir);
+        }, ct);
 
         var ext = Path.GetExtension(packPath).ToLowerInvariant();
 
@@ -54,11 +59,17 @@ public static class DellSoftPaqExtractor
             await RunSfxExtractAsync(packPath, destDir, ct);
         }
 
-        var infs = Directory.EnumerateFiles(destDir, "*.inf", SearchOption.AllDirectories)
-                            .Count();
-        var bytes = new DirectoryInfo(destDir)
-                        .EnumerateFiles("*", SearchOption.AllDirectories)
-                        .Sum(f => f.Length);
+        // Walking a fully-extracted Dell driver tree (10k-30k files) on the UI
+        // thread freezes the wizard — run on the thread pool.
+        var (infs, bytes) = await Task.Run(() =>
+        {
+            var infCount = Directory.EnumerateFiles(destDir, "*.inf", SearchOption.AllDirectories)
+                                    .Count();
+            var totalBytes = new DirectoryInfo(destDir)
+                                 .EnumerateFiles("*", SearchOption.AllDirectories)
+                                 .Sum(f => f.Length);
+            return (infCount, totalBytes);
+        }, ct);
 
         if (infs == 0 || bytes < 50_000_000)
             throw new IOException(

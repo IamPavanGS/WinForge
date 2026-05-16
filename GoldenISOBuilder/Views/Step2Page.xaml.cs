@@ -289,10 +289,10 @@ public partial class Step2Page : UserControl
             {
                 Tag        = u,
                 Margin     = new Thickness(0, 1, 0, 1),
-                Foreground = (System.Windows.Media.Brush)FindResource("FG0Brush"),
                 IsChecked  = _selectedUpdateIds.Contains(u.UpdateId),
                 ToolTip    = u.Title
             };
+            cb.SetResourceReference(Control.ForegroundProperty, "FG0Brush");
             // Compose a short label so the checkbox row is readable.
             cb.Content =
                 $"{(string.IsNullOrEmpty(u.KbId) ? "" : u.KbId + "  ")}" +
@@ -305,15 +305,16 @@ public partial class Step2Page : UserControl
 
         if (!UpdatesListPanel.Children.OfType<CheckBox>().Any())
         {
-            UpdatesListPanel.Children.Add(new TextBlock
+            var emptyTb = new TextBlock
             {
                 Text       = _availableUpdates.Count == 0
                              ? "Click 'Refresh catalog' above to query Microsoft Update Catalog."
                              : "(no matches for current filter)",
-                Foreground = (System.Windows.Media.Brush)FindResource("FG3Brush"),
                 FontStyle  = FontStyles.Italic,
                 Margin     = new Thickness(4)
-            });
+            };
+            emptyTb.SetResourceReference(TextBlock.ForegroundProperty, "FG3Brush");
+            UpdatesListPanel.Children.Add(emptyTb);
         }
 
         UpdatesFetchBtn.IsEnabled = _selectedUpdateIds.Count > 0;
@@ -566,11 +567,10 @@ public partial class Step2Page : UserControl
             var row = new TextBlock
             {
                 Text       = "  • " + System.IO.Path.GetFileName(msu),
-                Foreground = (System.Windows.Media.Brush)
-                                FindResource("FG1Brush"),
                 FontSize   = 11.5,
                 ToolTip    = msu
             };
+            row.SetResourceReference(TextBlock.ForegroundProperty, "FG1Brush");
             UpdatesResolvedPanel.Children.Add(row);
         }
     }
@@ -698,22 +698,23 @@ public partial class Step2Page : UserControl
                 Content    = $"{m.Name}   ({m.SystemId})",
                 Tag        = m,
                 Margin     = new Thickness(0, 1, 0, 1),
-                Foreground = (System.Windows.Media.Brush)FindResource("FG0Brush"),
                 IsChecked  = _selectedSystemIds.Contains(m.SystemId)
             };
+            cb.SetResourceReference(Control.ForegroundProperty, "FG0Brush");
             cb.Checked   += Model_CheckChanged;
             cb.Unchecked += Model_CheckChanged;
             ModelListPanel.Children.Add(cb);
         }
         if (!ModelListPanel.Children.OfType<CheckBox>().Any())
         {
-            ModelListPanel.Children.Add(new TextBlock
+            var emptyTb = new TextBlock
             {
                 Text       = "(no matches)",
-                Foreground = (System.Windows.Media.Brush)FindResource("FG3Brush"),
                 FontStyle  = FontStyles.Italic,
                 Margin     = new Thickness(4)
-            });
+            };
+            emptyTb.SetResourceReference(TextBlock.ForegroundProperty, "FG3Brush");
+            ModelListPanel.Children.Add(emptyTb);
         }
     }
 
@@ -938,10 +939,10 @@ public partial class Step2Page : UserControl
             {
                 Text       = $"  • {p.Vendor}  {p.ModelName} ({p.SystemId}) -- v{p.PackVersion}, " +
                              $"{p.SizeBytes / 1024 / 1024} MB",
-                Foreground = (System.Windows.Media.Brush)FindResource("FG1Brush"),
                 FontSize   = 11.5,
                 ToolTip    = p.LocalCabPath
             };
+            row.SetResourceReference(TextBlock.ForegroundProperty, "FG1Brush");
             FetchedPacksPanel.Children.Add(row);
         }
     }
@@ -1221,10 +1222,10 @@ public partial class Step2Page : UserControl
             Margin     = new Thickness(6, 0, 0, 0),
             MinWidth   = 0,
             Style      = (Style?)Application.Current.Resources["GhostButtonStyle"],
-            Foreground = (Brush)Application.Current.Resources["ErrBrush"],
             ToolTip    = "Remove MST transform",
             VerticalAlignment = VerticalAlignment.Center
         };
+        mstClearBtn.SetResourceReference(Control.ForegroundProperty, "ErrBrush");
 
         void RefreshMstChip()
         {
@@ -1236,7 +1237,7 @@ public partial class Step2Page : UserControl
             if (string.IsNullOrEmpty(app.MstPath))
             {
                 mstChip.Text       = "+ Add MST transform (optional)";
-                mstChip.Foreground = (Brush)Application.Current.Resources["FG3Brush"];
+                mstChip.SetResourceReference(TextBlock.ForegroundProperty, "FG3Brush");
                 mstChip.ToolTip    = "Click to attach a Windows Installer transform (.mst) file. " +
                                      "msiexec will be invoked with TRANSFORMS=\"<path>\".";
                 mstClearBtn.Visibility = Visibility.Collapsed;
@@ -1244,7 +1245,7 @@ public partial class Step2Page : UserControl
             else
             {
                 mstChip.Text       = $"📎 {Path.GetFileName(app.MstPath)}";
-                mstChip.Foreground = (Brush)Application.Current.Resources["Gold1Brush"];
+                mstChip.SetResourceReference(TextBlock.ForegroundProperty, "Gold1Brush");
                 mstChip.ToolTip    = app.MstPath + "  (click to change)";
                 mstClearBtn.Visibility = Visibility.Visible;
             }

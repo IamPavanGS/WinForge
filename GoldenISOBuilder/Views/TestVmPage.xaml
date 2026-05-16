@@ -289,11 +289,11 @@
                                       Width="32" Height="32"/>
                             </Border>
                             <TextBlock x:Name="PlaceholderText" Text="Select an ISO and click  Start VM"
-                                       Foreground="#2A5070" FontSize="13" FontWeight="Medium"
+                                       Foreground="{DynamicResource FG2Brush}" FontSize="13" FontWeight="Medium"
                                        HorizontalAlignment="Center"/>
                             <TextBlock x:Name="PlaceholderSub"
                                        Text="Configure RAM, vCPU, and security options above, then click Start VM."
-                                       Foreground="#1A3550" FontSize="11.5"
+                                       Foreground="{DynamicResource FG3Brush}" FontSize="11.5"
                                        HorizontalAlignment="Center" TextAlignment="Center"
                                        TextWrapping="Wrap" MaxWidth="340"/>
                         </StackPanel>
@@ -314,7 +314,7 @@
                                        HorizontalAlignment="Center"/>
                             <TextBlock x:Name="VmErrorDetail"
                                        Text="vmconnect.exe exited — the VM is still running."
-                                       Foreground="#AABFD0" FontSize="11.5"
+                                       Foreground="{DynamicResource FG2Brush}" FontSize="11.5"
                                        HorizontalAlignment="Center" TextAlignment="Center"
                                        TextWrapping="Wrap" MaxWidth="380"/>
                             <Button x:Name="ReconnectBtn"
@@ -434,6 +434,7 @@
 
                     <TextBlock DockPanel.Dock="Top" Text="LIVE TELEMETRY"
                                Style="{StaticResource GoldEyebrowText}"
+                               Foreground="{DynamicResource TestVmAccentBrush}"
                                Margin="12,8,12,6"/>
 
                     <!-- 4 sparkline metric cards -->
@@ -544,6 +545,7 @@
 
                     <TextBlock DockPanel.Dock="Top" Text="EVENT LOG"
                                Style="{StaticResource GoldEyebrowText}"
+                               Foreground="{DynamicResource TestVmAccentBrush}"
                                Margin="12,6,12,4"/>
 
                     <!-- Event log scrollable list -->

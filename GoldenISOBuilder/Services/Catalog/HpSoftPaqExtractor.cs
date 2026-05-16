@@ -30,12 +30,17 @@ public static class HpSoftPaqExtractor
         // HP's SFX is happy to extract into a pre-existing directory but the
         // pre-commit validator counts .inf files post-extract, so guarantee a
         // clean slate — mirrors the Lenovo extractor's defensive behaviour.
-        if (Directory.Exists(destDir))
+        // Recursive delete of a previously-extracted pack is heavy synchronous
+        // I/O; push it off the UI thread.
+        await Task.Run(() =>
         {
-            try { Directory.Delete(destDir, recursive: true); }
-            catch (IOException) { /* file in use — best-effort */ }
-        }
-        Directory.CreateDirectory(destDir);
+            if (Directory.Exists(destDir))
+            {
+                try { Directory.Delete(destDir, recursive: true); }
+                catch (IOException) { /* file in use — best-effort */ }
+            }
+            Directory.CreateDirectory(destDir);
+        }, ct);
 
         var psi = new ProcessStartInfo
         {
@@ -77,11 +82,17 @@ public static class HpSoftPaqExtractor
         // a valid driver tree, the extract worked regardless of exit code.
         var exitCode = p.ExitCode;
 
-        var infs = Directory.EnumerateFiles(destDir, "*.inf", SearchOption.AllDirectories)
-                            .Count();
-        var bytes = new DirectoryInfo(destDir)
-                        .EnumerateFiles("*", SearchOption.AllDirectories)
-                        .Sum(f => f.Length);
+        // Walking a fully-extracted HP driver tree (10k-30k files) on the UI
+        // thread freezes the wizard — run on the thread pool.
+        var (infs, bytes) = await Task.Run(() =>
+        {
+            var infCount = Directory.EnumerateFiles(destDir, "*.inf", SearchOption.AllDirectories)
+                                    .Count();
+            var totalBytes = new DirectoryInfo(destDir)
+                                 .EnumerateFiles("*", SearchOption.AllDirectories)
+                                 .Sum(f => f.Length);
+            return (infCount, totalBytes);
+        }, ct);
 
         if (infs == 0 || bytes < 50_000_000)
             throw new IOException(

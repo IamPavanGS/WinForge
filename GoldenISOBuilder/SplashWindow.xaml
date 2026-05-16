@@ -116,7 +116,7 @@
                                    Foreground="#5A7A9A"
                                    HorizontalAlignment="Left"
                                    VerticalAlignment="Center"/>
-                        <TextBlock Text="v2.4.5"
+                        <TextBlock Text="v2.4.7"
                                    FontFamily="Segoe UI" FontSize="10"
                                    Foreground="#3A5A78"
                                    HorizontalAlignment="Right"

@@ -16,7 +16,7 @@
         <!-- Page Header -->
         <Grid Grid.Row="0" Margin="40,24,40,12">
             <StackPanel>
-                <TextBlock Text="BUILD PROGRESS" Style="{StaticResource GoldEyebrowText}"/>
+                <TextBlock Text="BUILD PROGRESS" Style="{StaticResource GoldEyebrowText}" Foreground="{DynamicResource BuildAccentBrush}"/>
                 <TextBlock x:Name="PageHeaderSubtitle" Text="Ready to build"
                            Foreground="{DynamicResource FG0Brush}" FontSize="16" FontWeight="SemiBold" Margin="0,4,0,0"/>
             </StackPanel>

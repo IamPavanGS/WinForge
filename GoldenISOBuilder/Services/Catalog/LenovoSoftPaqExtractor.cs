@@ -34,12 +34,18 @@ public static class LenovoSoftPaqExtractor
             throw new FileNotFoundException("Lenovo SoftPaq EXE not found.", exePath);
 
         // Purge destination — Inno Setup silently fails if it already exists.
-        if (Directory.Exists(destDir))
+        // Recursive delete of a previously-extracted pack (10k+ files) is heavy
+        // synchronous I/O — push it off the calling thread (which is the UI
+        // thread when invoked from Step2Page DriverFetch_Click).
+        await Task.Run(() =>
         {
-            try { Directory.Delete(destDir, recursive: true); }
-            catch (IOException) { /* best-effort — file in use possible */ }
-        }
-        Directory.CreateDirectory(destDir);
+            if (Directory.Exists(destDir))
+            {
+                try { Directory.Delete(destDir, recursive: true); }
+                catch (IOException) { /* best-effort — file in use possible */ }
+            }
+            Directory.CreateDirectory(destDir);
+        }, ct);
 
         // Sniff the SFX wrapper. Reading the first 512 bytes is enough — the
         // Inno Setup signature appears within the first few hundred bytes;
@@ -71,12 +77,20 @@ public static class LenovoSoftPaqExtractor
             }
         }
 
-        // Validate output.
-        var infs = Directory.EnumerateFiles(destDir, "*.inf", SearchOption.AllDirectories)
-                            .Count();
-        var bytes = new DirectoryInfo(destDir)
-                        .EnumerateFiles("*", SearchOption.AllDirectories)
-                        .Sum(f => f.Length);
+        // Validate output. A typical Lenovo driver pack expands to 10k-30k files
+        // (NIC, GPU, chipset, audio, dock, fingerprint, etc. each with their own
+        // .inf/.sys/.cat/.dll). Walking that tree on the UI thread freezes the
+        // window for several seconds — run the enumeration on a thread-pool
+        // worker so the wizard stays interactive.
+        var (infs, bytes) = await Task.Run(() =>
+        {
+            var infCount = Directory.EnumerateFiles(destDir, "*.inf", SearchOption.AllDirectories)
+                                    .Count();
+            var totalBytes = new DirectoryInfo(destDir)
+                                 .EnumerateFiles("*", SearchOption.AllDirectories)
+                                 .Sum(f => f.Length);
+            return (infCount, totalBytes);
+        }, ct);
 
         if (infs == 0 || bytes < 50_000_000)
         {

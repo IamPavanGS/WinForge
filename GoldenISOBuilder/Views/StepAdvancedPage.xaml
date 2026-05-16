@@ -95,6 +95,20 @@
                                     </Grid>
                                     <TextBlock Foreground="{DynamicResource FG3Brush}" FontSize="11" Margin="0,4,0,0"
                                                Text="Max 10 characters · A–Z, 0–9 only · the machine's BIOS serial is appended at first boot (total ≤ 15 chars)"/>
+
+                                    <!-- Hostname template — default keeps today's behaviour byte-for-byte.
+                                         Other options route through a separate first-boot resolver. -->
+                                    <TextBlock Text="Suffix source" Style="{StaticResource FieldLabelText}" Margin="0,14,0,6"/>
+                                    <ComboBox x:Name="HostnameTemplateCombo" Width="360" HorizontalAlignment="Left"
+                                              SelectionChanged="HostnameTemplate_Changed">
+                                        <ComboBoxItem Content="BIOS serial (default)" Tag="{}{PREFIX}{SERIAL}"/>
+                                        <ComboBoxItem Content="Last 6 chars of BIOS serial" Tag="{}{PREFIX}{LAST6_SERIAL}"/>
+                                        <ComboBoxItem Content="Last 6 hex of MAC address" Tag="{}{PREFIX}{LAST6_MAC}"/>
+                                        <ComboBoxItem Content="SMBIOS asset tag (falls back to serial)" Tag="{}{PREFIX}{ASSETTAG}"/>
+                                    </ComboBox>
+                                    <TextBlock Foreground="{DynamicResource FG3Brush}" FontSize="11" Margin="0,4,0,0"
+                                               TextWrapping="Wrap"
+                                               Text="Default = today's behaviour (PREFIX + full BIOS serial). Other options use a different resolver at first boot, useful when BIOS serials collide or you track machines by MAC / asset tag."/>
                                 </StackPanel>
                             </StackPanel>
                         </Border>
@@ -122,10 +136,13 @@
 
                         <Border Background="{DynamicResource BG3Brush}" CornerRadius="6" Padding="14,10">
                             <Grid>
-                                <StackPanel>
+                                <StackPanel Margin="0,0,72,0">
                                     <TextBlock Text="Skip Express Settings (OOBE)" Foreground="{DynamicResource FG0Brush}" FontSize="13"/>
-                                    <TextBlock Text="Bypass Windows setup screens — machine goes straight to desktop"
-                                               Foreground="{DynamicResource FG2Brush}" FontSize="11"/>
+                                    <TextBlock Foreground="{DynamicResource FG2Brush}" FontSize="11" TextWrapping="Wrap" Margin="0,2,0,0">
+                                        <Run Text="ON: zero-touch install — machine goes straight to desktop."/>
+                                        <LineBreak/>
+                                        <Run Text="OFF: operator clicks through Windows setup screens manually. BitLocker, hostname rename, certs and OneDrive removal still apply via SetupComplete.cmd. Only AutoLogon and the disk-clean fix are lost."/>
+                                    </TextBlock>
                                 </StackPanel>
                                 <CheckBox x:Name="SkipOobeToggle" HorizontalAlignment="Right" IsChecked="True"
                                           Style="{StaticResource ToggleSwitchStyle}"/>

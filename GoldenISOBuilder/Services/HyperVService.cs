@@ -21,7 +21,7 @@ public record VmConfig(
     bool   EnableVtpm,
     bool   EnableSecureBoot);
 
-public record VmMetrics(int CpuPercent, long RamUsedMb);
+public record VmMetrics(int CpuPercent, long RamUsedMb, long DiskBytesPerSec, long NetworkBitsPerSec);
 public record HvResult(bool Success, string? ErrorMessage);
 
 public sealed class HyperVService : IDisposable
@@ -302,7 +302,13 @@ if (Test-Path $vmRoot) {
     public VmMetrics GetMetrics()
     {
         if (ActiveVmName == null || State != VmState.Running)
-            return new VmMetrics(0, 0);
+            return new VmMetrics(0, 0, 0, 0);
+
+        int  cpu = 0;
+        long ram = 0;
+        long diskBps = 0;
+        long netBps  = 0;
+        var nameLike = ActiveVmName.Replace("'", "''").Replace("\\", "\\\\");
 
         try
         {
@@ -314,13 +320,55 @@ if (Test-Path $vmRoot) {
                     $"WHERE ElementName = '{ActiveVmName.Replace("'", "''")}'"));
 
             using var summary = searcher.Get().Cast<ManagementObject>().FirstOrDefault();
-            if (summary == null) return new VmMetrics(0, 0);
-
-            int  cpu = Convert.ToInt32(summary["ProcessorLoad"]);
-            long ram = Convert.ToInt64(summary["MemoryUsage"]);   // MB
-            return new VmMetrics(cpu, ram);
+            if (summary != null)
+            {
+                cpu = Convert.ToInt32(summary["ProcessorLoad"]);
+                ram = Convert.ToInt64(summary["MemoryUsage"]);   // MB
+            }
         }
-        catch { return new VmMetrics(0, 0); }
+        catch { /* CPU/RAM unavailable; leave 0 */ }
+
+        // Disk counters (root\cimv2). Filter by VM name appearing in the VHD path.
+        try
+        {
+            using var diskSearcher = new ManagementObjectSearcher(
+                @"root\cimv2",
+                "SELECT ReadBytesPersec, WriteBytesPersec FROM Win32_PerfFormattedData_Counters_HyperVVirtualStorageDevice " +
+                $"WHERE Name LIKE '%{nameLike}%'");
+            foreach (ManagementObject mo in diskSearcher.Get())
+            {
+                try
+                {
+                    diskBps += Convert.ToInt64(mo["ReadBytesPersec"]  ?? 0L);
+                    diskBps += Convert.ToInt64(mo["WriteBytesPersec"] ?? 0L);
+                }
+                catch { /* per-instance read failure */ }
+                finally { mo.Dispose(); }
+            }
+        }
+        catch { /* counters not yet materialised; leave 0 */ }
+
+        // Network counters (root\cimv2). Instance Name is "<VMName>_Network Adapter_<GUID>".
+        try
+        {
+            using var netSearcher = new ManagementObjectSearcher(
+                @"root\cimv2",
+                "SELECT BytesReceivedPersec, BytesSentPersec FROM Win32_PerfFormattedData_Counters_HyperVVirtualNetworkAdapter " +
+                $"WHERE Name LIKE '%{nameLike}%'");
+            foreach (ManagementObject mo in netSearcher.Get())
+            {
+                try
+                {
+                    netBps += Convert.ToInt64(mo["BytesReceivedPersec"] ?? 0L);
+                    netBps += Convert.ToInt64(mo["BytesSentPersec"]     ?? 0L);
+                }
+                catch { /* per-instance read failure */ }
+                finally { mo.Dispose(); }
+            }
+        }
+        catch { /* counters not yet materialised; leave 0 */ }
+
+        return new VmMetrics(cpu, ram, diskBps, netBps * 8);   // network expressed as bits/sec for the Mbps tile
     }
 
     // ── VM control actions ────────────────────────────────────────────────────
