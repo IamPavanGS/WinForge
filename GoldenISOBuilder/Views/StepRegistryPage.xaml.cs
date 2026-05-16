@@ -137,7 +137,9 @@ public partial class StepRegistryPage : UserControl
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(130) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(100) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(64) });
+        // Op column must fit "SET"/"DELETE" badge + edit pencil + ✕ delete button.
+        // Keep this in lock-step with the header column 5 width in StepRegistryPage.xaml.
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(130) });
 
         // Hive badge
         var hiveBorder = new Border

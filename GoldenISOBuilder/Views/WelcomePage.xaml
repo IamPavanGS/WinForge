@@ -33,7 +33,7 @@
                             <Run Text="that's deployment-ready." FontSize="32" FontWeight="Bold"
                                  Foreground="{DynamicResource FG0Brush}"/>
                         </TextBlock>
-                        <TextBlock Text="Slipstream updates, inject drivers and language packs, harden privacy, and stage first-boot scripts — all from a single guided wizard. Outputs a bootable ISO with a verified hash."
+                        <TextBlock Text="Apply Windows updates, inject drivers and language packs, configure privacy and security settings, and stage first-boot applications — all from a single guided wizard. Outputs a ready-to-deploy ISO with a verified checksum."
                                    FontSize="14" Foreground="{DynamicResource FG1Brush}"
                                    TextWrapping="Wrap" MaxWidth="500" Margin="0,0,0,24" LineHeight="22"/>
 
@@ -126,7 +126,7 @@
                             <StackPanel Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center">
                                 <TextBlock Text="Start a new build" FontSize="13.5" FontWeight="SemiBold"
                                            Foreground="{DynamicResource FG0Brush}"/>
-                                <TextBlock Text="Walk through the 6-step wizard" FontSize="11.5"
+                                <TextBlock Text="Walk through the 8-step wizard" FontSize="11.5"
                                            Foreground="{DynamicResource FG2Brush}" Margin="0,2,0,0"/>
                             </StackPanel>
                             <Path Grid.Column="2" Style="{StaticResource IconPath}"

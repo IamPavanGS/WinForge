@@ -14,7 +14,7 @@
 
         <!-- Page Header -->
         <StackPanel Grid.Row="0" Margin="40,32,40,0">
-            <TextBlock Text="REVIEW" Style="{StaticResource GoldEyebrowText}"/>
+            <TextBlock Text="REVIEW" Style="{StaticResource GoldEyebrowText}" Foreground="{DynamicResource ReviewAccentBrush}"/>
             <TextBlock Text="Confirm your build configuration before starting"
                        Foreground="{DynamicResource FG2Brush}" FontSize="14" Margin="0,4,0,0"/>
         </StackPanel>
@@ -39,7 +39,7 @@
                             <Grid Margin="0,0,0,12">
                                 <StackPanel Orientation="Horizontal" h:PanelSpacing.Spacing="8">
                                     <Path Style="{StaticResource IconPath}" Width="16" Height="16"
-                                          Data="{StaticResource DiscIcon}" Stroke="{DynamicResource Gold1Brush}"/>
+                                          Data="{StaticResource DiscIcon}" Stroke="{DynamicResource SourceAccentBrush}"/>
                                     <TextBlock Text="Source &amp; Output" Style="{StaticResource CardTitleText}"/>
                                 </StackPanel>
                                 <Button HorizontalAlignment="Right" Style="{StaticResource GhostButtonStyle}"
@@ -47,8 +47,14 @@
                                         Content="Edit"/>
                             </Grid>
                             <StackPanel h:PanelSpacing.Spacing="8">
-                                <Grid><TextBlock Text="ISO Source" Foreground="{DynamicResource FG2Brush}" FontSize="12"/>
-                                      <TextBlock x:Name="V_IsoSource" HorizontalAlignment="Right" Foreground="{DynamicResource FG0Brush}" FontSize="12" TextTrimming="CharacterEllipsis" MaxWidth="280"/></Grid>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="ISO Source" Foreground="{DynamicResource FG2Brush}" FontSize="12" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="1" x:Name="V_IsoSource" HorizontalAlignment="Right" TextAlignment="Right" Foreground="{DynamicResource FG0Brush}" FontSize="12" TextTrimming="CharacterEllipsis" Margin="12,0,0,0"/>
+                                </Grid>
                                 <Border Style="{StaticResource DividerStyle}"/>
                                 <Grid><TextBlock Text="Edition" Foreground="{DynamicResource FG2Brush}" FontSize="12"/>
                                       <TextBlock x:Name="V_Edition" HorizontalAlignment="Right" Foreground="{DynamicResource FG0Brush}" FontSize="12"/></Grid>
@@ -56,8 +62,14 @@
                                 <Grid><TextBlock Text="Architecture" Foreground="{DynamicResource FG2Brush}" FontSize="12"/>
                                       <TextBlock x:Name="V_Arch" HorizontalAlignment="Right" Foreground="{DynamicResource FG0Brush}" FontSize="12"/></Grid>
                                 <Border Style="{StaticResource DividerStyle}"/>
-                                <Grid><TextBlock Text="Output Folder" Foreground="{DynamicResource FG2Brush}" FontSize="12"/>
-                                      <TextBlock x:Name="V_Output" HorizontalAlignment="Right" Foreground="{DynamicResource FG0Brush}" FontSize="12" TextTrimming="CharacterEllipsis" MaxWidth="280"/></Grid>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="Output Folder" Foreground="{DynamicResource FG2Brush}" FontSize="12" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="1" x:Name="V_Output" HorizontalAlignment="Right" TextAlignment="Right" Foreground="{DynamicResource FG0Brush}" FontSize="12" TextTrimming="CharacterEllipsis" Margin="12,0,0,0"/>
+                                </Grid>
                             </StackPanel>
                         </StackPanel>
                     </Border>
@@ -68,15 +80,30 @@
                             <Grid Margin="0,0,0,12">
                                 <StackPanel Orientation="Horizontal" h:PanelSpacing.Spacing="8">
                                     <Path Style="{StaticResource IconPath}" Width="16" Height="16"
-                                          Data="{StaticResource BoxIcon}" Stroke="{DynamicResource Gold1Brush}"/>
+                                          Data="{StaticResource BoxIcon}" Stroke="{DynamicResource AssetsAccentBrush}"/>
                                     <TextBlock Text="Assets" Style="{StaticResource CardTitleText}"/>
                                 </StackPanel>
                                 <Button HorizontalAlignment="Right" Style="{StaticResource GhostButtonStyle}"
                                         FontSize="12" Padding="8,4" Click="EditStep2_Click" Content="Edit"/>
                             </Grid>
                             <StackPanel h:PanelSpacing.Spacing="8">
-                                <Grid><TextBlock Text="Wallpaper" Foreground="{DynamicResource FG2Brush}" FontSize="12"/>
-                                      <TextBlock x:Name="V_Wallpaper" HorizontalAlignment="Right" Foreground="{DynamicResource FG0Brush}" FontSize="12" TextTrimming="CharacterEllipsis" MaxWidth="240"/></Grid>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="Wallpaper" Foreground="{DynamicResource FG2Brush}" FontSize="12" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="1" x:Name="V_Wallpaper" HorizontalAlignment="Right" TextAlignment="Right" Foreground="{DynamicResource FG0Brush}" FontSize="12" TextTrimming="CharacterEllipsis" Margin="12,0,0,0"/>
+                                </Grid>
+                                <Border Style="{StaticResource DividerStyle}"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="Lock screen image" Foreground="{DynamicResource FG2Brush}" FontSize="12" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="1" x:Name="V_LockScreen" HorizontalAlignment="Right" TextAlignment="Right" Foreground="{DynamicResource FG0Brush}" FontSize="12" TextTrimming="CharacterEllipsis" Margin="12,0,0,0"/>
+                                </Grid>
                                 <Border Style="{StaticResource DividerStyle}"/>
                                 <Grid><TextBlock Text="Applications staged" Foreground="{DynamicResource FG2Brush}" FontSize="12"/>
                                       <TextBlock x:Name="V_Apps" HorizontalAlignment="Right" Foreground="{DynamicResource FG0Brush}" FontSize="12"/></Grid>
@@ -92,6 +119,30 @@
                                 <Border Style="{StaticResource DividerStyle}"/>
                                 <Grid><TextBlock Text="Driver folders" Foreground="{DynamicResource FG2Brush}" FontSize="12"/>
                                       <TextBlock x:Name="V_Drivers" HorizontalAlignment="Right" Foreground="{DynamicResource FG0Brush}" FontSize="12"/></Grid>
+                                <Border Style="{StaticResource DividerStyle}"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="Auto-fetched driver packs" Foreground="{DynamicResource FG2Brush}" FontSize="12" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="1" x:Name="V_AutoDrivers" HorizontalAlignment="Right" TextAlignment="Right" Foreground="{DynamicResource FG0Brush}" FontSize="12" TextTrimming="CharacterEllipsis" Margin="12,0,0,0"/>
+                                </Grid>
+                                <Border Style="{StaticResource DividerStyle}"/>
+                                <Grid><TextBlock Text="Windows Updates (slipstream)" Foreground="{DynamicResource FG2Brush}" FontSize="12"/>
+                                      <TextBlock x:Name="V_AutoUpdates" HorizontalAlignment="Right" Foreground="{DynamicResource FG0Brush}" FontSize="12"/></Grid>
+                                <Border Style="{StaticResource DividerStyle}"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="Trusted certificates" Foreground="{DynamicResource FG2Brush}" FontSize="12" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="1" x:Name="V_Certificates" HorizontalAlignment="Right" TextAlignment="Right" Foreground="{DynamicResource FG0Brush}" FontSize="12" TextWrapping="Wrap" Margin="12,0,0,0"/>
+                                </Grid>
+                                <Border Style="{StaticResource DividerStyle}"/>
+                                <Grid><TextBlock Text="Custom fonts" Foreground="{DynamicResource FG2Brush}" FontSize="12"/>
+                                      <TextBlock x:Name="V_Fonts" HorizontalAlignment="Right" Foreground="{DynamicResource FG0Brush}" FontSize="12"/></Grid>
                             </StackPanel>
                         </StackPanel>
                     </Border>
@@ -102,7 +153,7 @@
                             <Grid Margin="0,0,0,12">
                                 <StackPanel Orientation="Horizontal" h:PanelSpacing.Spacing="8">
                                     <Path Style="{StaticResource IconPath}" Width="16" Height="16"
-                                          Data="{StaticResource SettingsIcon}" Stroke="{DynamicResource Gold1Brush}"/>
+                                          Data="{StaticResource SettingsIcon}" Stroke="{DynamicResource CustomAccentBrush}"/>
                                     <TextBlock Text="Customizations" Style="{StaticResource CardTitleText}"/>
                                 </StackPanel>
                                 <Button HorizontalAlignment="Right" Style="{StaticResource GhostButtonStyle}"
@@ -124,8 +175,23 @@
                                 <Grid><TextBlock Text="Dark Mode" Foreground="{DynamicResource FG2Brush}" FontSize="12"/>
                                       <TextBlock x:Name="V_DarkMode" HorizontalAlignment="Right" Foreground="{DynamicResource FG0Brush}" FontSize="12"/></Grid>
                                 <Border Style="{StaticResource DividerStyle}"/>
-                                <Grid><TextBlock Text="BitLocker" Foreground="{DynamicResource FG2Brush}" FontSize="12"/>
-                                      <TextBlock x:Name="V_BitLocker" HorizontalAlignment="Right" Foreground="{DynamicResource FG0Brush}" FontSize="12" TextWrapping="Wrap" MaxWidth="260"/></Grid>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="BitLocker" Foreground="{DynamicResource FG2Brush}" FontSize="12" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="1" x:Name="V_BitLocker" HorizontalAlignment="Right" TextAlignment="Right" Foreground="{DynamicResource FG0Brush}" FontSize="12" TextWrapping="Wrap" Margin="12,0,0,0"/>
+                                </Grid>
+                                <Border Style="{StaticResource DividerStyle}"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="Windows UX &amp; Privacy" Foreground="{DynamicResource FG2Brush}" FontSize="12" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="1" x:Name="V_Win11Ux" HorizontalAlignment="Right" TextAlignment="Right" Foreground="{DynamicResource FG0Brush}" FontSize="12" TextWrapping="Wrap" Margin="12,0,0,0"/>
+                                </Grid>
                             </StackPanel>
                         </StackPanel>
                     </Border>
@@ -136,7 +202,7 @@
                             <Grid Margin="0,0,0,12">
                                 <StackPanel Orientation="Horizontal" h:PanelSpacing.Spacing="8">
                                     <Path Style="{StaticResource IconPath}" Width="16" Height="16"
-                                          Data="{StaticResource UserIcon}" Stroke="{DynamicResource Gold1Brush}"/>
+                                          Data="{StaticResource UserIcon}" Stroke="{DynamicResource AdminAccentBrush}"/>
                                     <TextBlock Text="Admin Account" Style="{StaticResource CardTitleText}"/>
                                 </StackPanel>
                                 <Button HorizontalAlignment="Right" Style="{StaticResource GhostButtonStyle}"
@@ -204,9 +270,17 @@
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" h:PanelSpacing.Spacing="12">
                     <TextBlock Text="Step 7 of 8" Foreground="{DynamicResource FG2Brush}"
                                VerticalAlignment="Center" FontSize="13"/>
-                    <Button Content="💾 Save Profile" Style="{StaticResource GhostButtonStyle}"
+                    <Button Style="{StaticResource GhostButtonStyle}"
                             ToolTip="Save this configuration as a .gibprofile file you can reload later"
-                            Click="SaveProfile_Click"/>
+                            Click="SaveProfile_Click">
+                        <StackPanel Orientation="Horizontal" h:PanelSpacing.Spacing="6">
+                            <Path Style="{StaticResource IconPath}" Width="14" Height="14"
+                                  Data="{StaticResource SaveIcon}"
+                                  Stroke="{DynamicResource ReviewAccentBrush}"
+                                  StrokeThickness="1.5" VerticalAlignment="Center"/>
+                            <TextBlock Text="Save Profile" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                     <Button x:Name="BuildButton" Content="Build ISO →" Style="{StaticResource LargePrimaryButtonStyle}"
                             Click="BuildISO_Click"/>
                 </StackPanel>

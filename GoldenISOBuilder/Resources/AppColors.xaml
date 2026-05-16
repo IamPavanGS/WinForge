@@ -32,6 +32,23 @@
     <Color x:Key="ErrColor">#F05260</Color>
     <Color x:Key="InfoColor">#60A5FA</Color>
 
+    <!-- ════════════════════════════════════════════════════════════════
+         Per-step accent palette. All hues sit in the same lightness band
+         (~65-70%) and saturation band (~55-60%) as Gold1Color so they
+         read as siblings of the royal-blue primary, not as competing
+         imports. Used ONLY on the page-header icon + a soft background
+         badge; card/expander icons keep Gold1Brush for restraint.
+         ════════════════════════════════════════════════════════════════ -->
+    <Color x:Key="SourceAccentColor">#5DB6E8</Color>   <!-- sky cyan   - Step 1 Source/Output -->
+    <Color x:Key="AssetsAccentColor">#4FC2A8</Color>   <!-- soft teal  - Step 2 Assets -->
+    <Color x:Key="CustomAccentColor">#9886EE</Color>   <!-- soft violet- Step 3 Customizations -->
+    <Color x:Key="AdminAccentColor">#F19A6B</Color>    <!-- warm coral - Step 4 Admin -->
+    <Color x:Key="RegistryAccentColor">#D38CD9</Color> <!-- soft mauve - Step Registry -->
+    <Color x:Key="ReviewAccentColor">#4FD0CB</Color>   <!-- cyan teal  - Step 5 Review -->
+    <Color x:Key="BuildAccentColor">#F0B568</Color>    <!-- warm amber - Step 6 Build -->
+    <Color x:Key="TestVmAccentColor">#6FCE93</Color>   <!-- soft sage  - Test in VM -->
+    <!-- StepAdvanced intentionally reuses Gold1Color (royal blue) for visual contrast. -->
+
     <!-- Solid brushes -->
     <SolidColorBrush x:Key="BG0Brush"      Color="{StaticResource BG0Color}"/>
     <SolidColorBrush x:Key="BG1Brush"      Color="{StaticResource BG1Color}"/>
@@ -52,6 +69,29 @@
     <SolidColorBrush x:Key="WarnBrush"     Color="{StaticResource WarnColor}"/>
     <SolidColorBrush x:Key="ErrBrush"      Color="{StaticResource ErrColor}"/>
     <SolidColorBrush x:Key="InfoBrush"     Color="{StaticResource InfoColor}"/>
+
+    <!-- Per-step accent solid brushes (used as icon stroke) -->
+    <SolidColorBrush x:Key="SourceAccentBrush"   Color="{StaticResource SourceAccentColor}"/>
+    <SolidColorBrush x:Key="AssetsAccentBrush"   Color="{StaticResource AssetsAccentColor}"/>
+    <SolidColorBrush x:Key="CustomAccentBrush"   Color="{StaticResource CustomAccentColor}"/>
+    <SolidColorBrush x:Key="AdminAccentBrush"    Color="{StaticResource AdminAccentColor}"/>
+    <SolidColorBrush x:Key="RegistryAccentBrush" Color="{StaticResource RegistryAccentColor}"/>
+    <SolidColorBrush x:Key="ReviewAccentBrush"   Color="{StaticResource ReviewAccentColor}"/>
+    <SolidColorBrush x:Key="BuildAccentBrush"    Color="{StaticResource BuildAccentColor}"/>
+    <SolidColorBrush x:Key="TestVmAccentBrush"   Color="{StaticResource TestVmAccentColor}"/>
+
+    <!-- Per-step soft-tint background brushes for the header icon "chip"
+         badge. 18% alpha (0x2E) over deep navy background reads as a
+         subtle wash, never loud. -->
+    <SolidColorBrush x:Key="SourceAccentBgBrush"   Color="#2E5DB6E8"/>
+    <SolidColorBrush x:Key="AssetsAccentBgBrush"   Color="#2E4FC2A8"/>
+    <SolidColorBrush x:Key="CustomAccentBgBrush"   Color="#2E9886EE"/>
+    <SolidColorBrush x:Key="AdminAccentBgBrush"    Color="#2EF19A6B"/>
+    <SolidColorBrush x:Key="RegistryAccentBgBrush" Color="#2ED38CD9"/>
+    <SolidColorBrush x:Key="AdvancedAccentBgBrush" Color="#2E4D8EF8"/>
+    <SolidColorBrush x:Key="ReviewAccentBgBrush"   Color="#2E4FD0CB"/>
+    <SolidColorBrush x:Key="BuildAccentBgBrush"    Color="#2EF0B568"/>
+    <SolidColorBrush x:Key="TestVmAccentBgBrush"   Color="#2E6FCE93"/>
 
     <!-- Scrollbar -->
     <SolidColorBrush x:Key="ScrollThumbBrush"      Color="#2A4060"/>

@@ -74,6 +74,7 @@ public partial class StepAdvancedPage : UserControl
         PrefixBox.Text               = s.ComputerPrefix;
         PrefixPanel.Visibility       = hasPrefix ? System.Windows.Visibility.Visible
                                                   : System.Windows.Visibility.Collapsed;
+        SelectHostnameTemplate(s.HostnameTemplate);
         UpdatePrefixPreview();
 
         switch (s.PowerPlan)
@@ -114,11 +115,53 @@ public partial class StepAdvancedPage : UserControl
     {
         if (PrefixPreview == null) return;
         var prefix = PrefixBox?.Text?.Trim().ToUpperInvariant() ?? "";
-        // Show realistic example: prefix + a typical BIOS serial (no separator)
-        PrefixPreview.Text = string.IsNullOrEmpty(prefix)
-            ? "→ type a prefix above"
-            : $"→ e.g.  {prefix}PYB4586A   (prefix + this machine's BIOS serial)";
+        if (string.IsNullOrEmpty(prefix))
+        {
+            PrefixPreview.Text = "→ type a prefix above";
+            return;
+        }
+        // Show a realistic example based on the chosen template so the user
+        // sees how the hostname will look at first boot.
+        var template = (HostnameTemplateCombo?.SelectedItem
+                        as System.Windows.Controls.ComboBoxItem)?.Tag as string
+                       ?? "{PREFIX}{SERIAL}";
+        var sample = template switch
+        {
+            "{PREFIX}{LAST6_SERIAL}" => "B4586A",
+            "{PREFIX}{LAST6_MAC}"    => "3A7F12",
+            "{PREFIX}{ASSETTAG}"     => "AT00427",
+            _                         => "PYB4586A"    // default: full serial
+        };
+        var sourceLabel = template switch
+        {
+            "{PREFIX}{LAST6_SERIAL}" => "last 6 of serial",
+            "{PREFIX}{LAST6_MAC}"    => "last 6 of MAC",
+            "{PREFIX}{ASSETTAG}"     => "asset tag",
+            _                         => "BIOS serial"
+        };
+        PrefixPreview.Text = $"→ e.g.  {prefix}{sample}   (prefix + {sourceLabel})";
     }
+
+    private void SelectHostnameTemplate(string template)
+    {
+        if (HostnameTemplateCombo == null) return;
+        // Lookup the ComboBoxItem whose Tag matches; fall back to index 0
+        // (the default {PREFIX}{SERIAL}) if the stored value is unrecognised.
+        foreach (var obj in HostnameTemplateCombo.Items)
+        {
+            if (obj is System.Windows.Controls.ComboBoxItem item &&
+                (item.Tag as string) == template)
+            {
+                HostnameTemplateCombo.SelectedItem = item;
+                return;
+            }
+        }
+        HostnameTemplateCombo.SelectedIndex = 0;
+    }
+
+    private void HostnameTemplate_Changed(object sender,
+        System.Windows.Controls.SelectionChangedEventArgs e)
+        => UpdatePrefixPreview();
 
     // ── Power plan tiles ──────────────────────────────────────────────────────
 
@@ -131,13 +174,17 @@ public partial class StepAdvancedPage : UserControl
         PlanHighPerf.IsChecked  = plan == "HighPerformance";
         PlanUltimate.IsChecked  = plan == "UltimatePerformance";
 
-        // Update tile border highlights
-        var tiles = new[] { (Border)PlanBalanced.Parent, (Border)PlanHighPerf.Parent, (Border)PlanUltimate.Parent };
-        var tags  = new[] { "Balanced", "HighPerformance", "UltimatePerformance" };
-        for (int i = 0; i < tiles.Length; i++)
+        // Update tile border highlights. The previous code cast each
+        // RadioButton's logical Parent directly to Border — but Parent is the
+        // StackPanel inside the tile, not the Border itself, so the cast
+        // raised InvalidCastException on every click. Walk the visual tree
+        // from the RadioButton instead; FindParentBorder finds the enclosing
+        // tile Border safely.
+        var radios = new DependencyObject[] { PlanBalanced, PlanHighPerf, PlanUltimate };
+        var tags   = new[] { "Balanced", "HighPerformance", "UltimatePerformance" };
+        for (int i = 0; i < radios.Length; i++)
         {
-            // Walk up to find the enclosing Border
-            var tile = FindParentBorder(tiles[i]);
+            var tile = FindParentBorder(radios[i]);
             if (tile != null)
             {
                 tile.BorderBrush = tags[i] == plan
@@ -223,25 +270,30 @@ public partial class StepAdvancedPage : UserControl
 
         // Left: info
         var info = new StackPanel { Orientation = Orientation.Vertical };
-        info.Children.Add(new TextBlock
+        var nameTb = new TextBlock
         {
             Text       = task.Name,
-            Foreground = (Brush)Application.Current.Resources["FG0Brush"],
             FontSize   = 13, FontWeight = FontWeights.Medium
-        });
-        info.Children.Add(new TextBlock
+        };
+        nameTb.SetResourceReference(TextBlock.ForegroundProperty, "FG0Brush");
+        info.Children.Add(nameTb);
+        var trigTb = new TextBlock
         {
             Text       = $"{trigLabel}  ·  {System.IO.Path.GetFileName(task.ActionPath)}",
-            Foreground = (Brush)Application.Current.Resources["FG2Brush"],
             FontSize   = 11, Margin = new Thickness(0, 2, 0, 0)
-        });
+        };
+        trigTb.SetResourceReference(TextBlock.ForegroundProperty, "FG2Brush");
+        info.Children.Add(trigTb);
         if (task.DeleteAfterRun)
-            info.Children.Add(new TextBlock
+        {
+            var deleteTb = new TextBlock
             {
                 Text       = "✓ Run once then delete",
-                Foreground = (Brush)Application.Current.Resources["Gold1Brush"],
                 FontSize   = 11, Margin = new Thickness(0, 2, 0, 0)
-            });
+            };
+            deleteTb.SetResourceReference(TextBlock.ForegroundProperty, "Gold1Brush");
+            info.Children.Add(deleteTb);
+        }
 
         Grid.SetColumn(info, 0);
         grid.Children.Add(info);
@@ -317,7 +369,10 @@ public partial class StepAdvancedPage : UserControl
         s.RegisteredOwner = OwnerBox.Text.Trim();
         s.TimeZone        = TimeZoneBox.SelectedItem?.ToString() ?? "India Standard Time";
         // Only save prefix if renaming is enabled; clear it otherwise so BuildEngine skips the step
-        s.ComputerPrefix  = EnableRenameToggle.IsChecked == true ? PrefixBox.Text.Trim() : "";
+        s.ComputerPrefix    = EnableRenameToggle.IsChecked == true ? PrefixBox.Text.Trim() : "";
+        s.HostnameTemplate  = (HostnameTemplateCombo?.SelectedItem
+                                as System.Windows.Controls.ComboBoxItem)?.Tag as string
+                              ?? "{PREFIX}{SERIAL}";
         s.ProductKey      = ProductKeyBox.Text.Trim();
         s.SkipOobe        = SkipOobeToggle.IsChecked == true;
         s.OemManufacturer = OemMfgBox.Text.Trim();

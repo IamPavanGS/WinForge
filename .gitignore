@@ -30,3 +30,4 @@ crash.log
 # Claude internal
 .claude/
 Installer/
+skills-lock.json

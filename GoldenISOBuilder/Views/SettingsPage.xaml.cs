@@ -125,6 +125,28 @@ public partial class SettingsPage : UserControl
 
     private System.Windows.Threading.DispatcherTimer? _saveStatusTimer;
 
+    // Guard so initial IsChecked assignment during LoadIntoUi doesn't trigger
+    // the on-change handler and re-write the setting.
+    private bool _suppressAutoFetchPersist;
+
+    private void AutoFetchToggle_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_suppressAutoFetchPersist) return;
+        var value = AutoFetchToggle.IsChecked == true;
+
+        // Follow the existing per-toggle pattern (cf. VerifyIsoToggle /
+        // SoundOnCompleteToggle just above): update _settings then Save() so
+        // the field round-trips correctly through the full-rewrite Save Settings
+        // button as well. Without this the "Save Settings" click would
+        // serialise _settings without our field and silently wipe it.
+        _settings.EnableAutoFetchFeatures = value;
+        Save();
+
+        // Mirror onto the live session so Step 2 picks it up the next time
+        // it becomes visible without needing an app restart.
+        BuildSession.Current.EnableAutoFetchFeatures = value;
+    }
+
     private void SaveSettings_Click(object sender, RoutedEventArgs e)
     {
         // Collect every UI control into _settings
@@ -138,6 +160,7 @@ public partial class SettingsPage : UserControl
         _settings.BuildCompleteToast       = BuildCompleteToastToggle.IsChecked == true;
         _settings.ErrorAlerts              = ErrorAlertsToggle.IsChecked == true;
         _settings.SoundOnComplete          = SoundOnCompleteToggle.IsChecked == true;
+        _settings.EnableAutoFetchFeatures  = AutoFetchToggle.IsChecked == true;
 
         if (CompressionCombo.SelectedItem is ComboBoxItem ci && ci.Tag is string tag)
             _settings.WimCompression = tag;
@@ -470,6 +493,12 @@ public partial class SettingsPage : UserControl
         public bool   ErrorAlerts            { get; set; } = true;
         public bool   SoundOnComplete        { get; set; } = true;
         public string WimCompression         { get; set; } = "max";   // max | fast | none
+
+        /// <summary>Master toggle for the auto-fetch features (Windows Updates
+        /// + OEM driver packs). Must be on this full AppSettings model so the
+        /// "Save Settings" button's full-rewrite preserves the value rather
+        /// than wiping it.</summary>
+        public bool   EnableAutoFetchFeatures { get; set; } = false;
     }
 
     private void LoadSettings()
@@ -525,6 +554,16 @@ public partial class SettingsPage : UserControl
         BuildCompleteToastToggle.IsChecked = _settings.BuildCompleteToast;
         ErrorAlertsToggle.IsChecked        = _settings.ErrorAlerts;
         SoundOnCompleteToggle.IsChecked    = _settings.SoundOnComplete;
+
+        // Auto-fetch toggle — read from _settings so the value round-trips
+        // through the same JSON the Save Settings button writes. Suppress
+        // the on-change handler while we set the initial state.
+        _suppressAutoFetchPersist          = true;
+        AutoFetchToggle.IsChecked          = _settings.EnableAutoFetchFeatures;
+        _suppressAutoFetchPersist          = false;
+        // Mirror to BuildSession at startup so the wizard pages see the right
+        // value on first render without waiting for the user to touch Settings.
+        BuildSession.Current.EnableAutoFetchFeatures = _settings.EnableAutoFetchFeatures;
 
         // Compression dropdown — pick the matching item by Tag
         for (int i = 0; i < CompressionCombo.Items.Count; i++)

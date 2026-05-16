@@ -329,6 +329,7 @@ public partial class WelcomePage : UserControl
 
         // ── Step 2: Assets ────────────────────────────────────────────────────
         d.WallpaperPath           = src.WallpaperPath;
+        d.LockScreenPath          = src.LockScreenPath;
         d.StagedApps              = src.StagedApps;
         d.StagedFiles             = src.StagedFiles;
         d.PublicDesktopFiles      = src.PublicDesktopFiles;
@@ -339,6 +340,32 @@ public partial class WelcomePage : UserControl
         d.LanguagePackPaths       = src.LanguagePackPaths;
         d.DriverFolderPaths       = src.DriverFolderPaths;
         d.ScheduledTasks          = src.ScheduledTasks;
+
+        // Auto-fetched Windows Updates (.msu) and OEM driver packs — cached
+        // locally under %LOCALAPPDATA%\GoldenISOBuilder\Cache\. Stored paths
+        // may be stale if the cache was cleared or the profile was loaded on
+        // a different machine; CollectMissingPaths surfaces these to the user.
+        d.HostnameTemplate        = string.IsNullOrWhiteSpace(src.HostnameTemplate)
+                                      ? "{PREFIX}{SERIAL}"
+                                      : src.HostnameTemplate;
+
+        // Windows 11 UX & Privacy baseline
+        d.DisableCopilot          = src.DisableCopilot;
+        d.DisableRecall           = src.DisableRecall;
+        d.DisableWidgets          = src.DisableWidgets;
+        d.DisableChatIcon         = src.DisableChatIcon;
+        d.DisableConsumerFeatures = src.DisableConsumerFeatures;
+
+        // OneDrive per-machine uninstall
+        d.UninstallOneDrive       = src.UninstallOneDrive;
+
+        // Trusted certificates
+        d.Certificates            = src.Certificates ?? [];
+
+        // Custom fonts
+        d.Fonts                   = src.Fonts ?? [];
+        d.UpdatesMsuPaths         = src.UpdatesMsuPaths ?? [];
+        d.AutoFetchedDriverPacks  = src.AutoFetchedDriverPacks ?? [];
 
         // ── Step 3: Customisations ────────────────────────────────────────────
         d.BloatwareToRemove       = src.BloatwareToRemove;
@@ -467,6 +494,20 @@ public partial class WelcomePage : UserControl
         if (!string.IsNullOrWhiteSpace(s.WallpaperPath) && !System.IO.File.Exists(s.WallpaperPath))
             issues.Add(("Wallpaper", s.WallpaperPath));
 
+        // ── Lock-screen image ─────────────────────────────────────────────────
+        if (!string.IsNullOrWhiteSpace(s.LockScreenPath) && !System.IO.File.Exists(s.LockScreenPath))
+            issues.Add(("Lock screen image", s.LockScreenPath));
+
+        // ── Trusted certificates ──────────────────────────────────────────────
+        foreach (var cert in s.Certificates)
+            if (!string.IsNullOrWhiteSpace(cert.SourcePath) && !System.IO.File.Exists(cert.SourcePath))
+                issues.Add(($"Certificate ({cert.Store})", cert.SourcePath));
+
+        // ── Custom fonts ──────────────────────────────────────────────────────
+        foreach (var font in s.Fonts)
+            if (!string.IsNullOrWhiteSpace(font.SourcePath) && !System.IO.File.Exists(font.SourcePath))
+                issues.Add(("Custom font", font.SourcePath));
+
         // ── Staged app installers ─────────────────────────────────────────────
         foreach (var app in s.StagedApps)
         {
@@ -496,6 +537,25 @@ public partial class WelcomePage : UserControl
         foreach (var df in s.DriverFolderPaths)
             if (!string.IsNullOrWhiteSpace(df) && !System.IO.Directory.Exists(df))
                 issues.Add(("Driver folder", df));
+
+        // ── Auto-fetched Windows Updates (.msu in the catalogue cache) ───────
+        foreach (var msu in s.UpdatesMsuPaths)
+            if (!string.IsNullOrWhiteSpace(msu) && !System.IO.File.Exists(msu))
+                issues.Add(("Windows Update (auto-fetched) — re-fetch in Step 2",
+                            System.IO.Path.GetFileName(msu)));
+
+        // ── Auto-fetched OEM driver packs ─────────────────────────────────────
+        // Lenovo and HP packs are extracted-folder paths; Dell packs are CAB
+        // files. Accept either form so we don't false-positive on Dell entries.
+        foreach (var dp in s.AutoFetchedDriverPacks)
+        {
+            if (string.IsNullOrWhiteSpace(dp.LocalCabPath)) continue;
+            if (System.IO.File.Exists(dp.LocalCabPath) ||
+                System.IO.Directory.Exists(dp.LocalCabPath)) continue;
+            issues.Add(
+                ($"Driver pack (auto-fetched) — {dp.Vendor} {dp.ModelName} ({dp.SystemId}). Re-fetch in Step 2",
+                 dp.LocalCabPath));
+        }
 
         // ── Deployment scripts ────────────────────────────────────────────────
         foreach (var ds in s.DeploymentScripts)

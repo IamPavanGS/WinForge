@@ -296,6 +296,22 @@
                                 <CheckBox x:Name="SoundOnCompleteToggle" HorizontalAlignment="Right" IsChecked="False"
                                           Style="{StaticResource ToggleSwitchStyle}"/>
                             </Grid>
+                            <Border Style="{StaticResource DividerStyle}" Margin="0,0,0,16"/>
+
+                            <!-- Auto-fetch Updates &amp; Drivers -->
+                            <Grid>
+                                <StackPanel Margin="0,0,60,0">
+                                    <TextBlock Text="Auto-fetch Updates &amp; Drivers"
+                                               Foreground="{DynamicResource FG0Brush}" FontSize="13"/>
+                                    <TextBlock Text="Enables the Windows Update slipstream panel and Dell/HP/Lenovo driver-pack auto-download in Step 2."
+                                               Foreground="{DynamicResource FG2Brush}" FontSize="11" TextWrapping="Wrap"/>
+                                </StackPanel>
+                                <CheckBox x:Name="AutoFetchToggle" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                          IsChecked="True"
+                                          Style="{StaticResource ToggleSwitchStyle}"
+                                          Checked="AutoFetchToggle_Changed"
+                                          Unchecked="AutoFetchToggle_Changed"/>
+                            </Grid>
                         </StackPanel>
                     </Border>
 

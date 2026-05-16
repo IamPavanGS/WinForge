@@ -11,6 +11,8 @@ public class BuildSession
     // ── Step 1: Source & Output ───────────────────────────────────────────────
     public string? SourceIsoPath   { get; set; }
     public string? MountedIsoDrive { get; set; }
+    /// <summary>Windows 11 version detected from WIM metadata (e.g. "25H2"). Empty when unknown.</summary>
+    public string  IsoOsVersion    { get; set; } = "";
 
     public List<WindowsImageInfo> AvailableImages { get; set; } = [];
     public WindowsImageInfo?      SelectedImage   { get; set; }
@@ -24,6 +26,11 @@ public class BuildSession
 
     // ── Step 2: Assets ────────────────────────────────────────────────────────
     public string?         WallpaperPath           { get; set; }
+    /// <summary>Optional image for the lock-screen / sign-in / OOBE backgrounds
+    /// (<c>Windows\Web\Screen\img1*.jpg</c>). When null, the build engine leaves
+    /// the Windows defaults in place — independent of WallpaperPath, so admins
+    /// can brand desktop and lock screen separately.</summary>
+    public string?         LockScreenPath          { get; set; }
     public List<StagedApp> StagedApps              { get; set; } = [];
     /// <summary>Kept for backward-compatible loading of old .gibprofile files only.
     /// New code should use <see cref="StagedFiles"/> instead.</summary>
@@ -38,6 +45,24 @@ public class BuildSession
 
     // Drivers: folder paths to inject recursively via DISM /Add-Driver /Recurse
     public List<string>    DriverFolderPaths       { get; set; } = [];
+
+    /// <summary>
+    /// Per-driver-folder injection mode. Parallel array to <see cref="DriverFolderPaths"/>
+    /// (key = folder path, value = true if only WinPE-critical PnP classes should
+    /// be injected into boot.wim alongside install.wim). Folders not present in
+    /// this map default to install-only / full injection — today's behaviour.
+    /// </summary>
+    public Dictionary<string, bool> DriverFolderWinPEOnly { get; set; } = [];
+
+    // ── Auto-fetch features (Phase 4 — gated by EnableAutoFetchFeatures) ─────
+    /// <summary>Windows Update MSU files staged for slipstream into install.wim.
+    /// Populated either by the Phase 5 auto-fetch UI or by a manual folder drop.</summary>
+    public List<string> UpdatesMsuPaths { get; set; } = [];
+
+    /// <summary>OEM driver packs the auto-fetch flow downloaded for this build.
+    /// Each entry's DownloadUrl is the local cache path after fetch; the pipeline
+    /// step extracts and injects via DISM.</summary>
+    public List<DriverPackSelection> AutoFetchedDriverPacks { get; set; } = [];
 
     // ── Step 3: Customizations ────────────────────────────────────────────────
     public List<string> BloatwareToRemove { get; set; } = [];
@@ -90,6 +115,51 @@ public class BuildSession
     public string OrgName          { get; set; } = "";
     public string RegisteredOwner  { get; set; } = "";
     public string ComputerPrefix   { get; set; } = "";
+    /// <summary>Hostname template token. Default <c>"{PREFIX}{SERIAL}"</c> matches
+    /// the original behaviour byte-for-byte. Other supported templates resolved
+    /// at first boot: <c>{PREFIX}{LAST6_SERIAL}</c>, <c>{PREFIX}{LAST6_MAC}</c>,
+    /// <c>{PREFIX}{ASSETTAG}</c>. The default branch emits the existing
+    /// PowerShell line unchanged; non-default templates use a separate
+    /// resolver so a bug in the new code can't break the default case.</summary>
+    public string HostnameTemplate { get; set; } = "{PREFIX}{SERIAL}";
+
+    // ── Windows 11 UX & privacy baseline (Phase 6) ────────────────────────────
+    // Each toggle independently writes a fixed policy registry value to the
+    // offline SOFTWARE hive. All default false so existing builds are
+    // unchanged unless the admin opts in.
+    /// <summary>Disable the Copilot taskbar icon and block invocation
+    /// (<c>TurnOffWindowsCopilot=1</c>).</summary>
+    public bool DisableCopilot          { get; set; } = false;
+    /// <summary>Disable Windows 11 24H2+ Recall (AI screen-capture).
+    /// Sets both <c>DisableAIDataAnalysis=1</c> and
+    /// <c>AllowRecallEnablement=0</c>.</summary>
+    public bool DisableRecall           { get; set; } = false;
+    /// <summary>Remove the Widgets / News &amp; Interests pane
+    /// (<c>AllowNewsAndInterests=0</c>).</summary>
+    public bool DisableWidgets          { get; set; } = false;
+    /// <summary>Hide the consumer Teams Chat icon
+    /// (<c>ConfigureChatIcon=3</c>).</summary>
+    public bool DisableChatIcon         { get; set; } = false;
+    /// <summary>Block the "Welcome experience" tour, Spotlight promotions,
+    /// and Microsoft Store consumer ads
+    /// (<c>DisableWindowsConsumerFeatures=1</c>).</summary>
+    public bool DisableConsumerFeatures { get; set; } = false;
+
+    /// <summary>Run <c>OneDriveSetup.exe /uninstall</c> at first boot (both
+    /// 64-bit and 32-bit copies). Catches the per-user installer that the
+    /// provisioned-package match in <see cref="BloatwareToRemove"/> doesn't
+    /// always reach.</summary>
+    public bool UninstallOneDrive { get; set; } = false;
+
+    /// <summary>Trusted certificates staged into the WIM and imported via
+    /// <c>certutil -addstore</c> at first boot. Each entry carries its own
+    /// target store (Root / Intermediate / TrustedPublisher).</summary>
+    public List<CertificateEntry> Certificates { get; set; } = [];
+
+    /// <summary>Custom fonts (.ttf / .otf / .ttc) staged into Windows\Fonts
+    /// and registered under HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts.</summary>
+    public List<FontEntry> Fonts { get; set; } = [];
+
     public string ProductKey       { get; set; } = "";
     public bool   SkipOobe         { get; set; } = true;
     public int    AutoLogonCount   { get; set; } = 0;
@@ -115,4 +185,13 @@ public class BuildSession
     public string? LastBuiltIsoPath { get; set; }
     public string? LastBuildLogPath { get; set; }
     public string? LastBuildSha256  { get; set; }
+
+    // ── Auto-fetch feature flag (set via Settings page; off by default) ──────
+    /// <summary>Master toggle for the new auto-fetch features (Updates +
+    /// driver-pack auto-download + PnP-class boot.wim filter). When false, the
+    /// pipeline behaves exactly as it did before Phase 4 was merged — the new
+    /// soft step short-circuits and the new fields are ignored. Stored in
+    /// AppSettings rather than the per-profile session, but copied onto the
+    /// session at build start so the engine sees one source of truth.</summary>
+    public bool EnableAutoFetchFeatures { get; set; } = false;
 }

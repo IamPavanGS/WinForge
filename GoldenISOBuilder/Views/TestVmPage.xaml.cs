@@ -410,13 +410,13 @@ public partial class TestVmPage : UserControl
         {
             var metrics = await System.Threading.Tasks.Task.Run(() => _hv.GetMetrics());
 
-            // Use real CPU/RAM; keep disk/net as random walk
+            // All four metrics now read from Hyper-V WMI counters (HyperVService.GetMetrics).
             _cpuVal  = metrics.CpuPercent;
             _ramVal  = _vmRamTotalMb > 0
                 ? Math.Clamp((double)metrics.RamUsedMb / _vmRamTotalMb * 100, 0, 100)
                 : 0;
-            _diskVal = Clamp(_diskVal + _rng.NextDouble() * 30 - 12, 0, 150);
-            _netVal  = Clamp(_netVal  + _rng.NextDouble() * 80 - 30, 0, 1000);
+            _diskVal = Clamp(metrics.DiskBytesPerSec   / 1_048_576.0, 0, 150);    // bytes → MB/s
+            _netVal  = Clamp(metrics.NetworkBitsPerSec / 1_000_000.0, 0, 1000);   // bits  → Mbps (decimal)
 
             _cpuBuf[_bufHead]  = _cpuVal;
             _ramBuf[_bufHead]  = _ramVal;
@@ -483,10 +483,10 @@ public partial class TestVmPage : UserControl
             Text              = DateTime.Now.ToString("HH:mm:ss"),
             FontFamily        = new FontFamily("Consolas, Cascadia Code, Courier New"),
             FontSize          = 10.5,
-            Foreground        = (Brush)FindResource("FG3Brush"),
             VerticalAlignment = VerticalAlignment.Center,
             MinWidth          = 55
         };
+        timeText.SetResourceReference(TextBlock.ForegroundProperty, "FG3Brush");
 
         var levelBorder = new Border
         {
@@ -510,12 +510,20 @@ public partial class TestVmPage : UserControl
         {
             Text              = message,
             FontSize          = 11,
-            Foreground        = (Brush)FindResource("FG1Brush"),
             VerticalAlignment = VerticalAlignment.Center,
             TextWrapping      = TextWrapping.Wrap
         };
+        msgText.SetResourceReference(TextBlock.ForegroundProperty, "FG1Brush");
 
-        var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 2) };
+        // Grid instead of horizontal StackPanel so the message column gets a
+        // finite width and TextWrapping.Wrap on msgText actually fires.
+        var row = new Grid { Margin = new Thickness(0, 2, 0, 2) };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(58) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        Grid.SetColumn(timeText,    0);
+        Grid.SetColumn(levelBorder, 1);
+        Grid.SetColumn(msgText,     2);
         row.Children.Add(timeText);
         row.Children.Add(levelBorder);
         row.Children.Add(msgText);
@@ -603,7 +611,7 @@ public partial class TestVmPage : UserControl
         // process exits. Without this wait, the PowerShell child orphans the VM.
         try
         {
-            var task = _hv.StopAndDeleteAsync();
+            var task = _hv.StopAndDeleteAsync("app closing — CleanupVmOnClose");
             task.Wait(TimeSpan.FromSeconds(8));
         }
         catch { /* best-effort */ }
@@ -645,10 +653,20 @@ public partial class TestVmPage : UserControl
     private async void StopVm_Click(object sender, RoutedEventArgs e)
     {
         if (_hv.State != VmState.Running) return;
+
+        // Destructive action — the VM and its VHDX go away. Confirm so a
+        // misclick on a long-running test doesn't wipe the work.
+        if (!AppDialog.Confirm(this,
+                "Stop and delete this test VM?\n\n" +
+                "The VM and its virtual disk (.vhdx) will be removed. Any " +
+                "changes made inside the VM will be lost.",
+                "Confirm Stop & Delete"))
+            return;
+
         AppendLogRow("INFO", "#4D8EF8", "Stopping VM…");
         _telemetryTimer?.Stop();
         DisposeEmbed();
-        await _hv.StopAndDeleteAsync();
+        await _hv.StopAndDeleteAsync("user clicked Stop VM");
         AppendLogRow("OK", "#27C48A", "VM stopped and removed");
         SetVmUiState(VmState.Idle);
         _elapsedSeconds = 0;

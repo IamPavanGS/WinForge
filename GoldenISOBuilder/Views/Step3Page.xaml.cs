@@ -19,7 +19,8 @@ public partial class Step3Page : UserControl
     private readonly HashSet<string>     _packagesToRemove = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string>     _featuresToEnable  = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string>     _featuresToDisable = new(StringComparer.OrdinalIgnoreCase);
-    private readonly List<GroupPolicyEntry> _groupPolicies  = [];
+    private readonly List<GroupPolicyEntry>  _groupPolicies = [];
+    private readonly List<CertificateEntry>  _certificates  = [];
 
     // ── ADMX source selector state ────────────────────────────────────────────
     private string      _admxSourceMode  = "machine"; // "machine" | "iso" | "custom"
@@ -120,6 +121,21 @@ public partial class Step3Page : UserControl
         SysDarkMode.IsChecked   = s.DarkMode;
         SysShowExt.IsChecked    = s.ShowFileExtensions;
         SysShowHidden.IsChecked = s.ShowHiddenFiles;
+
+        // Windows 11 UX & Privacy baseline
+        UxDisableCopilot.IsChecked  = s.DisableCopilot;
+        UxDisableRecall.IsChecked   = s.DisableRecall;
+        UxDisableWidgets.IsChecked  = s.DisableWidgets;
+        UxDisableChat.IsChecked     = s.DisableChatIcon;
+        UxDisableConsumer.IsChecked = s.DisableConsumerFeatures;
+
+        // OneDrive per-machine uninstall (sits inside Bloatware Removal card)
+        BloatUninstallOneDrive.IsChecked = s.UninstallOneDrive;
+
+        // Trusted certificates
+        _certificates.Clear();
+        _certificates.AddRange(s.Certificates);
+        RefreshCertificateList();
 
         UpdateCounters();
     }
@@ -668,6 +684,19 @@ public partial class Step3Page : UserControl
         s.ShowFileExtensions = SysShowExt.IsChecked     == true;
         s.ShowHiddenFiles    = SysShowHidden.IsChecked  == true;
 
+        // Windows 11 UX & Privacy baseline (5 independent toggles)
+        s.DisableCopilot          = UxDisableCopilot.IsChecked  == true;
+        s.DisableRecall           = UxDisableRecall.IsChecked   == true;
+        s.DisableWidgets          = UxDisableWidgets.IsChecked  == true;
+        s.DisableChatIcon         = UxDisableChat.IsChecked     == true;
+        s.DisableConsumerFeatures = UxDisableConsumer.IsChecked == true;
+
+        // OneDrive per-machine uninstall
+        s.UninstallOneDrive       = BloatUninstallOneDrive.IsChecked == true;
+
+        // Trusted certificates (mirror of the working list back to the session)
+        s.Certificates            = [.. _certificates];
+
         s.GroupPolicies      = [.. _groupPolicies];
 
         s.AdmxSourceMode     = _admxSourceMode;
@@ -980,6 +1009,132 @@ public partial class Step3Page : UserControl
             }
             AdmxIsoLoadingText.Visibility = Visibility.Collapsed;
         }
+    }
+
+    // ── Trusted Certificates ──────────────────────────────────────────────────
+
+    private void AddCert_Click(object sender, RoutedEventArgs e)
+    {
+        var dlg = new Microsoft.Win32.OpenFileDialog
+        {
+            Title       = "Select certificate file",
+            Filter      = "Certificate files|*.cer;*.crt;*.pem|All files|*.*",
+            Multiselect = true
+        };
+        if (dlg.ShowDialog() != true) return;
+
+        foreach (var path in dlg.FileNames)
+        {
+            // Skip duplicates (same source + same store)
+            if (_certificates.Any(c => string.Equals(c.SourcePath, path,
+                                                     StringComparison.OrdinalIgnoreCase)))
+                continue;
+            _certificates.Add(new CertificateEntry { SourcePath = path, Store = "Root" });
+        }
+        RefreshCertificateList();
+    }
+
+    private void RefreshCertificateList()
+    {
+        CertListPanel.Children.Clear();
+
+        for (int i = 0; i < _certificates.Count; i++)
+            CertListPanel.Children.Add(BuildCertRow(_certificates[i], i));
+
+        if (CertCountPill != null)
+            CertCountPill.Text = $"{_certificates.Count} cert(s)";
+    }
+
+    private UIElement BuildCertRow(CertificateEntry cert, int index)
+    {
+        var row = new Border
+        {
+            CornerRadius = new CornerRadius(6),
+            Padding      = new Thickness(10, 8, 10, 8),
+        };
+        row.SetResourceReference(Border.BackgroundProperty, "BG3Brush");
+
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        // "TrustedPublisher (code-sign)" needs ~210px of internal text width plus
+        // the ComboBox chevron (~22px) — bump column to 240px so the label is
+        // not clipped on long store names.
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(240) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        // Filename + path (truncated)
+        var info = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        var fileNameTb = new TextBlock
+        {
+            Text         = System.IO.Path.GetFileName(cert.SourcePath),
+            FontSize     = 13,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+        fileNameTb.SetResourceReference(TextBlock.ForegroundProperty, "FG0Brush");
+        info.Children.Add(fileNameTb);
+        var pathTb = new TextBlock
+        {
+            Text         = cert.SourcePath,
+            FontSize     = 10,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            Margin       = new Thickness(0, 1, 0, 0),
+        };
+        pathTb.SetResourceReference(TextBlock.ForegroundProperty, "FG3Brush");
+        info.Children.Add(pathTb);
+        Grid.SetColumn(info, 0);
+        grid.Children.Add(info);
+
+        // Store dropdown
+        var storeCombo = new ComboBox
+        {
+            Width             = 230,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin            = new Thickness(8, 0, 8, 0),
+        };
+        storeCombo.Items.Add(new ComboBoxItem { Content = "Root (Trusted Root CA)",        Tag = "Root" });
+        storeCombo.Items.Add(new ComboBoxItem { Content = "CA (Intermediate)",              Tag = "CA" });
+        storeCombo.Items.Add(new ComboBoxItem { Content = "TrustedPublisher (code-sign)",   Tag = "TrustedPublisher" });
+        foreach (var obj in storeCombo.Items)
+        {
+            if (obj is ComboBoxItem item && (item.Tag as string) == cert.Store)
+            {
+                storeCombo.SelectedItem = item;
+                break;
+            }
+        }
+        if (storeCombo.SelectedItem == null) storeCombo.SelectedIndex = 0;
+        int capturedStoreIdx = index;
+        storeCombo.SelectionChanged += (_, _) =>
+        {
+            if (capturedStoreIdx >= _certificates.Count) return;
+            var tag = (storeCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "Root";
+            _certificates[capturedStoreIdx].Store = tag;
+        };
+        Grid.SetColumn(storeCombo, 1);
+        grid.Children.Add(storeCombo);
+
+        // Remove button
+        int capturedIdx = index;
+        var removeBtn = new Button
+        {
+            Content           = "✕",
+            Style             = (Style)Application.Current.Resources["GhostButtonStyle"],
+            FontSize          = 12,
+            Padding           = new Thickness(6, 2, 6, 2),
+            VerticalAlignment = VerticalAlignment.Center,
+            FocusVisualStyle  = null,
+        };
+        removeBtn.Click += (_, _) =>
+        {
+            if (capturedIdx < _certificates.Count)
+                _certificates.RemoveAt(capturedIdx);
+            RefreshCertificateList();
+        };
+        Grid.SetColumn(removeBtn, 2);
+        grid.Children.Add(removeBtn);
+
+        row.Child = grid;
+        return row;
     }
 
     private void RefreshGroupPoliciesPanel()

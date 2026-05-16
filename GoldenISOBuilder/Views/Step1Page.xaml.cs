@@ -312,6 +312,7 @@ public partial class Step1Page : UserControl
         // Persist to session
         BuildSession.Current.SourceIsoPath   = isoPath;
         BuildSession.Current.MountedIsoDrive = result.MountedDrive;
+        BuildSession.Current.IsoOsVersion    = result.OsVersion;
         BuildSession.Current.AvailableImages = result.Images;
 
         // Update ISO info strip
@@ -458,18 +459,18 @@ public partial class Step1Page : UserControl
         var nameText = new TextBlock
         {
             Text       = img.Name,
-            Foreground = (Brush)Application.Current.Resources["FG0Brush"],
             FontSize   = 13,
             FontWeight = FontWeights.SemiBold,
         };
+        nameText.SetResourceReference(TextBlock.ForegroundProperty, "FG0Brush");
         var subText = new TextBlock
         {
             Text       = subLabel,
-            Foreground = (Brush)Application.Current.Resources["FG3Brush"],
             FontSize   = 10,
             FontFamily = new FontFamily("Consolas"),
             Margin     = new Thickness(0, 2, 0, 0),
         };
+        subText.SetResourceReference(TextBlock.ForegroundProperty, "FG3Brush");
         var content = new StackPanel();
         content.Children.Add(nameText);
         content.Children.Add(subText);
@@ -617,12 +618,13 @@ public partial class Step1Page : UserControl
 
         if (!DriveSpacePanel.Children.OfType<UIElement>().Any())
         {
-            DriveSpacePanel.Children.Add(new TextBlock
+            var noDrivesTb = new TextBlock
             {
                 Text       = "No drives detected.",
-                Foreground = (Brush)Application.Current.Resources["FG2Brush"],
                 FontSize   = 13
-            });
+            };
+            noDrivesTb.SetResourceReference(TextBlock.ForegroundProperty, "FG2Brush");
+            DriveSpacePanel.Children.Add(noDrivesTb);
         }
     }
 

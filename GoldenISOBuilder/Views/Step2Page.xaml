@@ -14,7 +14,7 @@
 
         <!-- Page Header -->
         <StackPanel Grid.Row="0" Margin="40,32,40,0">
-            <TextBlock Text="ASSETS" Style="{StaticResource GoldEyebrowText}"/>
+            <TextBlock Text="ASSETS" Style="{StaticResource GoldEyebrowText}" Foreground="{DynamicResource AssetsAccentBrush}"/>
             <TextBlock Text="Stage wallpaper, first-boot apps, and deployment scripts"
                        Foreground="{DynamicResource FG2Brush}" FontSize="14" Margin="0,4,0,0"/>
         </StackPanel>
@@ -101,6 +101,218 @@
                             </Grid>
                         </Border>
                     </Grid>
+                </Border>
+
+                <!-- ══ Lock screen image ═════════════════════════════════════════
+                     Independent of wallpaper — leave empty to keep Windows
+                     defaults on the lock / sign-in / OOBE screens. -->
+                <Border Style="{StaticResource CardStyle}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0" Margin="0,0,20,0">
+                            <Grid Margin="0,0,0,12">
+                                <StackPanel>
+                                    <TextBlock Text="Lock screen image" Style="{StaticResource CardTitleText}"/>
+                                    <TextBlock Text="Replaces the lock-screen + sign-in + OOBE backgrounds. Leave empty to keep the Windows default."
+                                               Foreground="{DynamicResource FG2Brush}" FontSize="12" Margin="0,2,0,0"
+                                               TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <!-- Drop zone (visible when no lock-screen image selected) -->
+                            <Border x:Name="LockScreenDropZone" Style="{StaticResource DropZoneStyle}"
+                                    AllowDrop="True" Cursor="Hand"
+                                    MouseLeftButtonDown="LockScreenDrop_Click"
+                                    DragOver="LockScreen_DragOver" Drop="LockScreen_Drop">
+                                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
+                                            Margin="24,22,24,22" h:PanelSpacing.Spacing="6">
+                                    <Path Style="{StaticResource IconPath}" Width="24" Height="24"
+                                          Data="{StaticResource ImageIcon}" Stroke="{DynamicResource FG2Brush}"
+                                          HorizontalAlignment="Center"/>
+                                    <TextBlock Text="Drop image or click to browse"
+                                               Foreground="{DynamicResource FG2Brush}" FontSize="13"
+                                               HorizontalAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- File info row (visible when lock-screen image selected) -->
+                            <Border x:Name="LockScreenFileRow" Style="{StaticResource FilledDropZoneStyle}"
+                                    Visibility="Collapsed" Cursor="Hand"
+                                    MouseLeftButtonDown="LockScreenDrop_Click">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Path Grid.Column="0" Style="{StaticResource IconPath}"
+                                          Width="16" Height="16" Data="{StaticResource ImageIcon}"
+                                          Stroke="{DynamicResource OkBrush}" Margin="0,0,10,0"/>
+                                    <TextBlock x:Name="LockScreenFileLabel" Grid.Column="1"
+                                               Foreground="{DynamicResource FG0Brush}" FontSize="13"
+                                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                    <Button Grid.Column="2" Content="✕" Style="{StaticResource GhostButtonStyle}"
+                                            FontSize="11" Padding="6,2" Margin="8,0,0,0"
+                                            Click="LockScreenClear_Click"/>
+                                </Grid>
+                            </Border>
+
+                            <TextBlock Text="Supported: JPG, PNG, BMP · 1920×1080 or higher recommended"
+                                       Style="{StaticResource FieldHintText}" Margin="0,8,0,0"/>
+                        </StackPanel>
+
+                        <!-- Preview pane -->
+                        <Border Grid.Column="1" Background="{DynamicResource BG3Brush}" CornerRadius="8"
+                                Width="192" Height="108" VerticalAlignment="Top" ClipToBounds="True">
+                            <Grid>
+                                <StackPanel x:Name="LockScreenPlaceholder"
+                                            HorizontalAlignment="Center" VerticalAlignment="Center"
+                                            h:PanelSpacing.Spacing="6">
+                                    <Path Style="{StaticResource IconPath}" Width="28" Height="28"
+                                          Data="{StaticResource ImageIcon}" Stroke="{DynamicResource FG3Brush}"/>
+                                    <TextBlock Text="Preview" Foreground="{DynamicResource FG3Brush}"
+                                               FontSize="11" HorizontalAlignment="Center"/>
+                                </StackPanel>
+                                <Image x:Name="LockScreenPreview" Stretch="UniformToFill"
+                                       Visibility="Collapsed"/>
+                            </Grid>
+                        </Border>
+                    </Grid>
+                </Border>
+
+                <!-- ══ Windows Updates (auto-fetch — toggled in Settings) ═════════
+                     Visible only when EnableAutoFetchFeatures is on. Lets the
+                     admin either point at a folder of .msu files (existing
+                     pattern) or fetch the current LCU + checkpoint chain +
+                     optional 25H2 eKB directly from Microsoft Update Catalog. -->
+                <Border x:Name="UpdatesCard" Style="{StaticResource CardStyle}"
+                        Visibility="Collapsed">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,4">
+                            <StackPanel>
+                                <TextBlock Text="Windows Updates"
+                                           Style="{StaticResource CardTitleText}"/>
+                                <TextBlock Text="Pre-install the latest Windows cumulative update into the image so deployed machines are fully patched on first boot — no large update downloads required."
+                                           Foreground="{DynamicResource FG2Brush}" FontSize="12"
+                                           Margin="0,2,0,0" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- Mode toggle: Auto / Manual -->
+                        <StackPanel Orientation="Horizontal" Margin="0,12,0,8"
+                                    h:PanelSpacing.Spacing="6">
+                            <RadioButton x:Name="UpdatesAutoMode" Content="Auto-fetch from Microsoft"
+                                         GroupName="UpdatesMode" IsChecked="True"
+                                         Foreground="{DynamicResource FG0Brush}"
+                                         Checked="UpdatesMode_Changed"/>
+                            <RadioButton x:Name="UpdatesManualMode" Content="Pick folder of MSU/CAB files"
+                                         GroupName="UpdatesMode"
+                                         Foreground="{DynamicResource FG0Brush}" Margin="16,0,0,0"
+                                         Checked="UpdatesMode_Changed"/>
+                        </StackPanel>
+
+                        <!-- Auto-fetch panel -->
+                        <StackPanel x:Name="UpdatesAutoPanel">
+                            <Grid Margin="0,4,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock x:Name="UpdatesDetectedBuild"
+                                               Text="ISO not yet analysed — go to Step 1 first."
+                                               Foreground="{DynamicResource FG2Brush}" FontSize="12"
+                                               TextWrapping="Wrap"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal"
+                                            h:PanelSpacing.Spacing="6">
+                                    <Button x:Name="UpdatesRefreshBtn"
+                                            Content="Refresh catalog"
+                                            Style="{StaticResource DefaultButtonStyle}"
+                                            Click="UpdatesRefresh_Click"/>
+                                    <Button x:Name="UpdatesExportBtn"
+                                            Content="Export list"
+                                            Style="{StaticResource DefaultButtonStyle}"
+                                            IsEnabled="False"
+                                            Click="UpdatesExport_Click"
+                                            ToolTip="Save the current update list to a text file"/>
+                                </StackPanel>
+                            </Grid>
+                            <TextBox x:Name="UpdatesSearchBox" Margin="0,10,0,0" Height="30"
+                                     Padding="8,0"
+                                     Foreground="{DynamicResource FG0Brush}"
+                                     Background="{DynamicResource BG0Brush}"
+                                     VerticalContentAlignment="Center"
+                                     TextChanged="UpdatesSearch_Changed"
+                                     ToolTip="Filter by KB number or keyword — e.g. type 'Cumulative' or a specific KB number"/>
+
+                            <!-- Multi-select list of catalog hits. Tick every
+                                 KB you want slipstreamed; click Fetch selected
+                                 to download them all in sequence. -->
+                            <Border Margin="0,8,0,0"
+                                    Background="{DynamicResource BG0Brush}"
+                                    BorderBrush="{DynamicResource LineBrush}"
+                                    BorderThickness="1" CornerRadius="6"
+                                    MinHeight="120" MaxHeight="240">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                    <StackPanel x:Name="UpdatesListPanel" Margin="6"/>
+                                </ScrollViewer>
+                            </Border>
+
+                            <StackPanel Orientation="Horizontal" Margin="0,12,0,0"
+                                        h:PanelSpacing.Spacing="6">
+                                <Button x:Name="UpdatesFetchBtn"
+                                        Content="Fetch selected"
+                                        Style="{StaticResource PrimaryButtonStyle}"
+                                        IsEnabled="False"
+                                        Click="UpdatesFetch_Click"/>
+                                <ProgressBar x:Name="UpdatesProgress" Width="280" Height="6"
+                                             Margin="12,0,0,0"
+                                             VerticalAlignment="Center"
+                                             Visibility="Collapsed"/>
+                            </StackPanel>
+                            <TextBlock x:Name="UpdatesStatusText"
+                                       Margin="0,8,0,0"
+                                       FontSize="11.5"
+                                       TextWrapping="Wrap"
+                                       Foreground="{DynamicResource FG2Brush}"/>
+                        </StackPanel>
+
+                        <!-- Manual-folder panel -->
+                        <StackPanel x:Name="UpdatesManualPanel" Visibility="Collapsed">
+                            <Grid Margin="0,4,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBox x:Name="UpdatesFolderBox" Grid.Column="0" Height="32"
+                                         IsReadOnly="True"
+                                         Foreground="{DynamicResource FG0Brush}"
+                                         Background="{DynamicResource BG0Brush}"
+                                         VerticalContentAlignment="Center"
+                                         Padding="8,0"
+                                         Text="No folder selected"/>
+                                <Button Grid.Column="1" x:Name="UpdatesBrowseBtn"
+                                        Content="Browse folder…" Margin="8,0,0,0"
+                                        Style="{StaticResource DefaultButtonStyle}"
+                                        Click="UpdatesBrowse_Click"/>
+                            </Grid>
+                            <TextBlock x:Name="UpdatesManualHint"
+                                       Margin="0,6,0,0"
+                                       FontSize="11.5"
+                                       Foreground="{DynamicResource FG2Brush}"
+                                       Text="Place the cumulative update files and any prerequisite update packages in one folder. The build engine resolves the correct installation order automatically."
+                                       TextWrapping="Wrap"/>
+                        </StackPanel>
+
+                        <!-- Resolved package list — shared between Auto and Manual -->
+                        <StackPanel x:Name="UpdatesResolvedPanel" Margin="0,12,0,0"
+                                    h:PanelSpacing.Spacing="4"/>
+                    </StackPanel>
                 </Border>
 
                 <!-- ══ Language Pack Injection ═══════════════════════════════ -->
@@ -262,7 +474,7 @@
                         <Grid Margin="0,0,0,4">
                             <StackPanel>
                                 <TextBlock Text="Driver Injection" Style="{StaticResource CardTitleText}"/>
-                                <TextBlock Text="Injects OEM drivers from selected folders into the offline image via DISM /Add-Driver /Recurse"
+                                <TextBlock Text="Injects hardware drivers from selected folders directly into the Windows image during the build."
                                            Foreground="{DynamicResource FG2Brush}" FontSize="12" Margin="0,2,0,0"
                                            TextWrapping="Wrap"/>
                             </StackPanel>
@@ -289,13 +501,151 @@
                     </StackPanel>
                 </Border>
 
+                <!-- ══ Driver Auto-Fetch (Dell / HP / Lenovo) ════════════════════
+                     Visible only when EnableAutoFetchFeatures is on (Settings).
+                     Sits next to the manual Driver Injection card above so
+                     admins can use both: a vendor pack for the target SKUs and
+                     a folder pick for anything else. -->
+                <Border x:Name="DriversAutoCard" Style="{StaticResource CardStyle}"
+                        Visibility="Collapsed">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,4">
+                            <StackPanel>
+                                <TextBlock Text="Driver Auto-Fetch (Dell / HP / Lenovo)"
+                                           Style="{StaticResource CardTitleText}"/>
+                                <TextBlock Text="Select your laptop or desktop model and the tool downloads the official driver pack directly from the manufacturer's public catalog."
+                                           Foreground="{DynamicResource FG2Brush}" FontSize="12"
+                                           Margin="0,2,0,0" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Grid>
+
+                        <Grid Margin="0,12,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="140"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock Text="Vendor"
+                                       Grid.Column="0" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource FG2Brush}" FontSize="12"/>
+                            <ComboBox x:Name="VendorCombo" Grid.Column="1" Height="32"
+                                      Foreground="{DynamicResource FG0Brush}"
+                                      Background="{DynamicResource BG0Brush}"
+                                      SelectionChanged="Vendor_Changed">
+                                <!-- Default selection set in code-behind OnLoaded
+                                     to avoid SelectionChanged firing during
+                                     XAML parse before ModelListPanel exists. -->
+                                <ComboBoxItem Content="Dell"   Tag="Dell"/>
+                                <ComboBoxItem Content="HP"     Tag="HP"/>
+                                <ComboBoxItem Content="Lenovo" Tag="Lenovo"/>
+                            </ComboBox>
+                            <Button Grid.Column="2" x:Name="DriverRefreshBtn"
+                                    Content="Load models"
+                                    Style="{StaticResource DefaultButtonStyle}"
+                                    Margin="8,0,0,0"
+                                    Click="DriverRefresh_Click"/>
+                        </Grid>
+
+                        <Grid Margin="0,10,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="140"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Search model"
+                                       Grid.Column="0" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource FG2Brush}" FontSize="12"/>
+                            <TextBox x:Name="ModelSearchBox" Grid.Column="1" Height="32"
+                                     Foreground="{DynamicResource FG0Brush}"
+                                     Background="{DynamicResource BG0Brush}"
+                                     Padding="8,0"
+                                     VerticalContentAlignment="Center"
+                                     ToolTip="Type a model name (Dell / HP) or a 4-char Machine Type (Lenovo — found on the laptop's underside sticker)"
+                                     TextChanged="ModelSearch_Changed"/>
+                        </Grid>
+
+                        <TextBlock Margin="140,4,0,0" FontSize="11"
+                                   Foreground="{DynamicResource FG3Brush}"
+                                   TextWrapping="Wrap"
+                                   Text="Lenovo: type the 4-char Machine Type from the laptop's underside sticker — the seed list is reference only and won't cover every SKU."/>
+
+                        <Border Margin="0,8,0,0"
+                                Background="{DynamicResource BG0Brush}"
+                                BorderBrush="{DynamicResource LineBrush}"
+                                BorderThickness="1" CornerRadius="6"
+                                MinHeight="120" MaxHeight="220">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <StackPanel x:Name="ModelListPanel" Margin="6"/>
+                            </ScrollViewer>
+                        </Border>
+
+                        <StackPanel Orientation="Horizontal" Margin="0,12,0,0"
+                                    h:PanelSpacing.Spacing="6">
+                            <Button x:Name="DriverFetchBtn"
+                                    Content="Fetch selected (max 3)"
+                                    Style="{StaticResource PrimaryButtonStyle}"
+                                    IsEnabled="False"
+                                    Click="DriverFetch_Click"/>
+                            <ProgressBar x:Name="DriverProgress" Width="280" Height="6"
+                                         Margin="12,0,0,0"
+                                         VerticalAlignment="Center"
+                                         Visibility="Collapsed"/>
+                        </StackPanel>
+                        <TextBlock x:Name="DriverStatusText"
+                                   Margin="0,8,0,0" FontSize="11.5"
+                                   Foreground="{DynamicResource FG2Brush}"
+                                   TextWrapping="Wrap"/>
+
+                        <StackPanel x:Name="FetchedPacksPanel" Margin="0,8,0,0"
+                                    h:PanelSpacing.Spacing="4"/>
+
+                        <Border Background="{DynamicResource BG3Brush}" CornerRadius="6"
+                                Padding="12,10" Margin="0,10,0,0">
+                            <StackPanel Orientation="Horizontal" h:PanelSpacing.Spacing="8">
+                                <Path Style="{StaticResource IconPath}" Width="14" Height="14"
+                                      Data="{StaticResource AlertIcon}" Stroke="{DynamicResource Gold1Brush}"/>
+                                <TextBlock Text="Downloaded driver packs are cached locally and reused across builds. Network and storage drivers are automatically included in the setup environment to ensure hardware is detected during Windows installation."
+                                           Foreground="{DynamicResource FG2Brush}" FontSize="12"
+                                           TextWrapping="Wrap" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Border>
+
+                <!-- ══ Custom Fonts ════════════════════════════════════════════
+                     .ttf / .otf / .ttc files copied into \Windows\Fonts and
+                     registered under HKLM\…\Windows NT\…\Fonts so the deployed
+                     OS picks them up at next boot. Useful for corporate
+                     branding fonts (e.g. Hyundai Sans, IBM Plex). -->
+                <Border Style="{StaticResource CardStyle}">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,4">
+                            <StackPanel Margin="0,0,110,0">
+                                <TextBlock Text="Custom Fonts" Style="{StaticResource CardTitleText}"/>
+                                <TextBlock Text="Corporate / branding fonts (.ttf / .otf / .ttc) pre-installed into the image. They appear in every app's font picker on first boot."
+                                           Foreground="{DynamicResource FG2Brush}" FontSize="12" Margin="0,2,0,0"
+                                           TextWrapping="Wrap"/>
+                            </StackPanel>
+                            <Button HorizontalAlignment="Right" VerticalAlignment="Top"
+                                    Content="+ Add Font" Style="{StaticResource GhostButtonStyle}"
+                                    FontSize="12" Click="AddFont_Click"/>
+                        </Grid>
+
+                        <StackPanel x:Name="FontsPanel" h:PanelSpacing.Spacing="6" Margin="0,8,0,0"/>
+
+                        <TextBlock x:Name="FontsEmptyHint"
+                                   Text="No custom fonts added. Click '+ Add Font' to inject .ttf/.otf/.ttc files."
+                                   Foreground="{DynamicResource FG3Brush}" FontSize="12" FontStyle="Italic"/>
+                    </StackPanel>
+                </Border>
+
                 <!-- ══ First-Boot Applications ════════════════════════════════ -->
                 <Border Style="{StaticResource CardStyle}">
                     <StackPanel>
                         <Grid Margin="0,0,0,4">
                             <StackPanel>
                                 <TextBlock Text="First-Boot Applications" Style="{StaticResource CardTitleText}"/>
-                                <TextBlock Text="These EXE/MSI installers are staged inside the image and installed silently on first login via GIBFirstBoot"
+                                <TextBlock Text="These installers are bundled into the image and installed silently and automatically on the user's first login — no manual intervention required."
                                            Foreground="{DynamicResource FG2Brush}" FontSize="12" Margin="0,2,0,0"
                                            TextWrapping="Wrap"/>
                             </StackPanel>
@@ -439,7 +789,7 @@
                             <StackPanel Orientation="Horizontal" h:PanelSpacing.Spacing="8">
                                 <Path Style="{StaticResource IconPath}" Width="14" Height="14"
                                       Data="{StaticResource AlertIcon}" Stroke="{DynamicResource Gold1Brush}"/>
-                                <TextBlock Text="Scripts are copied to C:\Users\Public\Documents. You can call them from SetupComplete.cmd or run them manually on first login."
+                                <TextBlock Text="Scripts are copied to C:\Users\Public\Documents and are available immediately after deployment. Use the Every Login trigger to run them automatically on each login."
                                            Foreground="{DynamicResource FG2Brush}" FontSize="12"
                                            TextWrapping="Wrap" VerticalAlignment="Center"/>
                             </StackPanel>

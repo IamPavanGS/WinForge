@@ -38,7 +38,7 @@
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0" Margin="0,0,12,0">
-                                <TextBlock Text="Organisation Name" Style="{StaticResource FieldLabelText}" Margin="0,0,0,6"/>
+                                <TextBlock Text="Organization Name" Style="{StaticResource FieldLabelText}" Margin="0,0,0,6"/>
                                 <TextBox x:Name="OrgNameBox" Style="{StaticResource TextInputStyle}"/>
                             </StackPanel>
                             <StackPanel Grid.Column="1">
@@ -52,7 +52,7 @@
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="1">
-                                <TextBlock Text="Product Key (KMS / MAK)" Style="{StaticResource FieldLabelText}" Margin="0,0,0,6"/>
+                                <TextBlock Text="Product Key" Style="{StaticResource FieldLabelText}" Margin="0,0,0,6"/>
                                 <TextBox x:Name="ProductKeyBox" Style="{StaticResource MonoTextInputStyle}"
                                          MaxLength="29"/>
                                 <TextBlock Text="Leave blank to use the key embedded in the ISO"
@@ -95,6 +95,20 @@
                                     </Grid>
                                     <TextBlock Foreground="{DynamicResource FG3Brush}" FontSize="11" Margin="0,4,0,0"
                                                Text="Max 10 characters · A–Z, 0–9 only · the machine's BIOS serial is appended at first boot (total ≤ 15 chars)"/>
+
+                                    <!-- Hostname template — default keeps today's behaviour byte-for-byte.
+                                         Other options route through a separate first-boot resolver. -->
+                                    <TextBlock Text="Suffix source" Style="{StaticResource FieldLabelText}" Margin="0,14,0,6"/>
+                                    <ComboBox x:Name="HostnameTemplateCombo" Width="360" HorizontalAlignment="Left"
+                                              SelectionChanged="HostnameTemplate_Changed">
+                                        <ComboBoxItem Content="BIOS serial (default)" Tag="{}{PREFIX}{SERIAL}"/>
+                                        <ComboBoxItem Content="Last 6 chars of BIOS serial" Tag="{}{PREFIX}{LAST6_SERIAL}"/>
+                                        <ComboBoxItem Content="Last 6 hex of MAC address" Tag="{}{PREFIX}{LAST6_MAC}"/>
+                                        <ComboBoxItem Content="SMBIOS asset tag (falls back to serial)" Tag="{}{PREFIX}{ASSETTAG}"/>
+                                    </ComboBox>
+                                    <TextBlock Foreground="{DynamicResource FG3Brush}" FontSize="11" Margin="0,4,0,0"
+                                               TextWrapping="Wrap"
+                                               Text="Default = today's behaviour (PREFIX + full BIOS serial). Other options use a different resolver at first boot, useful when BIOS serials collide or you track machines by MAC / asset tag."/>
                                 </StackPanel>
                             </StackPanel>
                         </Border>
@@ -107,7 +121,7 @@
                         <StackPanel Orientation="Horizontal" h:PanelSpacing.Spacing="10">
                             <Path Style="{StaticResource IconPath}" Width="16" Height="16"
                                   Data="{StaticResource ZapIcon}" Stroke="{DynamicResource Gold1Brush}"/>
-                            <TextBlock Text="OOBE &amp; First-Boot Behaviour" Style="{StaticResource CardTitleText}"
+                            <TextBlock Text="Setup &amp; First-Boot Behavior" Style="{StaticResource CardTitleText}"
                                        VerticalAlignment="Center"/>
                         </StackPanel>
 
@@ -116,16 +130,19 @@
                             <TextBlock Text="Time Zone" Style="{StaticResource FieldLabelText}" Margin="0,0,0,6"/>
                             <ComboBox x:Name="TimeZoneBox" Style="{StaticResource ComboBoxStyle}"
                                       HorizontalAlignment="Stretch" MaxDropDownHeight="240"/>
-                            <TextBlock Text="Applied to the deployed OS via Autounattend.xml (specialize + oobeSystem)"
+                            <TextBlock Text="Sets the time zone on the deployed machine."
                                        Style="{StaticResource FieldHintText}" Margin="0,4,0,0"/>
                         </StackPanel>
 
                         <Border Background="{DynamicResource BG3Brush}" CornerRadius="6" Padding="14,10">
                             <Grid>
-                                <StackPanel>
-                                    <TextBlock Text="Skip Express Settings (OOBE)" Foreground="{DynamicResource FG0Brush}" FontSize="13"/>
-                                    <TextBlock Text="Bypass Windows setup screens — machine goes straight to desktop"
-                                               Foreground="{DynamicResource FG2Brush}" FontSize="11"/>
+                                <StackPanel Margin="0,0,72,0">
+                                    <TextBlock Text="Unattended Windows Setup" Foreground="{DynamicResource FG0Brush}" FontSize="13"/>
+                                    <TextBlock Foreground="{DynamicResource FG2Brush}" FontSize="11" TextWrapping="Wrap" Margin="0,2,0,0">
+                                        <Run Text="ON: Windows installs without prompting for any setup screens — machine goes straight to the desktop."/>
+                                        <LineBreak/>
+                                        <Run Text="OFF: The operator is prompted through the standard Windows setup screens. Most customizations still apply — only Auto-Login and silent disk preparation are skipped."/>
+                                    </TextBlock>
                                 </StackPanel>
                                 <CheckBox x:Name="SkipOobeToggle" HorizontalAlignment="Right" IsChecked="True"
                                           Style="{StaticResource ToggleSwitchStyle}"/>
@@ -168,7 +185,7 @@
                             <TextBlock Text="Windows Optional Features" Style="{StaticResource CardTitleText}"
                                        VerticalAlignment="Center"/>
                         </StackPanel>
-                        <TextBlock Text="These are injected offline via DISM /Enable-Feature before sealing the image"
+                        <TextBlock Text="These features are enabled or disabled in the image before it is finalized."
                                    Foreground="{DynamicResource FG2Brush}" FontSize="12" Margin="0,0,0,12"/>
 
                         <Grid>
@@ -191,7 +208,7 @@
                                     <Grid>
                                         <StackPanel>
                                             <TextBlock Text="Hyper-V" Foreground="{DynamicResource FG0Brush}" FontSize="13"/>
-                                            <TextBlock Text="Hardware virtualisation platform" Foreground="{DynamicResource FG2Brush}" FontSize="11"/>
+                                            <TextBlock Text="Hardware virtualization platform" Foreground="{DynamicResource FG2Brush}" FontSize="11"/>
                                         </StackPanel>
                                         <CheckBox x:Name="FeatHyperV" HorizontalAlignment="Right" IsChecked="False"
                                                   Style="{StaticResource ToggleSwitchStyle}"/>
@@ -340,13 +357,13 @@
                         <StackPanel Orientation="Horizontal" h:PanelSpacing.Spacing="10">
                             <Path Style="{StaticResource IconPath}" Width="16" Height="16"
                                   Data="{StaticResource UserIcon}" Stroke="{DynamicResource Gold1Brush}"/>
-                            <TextBlock Text="OEM Branding" Style="{StaticResource CardTitleText}"
+                            <TextBlock Text="Company Branding" Style="{StaticResource CardTitleText}"
                                        VerticalAlignment="Center"/>
                             <Border Style="{StaticResource PillStyle}" Margin="4,0,0,0">
                                 <TextBlock Text="System Properties"/>
                             </Border>
                         </StackPanel>
-                        <TextBlock Text="Customises the Support Information shown in Settings → About and System Properties"
+                        <TextBlock Text="Customizes the Support Information shown in Settings → About and System Properties"
                                    Foreground="{DynamicResource FG2Brush}" FontSize="12"/>
                         <Grid>
                             <Grid.ColumnDefinitions>
@@ -413,7 +430,7 @@
                                     FocusVisualStyle="{x:Null}" Click="AddTask_Click"/>
                         </Grid>
 
-                        <TextBlock Text="These tasks are created on the deployed OS via schtasks.exe inside SetupComplete.cmd"
+                        <TextBlock Text="These tasks are registered in Windows Task Scheduler on the deployed machine at first boot."
                                    Foreground="{DynamicResource FG2Brush}" FontSize="12"/>
 
                         <!-- Task list -->

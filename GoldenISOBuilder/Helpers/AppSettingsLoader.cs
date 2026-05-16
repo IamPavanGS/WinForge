@@ -33,6 +33,10 @@ public static class AppSettingsLoader
         public bool   VerifyIsoAfterBuild      { get; set; } = true;
         public bool   CleanWorkspaceAfterBuild { get; set; } = true;
         public string WimCompression           { get; set; } = "max";
+
+        /// <summary>Master toggle for the Windows-Update + driver-pack auto-fetch
+        /// features. On by default.</summary>
+        public bool   EnableAutoFetchFeatures  { get; set; } = true;
     }
 
     /// <summary>
@@ -131,6 +135,45 @@ public static class AppSettingsLoader
             LogError("AppSettingsLoader.ReadPaths", ex);
             return ("", "");
         }
+    }
+
+    /// <summary>Reads the auto-fetch master toggle. Defaults to false.</summary>
+    public static bool ReadEnableAutoFetchFeatures()
+    {
+        try
+        {
+            if (!File.Exists(SettingsPath)) return false;
+            var json = File.ReadAllText(SettingsPath);
+            var s    = JsonSerializer.Deserialize<StartupSettings>(json,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            return s?.EnableAutoFetchFeatures ?? false;
+        }
+        catch { return false; }
+    }
+
+    /// <summary>Persists the auto-fetch master toggle.</summary>
+    public static void SaveEnableAutoFetchFeatures(bool value)
+    {
+        try
+        {
+            var opts = new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true,
+                WriteIndented               = true
+            };
+            Dictionary<string, object>? raw = null;
+            if (File.Exists(SettingsPath))
+            {
+                var json = File.ReadAllText(SettingsPath);
+                raw = JsonSerializer.Deserialize<Dictionary<string, object>>(json, opts);
+            }
+            raw ??= new Dictionary<string, object>();
+            raw["EnableAutoFetchFeatures"] = value;
+
+            Directory.CreateDirectory(SettingsDir);
+            File.WriteAllText(SettingsPath, JsonSerializer.Serialize(raw, opts));
+        }
+        catch { /* non-fatal */ }
     }
 
     /// <summary>Returns build-time settings. Defaults to the safe/default values if file is missing.</summary>

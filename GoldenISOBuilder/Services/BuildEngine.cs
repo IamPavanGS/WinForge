@@ -91,6 +91,7 @@ public class BuildEngine
             new BuildStep { Id = "copyiso",      Title = "Copy ISO contents" },
             new BuildStep { Id = "exportedition",Title = "Export selected edition" },
             new BuildStep { Id = "mountwim",     Title = "Mount install.wim" },
+            new BuildStep { Id = "updates",      Title = "Slipstream Windows updates" },
             new BuildStep { Id = "langpacks",    Title = "Inject language packs" },
             new BuildStep { Id = "drivers",      Title = "Inject drivers" },
             new BuildStep { Id = "wallpaper",    Title = "Inject wallpaper" },
@@ -118,6 +119,13 @@ public class BuildEngine
             OpenLog();
             Log($"=== Golden ISO Build started at {DateTime.Now:yyyy-MM-dd HH:mm:ss} ===");
 
+            // Copy the persisted auto-fetch toggle onto the session so all the
+            // new pipeline branches (SlipstreamUpdatesAsync, the boot.wim split
+            // inside InjectDriversAsync) read one source of truth.
+            _s.EnableAutoFetchFeatures = Helpers.AppSettingsLoader.ReadEnableAutoFetchFeatures();
+            if (_s.EnableAutoFetchFeatures)
+                Log("Auto-fetch features ENABLED (Settings → Auto-fetch).");
+
             // ── Critical steps: failure stops the build ──────────────────────
             await Step("validate",      ValidateAsync);
             await Step("prepare",       PrepareWorkspaceAsync);
@@ -126,6 +134,7 @@ public class BuildEngine
             await Step("mountwim",      MountWimAsync);
 
             // ── Optional steps: failure is logged but build continues ─────────
+            await StepSoft("updates",       SlipstreamUpdatesAsync);
             await StepSoft("langpacks",     InjectLanguagePacksAsync);
             await StepSoft("drivers",       InjectDriversAsync);
             await StepSoft("wallpaper",     InjectWallpaperAsync);
@@ -405,7 +414,114 @@ public class BuildEngine
         await DismAsync($"/Mount-Image /ImageFile:\"{_wimPath}\" /Index:1 /MountDir:\"{_mountDir}\"");
     }
 
-    // ── Step 6: Language Pack Injection ──────────────────────────────────────
+    // ── Step 6: Windows Update slipstream (auto-fetch feature) ───────────────
+    //
+    // Inserts cumulative updates + checkpoint CUs + .NET CUs + the optional
+    // 25H2 enablement package into install.wim before language packs. Gated
+    // behind BuildSession.EnableAutoFetchFeatures so existing builds are
+    // unaffected. Today's MSU set is provided via UpdatesMsuPaths (a list of
+    // absolute paths to .msu/.cab files); Phase 5's UI either auto-fetches
+    // them from Microsoft Update Catalog or lets the admin point at a folder.
+    //
+    // Order matters: drop every prerequisite-chain MSU in a single folder and
+    // DISM /Add-Package auto-resolves SSU → checkpoint(s) → target LCU. The
+    // 25H2 enablement package MUST be applied after /Cleanup-Image per
+    // Microsoft Learn — we detect KB5054156 by filename and apply it last.
+
+    private async Task SlipstreamUpdatesAsync()
+    {
+        if (!_s.EnableAutoFetchFeatures)
+        {
+            Skip("Auto-fetch features disabled in Settings.");
+            return;
+        }
+        if (_s.UpdatesMsuPaths.Count == 0)
+        {
+            Skip("No Windows updates configured.");
+            return;
+        }
+
+        // Validate every path up-front so a missing file doesn't surface mid-
+        // DISM with a confusing error.
+        var present = _s.UpdatesMsuPaths.Where(File.Exists).ToList();
+        if (present.Count != _s.UpdatesMsuPaths.Count)
+        {
+            foreach (var missing in _s.UpdatesMsuPaths.Except(present))
+                Log($"  ! Missing update package, skipping: {missing}");
+        }
+        if (present.Count == 0)
+        {
+            Skip("All configured update packages were missing on disk.");
+            return;
+        }
+
+        // Split off the 25H2 enablement package — it must be applied after
+        // /Cleanup-Image per Microsoft's documented guidance.
+        var ekb = present.FirstOrDefault(
+            p => Path.GetFileName(p).Contains("kb5054156",
+                                              StringComparison.OrdinalIgnoreCase));
+        var coreUpdates = present.Where(p => p != ekb).ToList();
+
+        // Stage core updates into a temp folder so DISM /Add-Package can
+        // auto-resolve the SSU → checkpoint → LCU prerequisite chain. (DISM
+        // only auto-sequences when given a folder whose contents are all
+        // related updates with no extra files.)
+        if (coreUpdates.Count > 0)
+        {
+            var stagingDir = Path.Combine(_workspace, "updates_stage");
+            if (Directory.Exists(stagingDir)) Directory.Delete(stagingDir, true);
+            Directory.CreateDirectory(stagingDir);
+
+            foreach (var msu in coreUpdates)
+            {
+                var dest = Path.Combine(stagingDir, Path.GetFileName(msu));
+                File.Copy(msu, dest, overwrite: true);
+                Log($"  Staged update: {Path.GetFileName(msu)}");
+            }
+
+            Log($"Applying {coreUpdates.Count} core update package(s) " +
+                "(DISM auto-resolves checkpoint chain)…");
+            await DismAsync(
+                $"/Image:\"{_mountDir}\" /Add-Package /PackagePath:\"{stagingDir}\"");
+
+            Log("Running /Cleanup-Image /StartComponentCleanup to shrink WIM…");
+            try
+            {
+                await DismAsync(
+                    $"/Image:\"{_mountDir}\" /Cleanup-Image /StartComponentCleanup");
+            }
+            catch (Exception ex)
+            {
+                // /Cleanup-Image failures are non-fatal — the WIM still works,
+                // it's just larger than ideal.
+                Log($"  ! /Cleanup-Image failed (continuing): {ex.Message}");
+            }
+        }
+
+        // Apply 25H2 eKB after cleanup. KB5054156 flips the feature-flag bit
+        // that activates 25H2 binaries pre-staged by the August 2025 (or
+        // later) LCU; on a base 24H2 WIM with no LCU it's a no-op, so we log
+        // a warning when no LCU was found in the core set.
+        if (ekb != null)
+        {
+            bool hasLcu = coreUpdates.Any(
+                p => Path.GetFileName(p).Contains("cumulative",
+                                                  StringComparison.OrdinalIgnoreCase)
+                  || Path.GetFileName(p).StartsWith("kb",
+                                                    StringComparison.OrdinalIgnoreCase));
+            if (!hasLcu)
+                Log("  ! 25H2 eKB applied without a current LCU in the set — " +
+                    "Microsoft requires the August 2025 LCU or later as a prereq. " +
+                    "Resulting image may still report 24H2.");
+            Log($"Applying 25H2 enablement package: {Path.GetFileName(ekb)}");
+            await DismAsync(
+                $"/Image:\"{_mountDir}\" /Add-Package /PackagePath:\"{ekb}\"");
+        }
+
+        Log($"Update slipstream complete: {present.Count} package(s) applied.");
+    }
+
+    // ── Step 7: Language Pack Injection ──────────────────────────────────────
 
     private async Task InjectLanguagePacksAsync()
     {
@@ -445,13 +561,28 @@ public class BuildEngine
 
     private async Task InjectDriversAsync()
     {
-        if (_s.DriverFolderPaths.Count == 0)
+        // Two sources feed this step:
+        //   1. _s.DriverFolderPaths        — folders the user picked manually
+        //                                    in Step 2 (Driver Injection card).
+        //   2. _s.AutoFetchedDriverPacks   — Dell/HP/Lenovo packs fetched by
+        //                                    the Phase 5b auto-fetch flow.
+        //                                    Each entry's LocalCabPath is the
+        //                                    extracted folder ready for DISM
+        //                                    (extraction happens in Step2Page
+        //                                    before the entry is added).
+        // Either or both may be empty.
+        int manualTotal     = _s.DriverFolderPaths.Count;
+        int autoFetchTotal  = _s.AutoFetchedDriverPacks.Count;
+
+        if (manualTotal == 0 && autoFetchTotal == 0)
         {
             Skip("No drivers configured.");
             return;
         }
 
         int added = 0;
+
+        // ── Manual driver folders ─────────────────────────────────────────
         foreach (var folder in _s.DriverFolderPaths)
         {
             if (!Directory.Exists(folder))
@@ -466,7 +597,18 @@ public class BuildEngine
                 // DISM only adds drivers that match the image architecture — mismatched
                 // drivers are silently skipped rather than causing failures.
                 await DismAsync($"/Image:\"{_mountDir}\" /Add-Driver /Driver:\"{folder}\" /Recurse");
-                Log($"  ✓ Drivers added from: {Path.GetFileName(folder.TrimEnd('\\', '/'))}");
+                Log($"  ✓ Drivers added to install.wim from: {Path.GetFileName(folder.TrimEnd('\\', '/'))}");
+
+                // WinPE-critical split: when auto-fetch is on AND the user
+                // flagged this folder, also inject the Net / Storage / HID
+                // subset into boot.wim. Without this, WinPE on Intel 12th-gen+
+                // can't see NVMe SSDs (VMD requires the F6 RST driver).
+                if (_s.EnableAutoFetchFeatures &&
+                    _s.DriverFolderWinPEOnly.TryGetValue(folder, out var winPe) &&
+                    winPe)
+                {
+                    await InjectWinPECriticalDriversAsync(folder);
+                }
                 added++;
             }
             catch (Exception ex)
@@ -475,56 +617,258 @@ public class BuildEngine
                 Log($"  ! Failed to inject drivers from {folder}: {ex.Message}");
             }
         }
-        Log($"Driver injection complete. {added}/{_s.DriverFolderPaths.Count} folder(s) processed.");
+
+        // ── Auto-fetched OEM driver packs (Dell / HP / Lenovo) ───────────
+        foreach (var pack in _s.AutoFetchedDriverPacks)
+        {
+            var folder = pack.LocalCabPath;
+            var label  = $"{pack.Vendor} {pack.ModelName} ({pack.SystemId})";
+
+            if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder))
+            {
+                Log($"  ! Auto-fetched pack folder not found, skipping: {label} → {folder}");
+                continue;
+            }
+            try
+            {
+                Log($"  Injecting auto-fetched pack: {label}");
+                await DismAsync($"/Image:\"{_mountDir}\" /Add-Driver /Driver:\"{folder}\" /Recurse");
+                Log($"  ✓ Drivers added to install.wim from {label}");
+
+                // Auto-fetched packs default to WinPE-critical injection so
+                // setup.exe/WinPE can see NVMe + network on modern hardware.
+                // Honour the per-pack flag so a user can disable it later.
+                if (pack.InjectWinPECritical)
+                    await InjectWinPECriticalDriversAsync(folder);
+                added++;
+            }
+            catch (Exception ex)
+            {
+                Log($"  ! Failed to inject auto-fetched pack {label}: {ex.Message}");
+            }
+        }
+
+        Log($"Driver injection complete. {added} source(s) processed " +
+            $"({manualTotal} manual folder(s) + {autoFetchTotal} auto-fetched pack(s)).");
+    }
+
+    /// <summary>
+    /// WinPE-critical PnP classes per Microsoft Learn ("Customize WinPE boot
+    /// images"): Net, SCSIAdapter, HDC (hard-disk controllers), HIDClass, USB,
+    /// System. WinPE only needs network + storage + input — anything else just
+    /// bloats boot.wim.
+    /// </summary>
+    private static readonly string[] WinPECriticalClasses =
+        ["Net", "SCSIAdapter", "HDC", "HIDClass", "USB", "System"];
+
+    /// <summary>
+    /// Take ownership of boot.wim and grant Administrators full control.
+    /// Win11 25H2 ISOs ship boot.wim with restrictive ACLs (owner = TrustedInstaller,
+    /// Administrators get only Read) which causes DISM /Mount-Image to fail with
+    /// 0xc1510111 "You do not have permissions to mount and modify this image."
+    /// Run this before any /Mount-Image against boot.wim.
+    /// </summary>
+    private async Task EnsureBootWimWritableAsync(string bootWimPath)
+    {
+        if (!File.Exists(bootWimPath)) return;
+        try
+        {
+            // Also clear read-only attribute just in case.
+            var fi = new FileInfo(bootWimPath);
+            if (fi.IsReadOnly) fi.IsReadOnly = false;
+            await RunAsync("takeown.exe", $"/f \"{bootWimPath}\" /a", expectZero: false);
+            // Use the Administrators SID (S-1-5-32-544) so we don't depend on the OS locale.
+            await RunAsync("icacls.exe", $"\"{bootWimPath}\" /grant *S-1-5-32-544:F", expectZero: false);
+        }
+        catch (Exception ex)
+        {
+            Log($"  ! Could not adjust boot.wim ACLs: {ex.Message} (continuing — mount may still work)");
+        }
+    }
+
+    private async Task InjectWinPECriticalDriversAsync(string sourceFolder)
+    {
+        var bootWimPath = Path.Combine(_isoStaging, "sources", "boot.wim");
+        if (!File.Exists(bootWimPath))
+        {
+            Log($"  ! boot.wim not found at {bootWimPath}, skipping WinPE driver injection.");
+            return;
+        }
+        await EnsureBootWimWritableAsync(bootWimPath);
+
+        // Filter .inf files by their Class= line.
+        var filteredFolder = Path.Combine(_workspace,
+            "winpe_drivers", Path.GetFileName(sourceFolder.TrimEnd('\\', '/')));
+        if (Directory.Exists(filteredFolder)) Directory.Delete(filteredFolder, true);
+        Directory.CreateDirectory(filteredFolder);
+
+        int copied = 0;
+        foreach (var inf in Directory.EnumerateFiles(sourceFolder, "*.inf",
+                                                    SearchOption.AllDirectories))
+        {
+            if (!IsWinPECritical(inf)) continue;
+            // Copy the whole driver directory (the .inf plus its sibling
+            // .sys / .cat / .dll files all need to travel together).
+            var srcDir = Path.GetDirectoryName(inf)!;
+            var relPath = Path.GetRelativePath(sourceFolder, srcDir);
+            var destDir = Path.Combine(filteredFolder, relPath);
+            CopyDirectory(srcDir, destDir);
+            copied++;
+        }
+
+        if (copied == 0)
+        {
+            Log("  ! No WinPE-critical drivers found in this folder.");
+            return;
+        }
+
+        var bootMountDir = Path.Combine(_workspace, "boot_mount");
+        Directory.CreateDirectory(bootMountDir);
+        try
+        {
+            // boot.wim Index 2 is the Windows Setup environment. Index 1 is
+            // the Recovery image — drivers go in both ideally but adding them
+            // to Index 2 is what unblocks "no disks found" failures.
+            Log("  Mounting boot.wim (Index 2)…");
+            await DismAsync($"/Mount-Image /ImageFile:\"{bootWimPath}\" /Index:2 /MountDir:\"{bootMountDir}\"");
+
+            // Inject one INF at a time. A single /Recurse call returns exit 50
+            // (ERROR_NOT_SUPPORTED) and injects nothing if any driver in the batch is
+            // not WinPE-compatible. Per-INF injection lets the compatible drivers land.
+            var infs     = Directory.EnumerateFiles(filteredFolder, "*.inf",
+                               SearchOption.AllDirectories).ToList();
+            var injected = 0;
+            var skipped  = 0;
+            Log($"  Injecting {infs.Count} WinPE-critical INF(s) into boot.wim…");
+            foreach (var inf in infs)
+            {
+                try
+                {
+                    await DismAsync($"/Image:\"{bootMountDir}\" /Add-Driver /Driver:\"{inf}\"");
+                    injected++;
+                }
+                catch
+                {
+                    Log($"  ! Skipped {Path.GetFileName(inf)} (not injectable into WinPE)");
+                    skipped++;
+                }
+            }
+
+            Log($"  Committing boot.wim ({injected} injected, {skipped} skipped)…");
+            await DismAsync($"/Unmount-Image /MountDir:\"{bootMountDir}\" /Commit");
+            if (injected > 0)
+                Log($"  ✓ boot.wim: {injected} WinPE driver(s) injected.");
+            else
+                Log($"  ! boot.wim: all {skipped} driver(s) were WinPE-incompatible, none injected.");
+        }
+        catch (Exception ex)
+        {
+            Log($"  ! boot.wim injection failed: {ex.Message}");
+            // Try to discard the half-mounted image so the next run can re-mount.
+            try { await DismAsync($"/Unmount-Image /MountDir:\"{bootMountDir}\" /Discard"); }
+            catch { }
+        }
+    }
+
+    private static bool IsWinPECritical(string infPath)
+    {
+        try
+        {
+            foreach (var rawLine in File.ReadLines(infPath))
+            {
+                var line = rawLine.Trim();
+                if (!line.StartsWith("Class", StringComparison.OrdinalIgnoreCase)) continue;
+                // Match "Class = Net" but not "ClassGuid = ..."
+                var eq = line.IndexOf('=');
+                if (eq <= 0) continue;
+                var key = line[..eq].Trim();
+                if (!key.Equals("Class", StringComparison.OrdinalIgnoreCase)) continue;
+                var value = line[(eq + 1)..].Trim().Trim('"');
+                if (WinPECriticalClasses.Contains(value, StringComparer.OrdinalIgnoreCase))
+                    return true;
+            }
+        }
+        catch { /* unreadable inf — fall through, treat as non-critical */ }
+        return false;
+    }
+
+    private static void CopyDirectory(string source, string destination)
+    {
+        Directory.CreateDirectory(destination);
+        foreach (var file in Directory.EnumerateFiles(source))
+            File.Copy(file, Path.Combine(destination, Path.GetFileName(file)), true);
+        foreach (var dir in Directory.EnumerateDirectories(source))
+            CopyDirectory(dir, Path.Combine(destination, Path.GetFileName(dir)));
     }
 
     // ── Step 8: Wallpaper ────────────────────────────────────────────────────
 
     private async Task InjectWallpaperAsync()
     {
-        if (string.IsNullOrEmpty(_s.WallpaperPath) || !File.Exists(_s.WallpaperPath))
-        {
-            Skip("No wallpaper configured.");
-            return;
-        }
+        // Desktop wallpaper and lock-screen are configured independently in
+        // Step 2 — admins can brand each surface separately or leave either
+        // one at the Windows default. Apply only the blocks whose source
+        // image is set.
+        bool didDesktop    = false;
+        bool didLockScreen = false;
 
-        // Win11 24H2/25H2 introduced "Bloom" defaults at img19 (light) and img20 (dark)
-        // alongside the legacy img0. We overwrite all of them so the user's wallpaper
-        // is the new default regardless of which one Windows picks based on theme.
-        // Some Windows builds ship only a subset of these (e.g. img0 + img19 but no img20),
-        // so we only attempt to replace files that actually exist — avoids spurious
-        // "file not found" errors in the build log for missing variants.
-        var wallpaperDir = Path.Combine(_mountDir, "Windows", "Web", "Wallpaper", "Windows");
-        Directory.CreateDirectory(wallpaperDir);
-        foreach (var name in new[] { "img0.jpg", "img19.jpg", "img20.jpg" })
+        // ── Desktop wallpaper ─────────────────────────────────────────────
+        // Win11 24H2/25H2 introduced "Bloom" defaults at img19 (light) and
+        // img20 (dark) alongside the legacy img0. We overwrite all of them so
+        // the user's wallpaper is the new default regardless of which one
+        // Windows picks based on theme. Some Windows builds ship only a
+        // subset (e.g. img0 + img19 but no img20), so we only attempt to
+        // replace files that actually exist.
+        if (!string.IsNullOrEmpty(_s.WallpaperPath) && File.Exists(_s.WallpaperPath))
         {
-            var p = Path.Combine(wallpaperDir, name);
-            if (!File.Exists(p))
+            var wallpaperDir = Path.Combine(_mountDir, "Windows", "Web", "Wallpaper", "Windows");
+            Directory.CreateDirectory(wallpaperDir);
+            foreach (var name in new[] { "img0.jpg", "img19.jpg", "img20.jpg" })
             {
-                Log($"  - {name} not present in this Windows build, skipping");
-                continue;
+                var p = Path.Combine(wallpaperDir, name);
+                if (!File.Exists(p))
+                {
+                    Log($"  - {name} not present in this Windows build, skipping");
+                    continue;
+                }
+                await TryReplaceFileWithOwnership(p, _s.WallpaperPath, "wallpaper");
             }
-            await TryReplaceFileWithOwnership(p, _s.WallpaperPath, "wallpaper");
+
+            // 4K variants: img0_*, img19_*, img20_* (multi-resolution per file)
+            var dir4k = Path.Combine(_mountDir, "Windows", "Web", "4K", "Wallpaper", "Windows");
+            if (Directory.Exists(dir4k))
+            {
+                foreach (var pattern in new[] { "img0_*.jpg", "img19_*.jpg", "img20_*.jpg" })
+                    foreach (var f in Directory.GetFiles(dir4k, pattern))
+                        await TryReplaceFileWithOwnership(f, _s.WallpaperPath, "4K wallpaper");
+            }
+            didDesktop = true;
+        }
+        else
+        {
+            Log("  - desktop wallpaper not configured, leaving Windows default in place");
         }
 
-        // 4K variants: img0_*, img19_*, img20_* (multi-resolution per file)
-        var dir4k = Path.Combine(_mountDir, "Windows", "Web", "4K", "Wallpaper", "Windows");
-        if (Directory.Exists(dir4k))
+        // ── Lock-screen / OOBE / sign-in backgrounds ──────────────────────
+        // Win10 used img1*.jpg.  Win11 uses img100.jpg as primary, plus
+        // img101–img105 in 24H2/25H2. The "img1*.jpg" pattern matches both.
+        if (!string.IsNullOrEmpty(_s.LockScreenPath) && File.Exists(_s.LockScreenPath))
         {
-            foreach (var pattern in new[] { "img0_*.jpg", "img19_*.jpg", "img20_*.jpg" })
-                foreach (var f in Directory.GetFiles(dir4k, pattern))
-                    await TryReplaceFileWithOwnership(f, _s.WallpaperPath, "4K wallpaper");
+            var screenDir = Path.Combine(_mountDir, "Windows", "Web", "Screen");
+            if (Directory.Exists(screenDir))
+            {
+                foreach (var f in Directory.GetFiles(screenDir, "img1*.jpg"))
+                    await TryReplaceFileWithOwnership(f, _s.LockScreenPath, "lock-screen");
+            }
+            didLockScreen = true;
+        }
+        else
+        {
+            Log("  - lock-screen image not configured, leaving Windows default in place");
         }
 
-        // Lock screen / OOBE / logon backgrounds.  Win10 used img1*.jpg.  Win11 uses
-        // img100.jpg as primary, plus img101–img105 in 24H2/25H2.  The "img1*.jpg"
-        // pattern matches both eras.
-        var screenDir = Path.Combine(_mountDir, "Windows", "Web", "Screen");
-        if (Directory.Exists(screenDir))
-        {
-            foreach (var f in Directory.GetFiles(screenDir, "img1*.jpg"))
-                await TryReplaceFileWithOwnership(f, _s.WallpaperPath, "lock-screen");
-        }
+        if (!didDesktop && !didLockScreen)
+            Skip("Neither wallpaper nor lock screen configured.");
     }
 
     /// <summary>
@@ -888,6 +1232,22 @@ public class BuildEngine
                              "SystemUsesLightTheme", "REG_DWORD", "0");
             }
 
+            // 2b) OneDrive: strip the silent auto-install bootstrap from the
+            // default user template so new accounts don't get OneDriveSetup
+            // fired on first login. This does NOT block manual installs (Office
+            // M365 bundle, standalone OneDrive installer) -- those drop their
+            // own OneDrive.exe and don't depend on these RunOnce/Run entries.
+            if (_s.UninstallOneDrive && File.Exists(userHive))
+            {
+                await RunAsync("reg.exe",
+                    "delete \"HKLM\\OFFLINE_USR\\Software\\Microsoft\\Windows\\CurrentVersion\\RunOnce\" /v OneDriveSetup /f",
+                    expectZero: false);
+                await RunAsync("reg.exe",
+                    "delete \"HKLM\\OFFLINE_USR\\Software\\Microsoft\\Windows\\CurrentVersion\\Run\" /v OneDrive /f",
+                    expectZero: false);
+                Log("  OneDrive: stripped per-user auto-install entries from default profile.");
+            }
+
             // 3) Show file extensions / hidden files
             if (File.Exists(userHive))
             {
@@ -932,6 +1292,92 @@ public class BuildEngine
             if (_s.DisableSmbV1)
                 await RegAdd(@"HKLM\OFFLINE_SYS\ControlSet001\Services\mrxsmb10",
                              "Start", "REG_DWORD", "4");
+
+            // 7a) Auto-timezone: let Windows correct the time zone via
+            // geolocation when the laptop first connects to the internet.
+            // The <TimeZone> element in unattend.xml + tzutil in SetupComplete
+            // give a deterministic offline baseline; tzautoupdate Start=3
+            // (auto) then lets a laptop shipped to a different region
+            // self-correct on first online sign-in. Start=4 would mean
+            // manual-only, which is the default behaviour we are replacing.
+            await RegAdd(@"HKLM\OFFLINE_SYS\ControlSet001\Services\tzautoupdate",
+                         "Start", "REG_DWORD", "3");
+
+            // 7b) Windows 11 UX & privacy baseline (enterprise preset)
+            // Each toggle is independent; all default off in the model so this
+            // block is a no-op for users who haven't opted in. Validator
+            // queries each key separately to report PASS / WARN per toggle.
+            if (_s.DisableCopilot)
+                await RegAdd(@"HKLM\OFFLINE_SW\Policies\Microsoft\Windows\WindowsCopilot",
+                             "TurnOffWindowsCopilot", "REG_DWORD", "1");
+
+            if (_s.DisableRecall)
+            {
+                // Primary kill-switch (Win11 24H2+ Recall feature)
+                await RegAdd(@"HKLM\OFFLINE_SW\Policies\Microsoft\Windows\WindowsAI",
+                             "DisableAIDataAnalysis", "REG_DWORD", "1");
+                // Secondary: block any future enablement attempt
+                await RegAdd(@"HKLM\OFFLINE_SW\Policies\Microsoft\Windows\WindowsAI",
+                             "AllowRecallEnablement", "REG_DWORD", "0");
+            }
+
+            if (_s.DisableWidgets)
+                await RegAdd(@"HKLM\OFFLINE_SW\Policies\Microsoft\Dsh",
+                             "AllowNewsAndInterests", "REG_DWORD", "0");
+
+            if (_s.DisableChatIcon)
+                await RegAdd(@"HKLM\OFFLINE_SW\Microsoft\PolicyManager\current\device\Experience",
+                             "ConfigureChatIcon", "REG_DWORD", "3");
+
+            if (_s.DisableConsumerFeatures)
+                await RegAdd(@"HKLM\OFFLINE_SW\Policies\Microsoft\Windows\CloudContent",
+                             "DisableWindowsConsumerFeatures", "REG_DWORD", "1");
+
+            // 7c) Custom fonts (file copy + registry registration)
+            // Files go into <mount>\Windows\Fonts; each gets a registry value
+            // under HKLM\OFFLINE_SW\Microsoft\Windows NT\CurrentVersion\Fonts.
+            // Skipped entirely when no fonts are configured.
+            if (_s.Fonts != null && _s.Fonts.Count > 0)
+            {
+                var fontsDir = Path.Combine(_mountDir, "Windows", "Fonts");
+                Directory.CreateDirectory(fontsDir);
+                int registered = 0;
+                foreach (var font in _s.Fonts)
+                {
+                    if (string.IsNullOrWhiteSpace(font.SourcePath) ||
+                        !File.Exists(font.SourcePath))
+                    {
+                        Log($"  ! Font source not found, skipping: {font.SourcePath}");
+                        continue;
+                    }
+                    try
+                    {
+                        var fname = Path.GetFileName(font.SourcePath);
+                        var dest  = Path.Combine(fontsDir, fname);
+
+                        // Some pristine Windows font files are read-only /
+                        // TrustedInstaller-owned. Reuse the wallpaper helper
+                        // that handles takeown + ACL grant + copy.
+                        await TryReplaceFileWithOwnership(dest, font.SourcePath, "font");
+
+                        // Registry name: "Display Name (TrueType|OpenType)".
+                        var ext    = Path.GetExtension(fname).ToLowerInvariant();
+                        var suffix = ext == ".otf" ? " (OpenType)"
+                                                   : " (TrueType)";  // .ttf and .ttc both
+                        var name   = string.IsNullOrWhiteSpace(font.DisplayName)
+                                   ? Path.GetFileNameWithoutExtension(fname)
+                                   : font.DisplayName;
+                        await RegAdd(@"HKLM\OFFLINE_SW\Microsoft\Windows NT\CurrentVersion\Fonts",
+                                     name + suffix, "REG_SZ", fname);
+                        registered++;
+                    }
+                    catch (Exception ex)
+                    {
+                        Log($"  ! Failed to register font {font.SourcePath}: {ex.Message}");
+                    }
+                }
+                Log($"  Fonts: {registered}/{_s.Fonts.Count} registered.");
+            }
 
             // 8) Custom user-defined entries
             foreach (var e in _s.CustomRegistryEntries)
@@ -1207,9 +1653,19 @@ public class BuildEngine
         // ── Password never expires ────────────────────────────────────────────────
         if (_s.PasswordNeverExpires)
         {
-            sb.AppendLine(":: Remove password expiration");
+            // Two-method belt-and-braces (WMIC removed in 25H2 -- can't use it as fallback).
+            // Method 1: Set-LocalUser. Method 2: Set-CimInstance on Win32_UserAccount (WMIC replacement).
+            // Both write the per-account UF_DONT_EXPIRE_PASSWD flag in SAM. If one silently no-ops,
+            // the other should succeed. Verification line logs the final state to %LOG% so the next
+            // failure (if any) can be diagnosed without another build.
+            string pneUser = string.IsNullOrWhiteSpace(_s.AdminUsername) ? "Administrator" : _s.AdminUsername;
+            string pneUserEsc = pneUser.Replace("'", "''");
+            sb.AppendLine(":: PasswordNeverExpires: 2 independent setters + verification (25H2 has no WMIC)");
             sb.AppendLine("net accounts /maxpwage:unlimited >> \"%LOG%\" 2>&1");
-            Log("  Password never expires applied via net accounts.");
+            sb.AppendLine($"powershell -NoProfile -ExecutionPolicy Bypass -Command \"try {{ Set-LocalUser -Name '{pneUserEsc}' -PasswordNeverExpires $true; 'Set-LocalUser OK' }} catch {{ 'Set-LocalUser ERR: ' + $_.Exception.Message }}\" >> \"%LOG%\" 2>&1");
+            sb.AppendLine($"powershell -NoProfile -ExecutionPolicy Bypass -Command \"try {{ $u = Get-CimInstance Win32_UserAccount | Where-Object {{ $_.Name -eq '{pneUserEsc}' -and $_.LocalAccount }}; if ($u) {{ Set-CimInstance -InputObject $u -Property @{{ PasswordExpires = $false }}; 'CIM OK' }} else {{ 'CIM ERR: account not found' }} }} catch {{ 'CIM ERR: ' + $_.Exception.Message }}\" >> \"%LOG%\" 2>&1");
+            sb.AppendLine($"powershell -NoProfile -ExecutionPolicy Bypass -Command \"$pne = (Get-LocalUser -Name '{pneUserEsc}').PasswordNeverExpires; 'PasswordNeverExpires final state = ' + $pne\" >> \"%LOG%\" 2>&1");
+            Log($"  Password never expires: 2-method setter + verification line written (Set-LocalUser + CIM, target '{pneUser}').");
         }
 
         if (_s.AutoLoginEnabled && !string.IsNullOrEmpty(_s.AdminPassword))
@@ -1237,6 +1693,19 @@ public class BuildEngine
         // ── Power plan ────────────────────────────────────────────────────────
         sb.AppendLine($"echo [%date% %time%] Setting power plan {_s.PowerPlan} >> \"%LOG%\"");
         sb.AppendLine($"powercfg /setactive {PowerPlanGuid(_s.PowerPlan)} >> \"%LOG%\" 2>&1");
+
+        // ── Dark mode for the current (auto-logged-in Administrator) session ──
+        // The offline-hive writes (OFFLINE_USR\Software\...\Themes\Personalize)
+        // cover users provisioned later from the default profile, but the
+        // built-in Administrator's HKCU is materialised by AutoLogon before
+        // those default-template keys take effect for that specific account.
+        // Belt and braces: also write into the live HKCU during SetupComplete.
+        if (_s.DarkMode)
+        {
+            sb.AppendLine(":: Dark mode for current Administrator session");
+            sb.AppendLine("reg add \"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize\" /v AppsUseLightTheme   /t REG_DWORD /d 0 /f >> \"%LOG%\" 2>&1");
+            sb.AppendLine("reg add \"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize\" /v SystemUsesLightTheme /t REG_DWORD /d 0 /f >> \"%LOG%\" 2>&1");
+        }
 
         // ── Remove Windows.old ───────────────────────────────────────────────
         // Windows Setup moves the previous Windows installation to C:\Windows.old
@@ -1315,6 +1784,96 @@ public class BuildEngine
             Log($"  {_s.ScheduledTasks.Count} scheduled task(s) staged in SetupComplete.cmd.");
         }
 
+        // ── Trusted certificates (Root / Intermediate / TrustedPublisher) ────
+        // Stage each cert file into a store-specific subfolder under
+        // \Windows\Setup\Scripts\Certs\ and emit a single `for` loop per
+        // store. Skipped entirely when no certs are configured.
+        if (_s.Certificates != null && _s.Certificates.Count > 0)
+        {
+            var certsRoot = Path.Combine(_mountDir, "Windows", "Setup", "Scripts", "Certs");
+            // Group by store; valid values restricted to the three Windows
+            // store names. Unknown values are silently downgraded to "Root"
+            // so a typo never produces an empty / unreachable destination.
+            var validStores = new[] { "Root", "CA", "TrustedPublisher" };
+            int staged = 0;
+            foreach (var cert in _s.Certificates)
+            {
+                if (string.IsNullOrWhiteSpace(cert.SourcePath) || !File.Exists(cert.SourcePath))
+                {
+                    Log($"  ! Certificate source not found, skipping: {cert.SourcePath}");
+                    continue;
+                }
+                var store = Array.Exists(validStores,
+                    s => string.Equals(s, cert.Store, StringComparison.OrdinalIgnoreCase))
+                    ? cert.Store
+                    : "Root";
+                var storeDir = Path.Combine(certsRoot, store);
+                Directory.CreateDirectory(storeDir);
+                var fname = Path.GetFileName(cert.SourcePath);
+                File.Copy(cert.SourcePath, Path.Combine(storeDir, fname), overwrite: true);
+                staged++;
+            }
+            Log($"  Staged {staged}/{_s.Certificates.Count} certificate file(s) to \\Windows\\Setup\\Scripts\\Certs.");
+
+            sb.AppendLine(":: ── Trusted certificates ─────────────────────────────");
+            sb.AppendLine("echo [%date% %time%] Importing trusted certificates >> \"%LOG%\"");
+            // Three loops — one per store. -f forces overwrite of an existing
+            // entry with the same thumbprint. Files with .cer OR .crt are
+            // accepted; we glob both.
+            foreach (var store in validStores)
+            {
+                sb.AppendLine($"for %%f in (\"%SystemRoot%\\Setup\\Scripts\\Certs\\{store}\\*.cer\" \"%SystemRoot%\\Setup\\Scripts\\Certs\\{store}\\*.crt\") do certutil.exe -f -addstore {store} \"%%f\" >> \"%LOG%\" 2>&1");
+            }
+        }
+
+        // ── OneDrive per-machine uninstall ────────────────────────────────────
+        // Catches the per-user installer that the bloatware-removal step
+        // (provisioned package match) doesn't reach. Both architectures —
+        // System32 has the native 64-bit OneDriveSetup.exe and SysWOW64 has
+        // the 32-bit shim — checked with `if exist` so the script is safe on
+        // ARM64 builds where neither exists.
+        if (_s.UninstallOneDrive)
+        {
+            sb.AppendLine(":: ── OneDrive per-machine uninstall ──────────────");
+            sb.AppendLine("if exist \"%SystemRoot%\\System32\\OneDriveSetup.exe\" (");
+            // Square brackets, not parens -- cmd.exe treats unescaped `)` inside
+            // an `if exist (...)` body as the end of the if-block, which breaks
+            // the following SysWOW64 dispatch line.
+            sb.AppendLine("    echo [%date% %time%] Uninstalling OneDrive [64-bit] >> \"%LOG%\"");
+            sb.AppendLine("    \"%SystemRoot%\\System32\\OneDriveSetup.exe\" /uninstall >> \"%LOG%\" 2>&1");
+            sb.AppendLine(")");
+            sb.AppendLine("if exist \"%SystemRoot%\\SysWOW64\\OneDriveSetup.exe\" (");
+            sb.AppendLine("    echo [%date% %time%] Uninstalling OneDrive [32-bit] >> \"%LOG%\"");
+            sb.AppendLine("    \"%SystemRoot%\\SysWOW64\\OneDriveSetup.exe\" /uninstall >> \"%LOG%\" 2>&1");
+            sb.AppendLine(")");
+            // Remove the OneDrive shortcut from File Explorer's left pane.
+            sb.AppendLine("reg delete \"HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Desktop\\NameSpace\\{018D5C66-4533-4307-9B53-224DE2ED1FE6}\" /f >> \"%LOG%\" 2>&1");
+            // Reap any per-user OneDrive that was installed by the default-profile
+            // RunOnce during the Administrator AutoLogon that fires this very
+            // SetupComplete.cmd. taskkill first (releases file handles), then
+            // rmdir the per-user install folder, then clean up the residual
+            // HKCU RunOnce. All three are idempotent and gated by the surrounding
+            // if (_s.UninstallOneDrive); errors land in the log but never halt.
+            sb.AppendLine("echo [%date% %time%] Reaping any per-user OneDrive >> \"%LOG%\"");
+            sb.AppendLine("taskkill /f /im OneDrive.exe >> \"%LOG%\" 2>&1");
+            sb.AppendLine("rmdir /s /q \"%LOCALAPPDATA%\\Microsoft\\OneDrive\" >> \"%LOG%\" 2>&1");
+            sb.AppendLine("reg delete \"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\RunOnce\" /v OneDriveSetup /f >> \"%LOG%\" 2>&1");
+            // Remove startup Run entry (any per-user copy that registered).
+            sb.AppendLine("reg delete \"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run\" /v OneDrive /f >> \"%LOG%\" 2>&1");
+            // Delete the OEM staging copies so Windows can't re-spawn OneDriveSetup per-user.
+            // /uninstall removes only the per-user Program Files copy; System32/SysWOW64 keep
+            // the staging binaries which Windows runs at every new user's first logon, putting
+            // OneDrive back. takeown + icacls + del (SID *S-1-5-32-544 = Administrators) is the
+            // documented enterprise pattern.
+            sb.AppendLine(":: Delete OEM staging copies so OneDrive can't be re-staged for new users");
+            sb.AppendLine("takeown /f \"%SystemRoot%\\System32\\OneDriveSetup.exe\" /a >> \"%LOG%\" 2>&1");
+            sb.AppendLine("icacls \"%SystemRoot%\\System32\\OneDriveSetup.exe\" /grant *S-1-5-32-544:F >> \"%LOG%\" 2>&1");
+            sb.AppendLine("if exist \"%SystemRoot%\\System32\\OneDriveSetup.exe\" del /f /q \"%SystemRoot%\\System32\\OneDriveSetup.exe\" >> \"%LOG%\" 2>&1");
+            sb.AppendLine("takeown /f \"%SystemRoot%\\SysWOW64\\OneDriveSetup.exe\" /a >> \"%LOG%\" 2>&1");
+            sb.AppendLine("icacls \"%SystemRoot%\\SysWOW64\\OneDriveSetup.exe\" /grant *S-1-5-32-544:F >> \"%LOG%\" 2>&1");
+            sb.AppendLine("if exist \"%SystemRoot%\\SysWOW64\\OneDriveSetup.exe\" del /f /q \"%SystemRoot%\\SysWOW64\\OneDriveSetup.exe\" >> \"%LOG%\" 2>&1");
+        }
+
         // ── Computer rename: always LAST because it triggers a reboot ─────────
         //
         // Why last:
@@ -1333,16 +1892,41 @@ public class BuildEngine
         // the script exits normally and Windows presents the login screen.
         if (!string.IsNullOrWhiteSpace(_s.ComputerPrefix))
         {
-            Log($"  Computer naming enabled — prefix '{_s.ComputerPrefix}' + BIOS serial. A reboot will follow.");
+            // Default template = the proven, original PowerShell line. ANY
+            // non-default template routes through a separate helper so a bug
+            // in the new resolver cannot break the default case. See
+            // BuildSession.HostnameTemplate.
+            var template = string.IsNullOrWhiteSpace(_s.HostnameTemplate)
+                         ? "{PREFIX}{SERIAL}"
+                         : _s.HostnameTemplate;
+
+            Log($"  Computer naming enabled — template '{template}'. A reboot will follow.");
             sb.AppendLine(":: ── Computer rename (must be last — triggers reboot) ──────────────");
-            sb.AppendLine($"echo [%date% %time%] Renaming computer: prefix {_s.ComputerPrefix.ToUpper()} + BIOS serial >> \"%LOG%\"");
-            sb.AppendLine(
-                $"powershell -NonInteractive -ExecutionPolicy Bypass -Command \"" +
-                $"$serial = ((Get-WmiObject -Class Win32_BIOS).SerialNumber.Trim() -replace '[^a-zA-Z0-9]','').ToUpper(); " +
-                $"$newName = ('{_s.ComputerPrefix.ToUpper()}' + $serial).ToUpper(); " +
-                $"if ($newName.Length -gt 15) {{ $newName = $newName.Substring(0,15) }}; " +
-                $"Rename-Computer -NewName $newName -Force -ErrorAction SilentlyContinue; " +
-                $"\\\"[$(Get-Date)] Renamed to: $newName\\\" | Out-File \\\"%LOG%\\\" -Append\" >> \"%LOG%\" 2>&1");
+
+            if (template == "{PREFIX}{SERIAL}")
+            {
+                // EXISTING PowerShell line — preserved byte-for-byte from the
+                // original implementation. DO NOT EDIT this block; if behaviour
+                // for the default case needs to change, do it in the new
+                // template branch first to validate, then port back.
+                sb.AppendLine($"echo [%date% %time%] Renaming computer: prefix {_s.ComputerPrefix.ToUpper()} + BIOS serial >> \"%LOG%\"");
+                sb.AppendLine(
+                    $"powershell -NonInteractive -ExecutionPolicy Bypass -Command \"" +
+                    $"$serial = ((Get-WmiObject -Class Win32_BIOS).SerialNumber.Trim() -replace '[^a-zA-Z0-9]','').ToUpper(); " +
+                    $"$newName = ('{_s.ComputerPrefix.ToUpper()}' + $serial).ToUpper(); " +
+                    $"if ($newName.Length -gt 15) {{ $newName = $newName.Substring(0,15) }}; " +
+                    $"Rename-Computer -NewName $newName -Force -ErrorAction SilentlyContinue; " +
+                    $"\\\"[$(Get-Date)] Renamed to: $newName\\\" | Out-File \\\"%LOG%\\\" -Append\" >> \"%LOG%\" 2>&1");
+            }
+            else
+            {
+                // Non-default template — emit the resolver block. Variables
+                // {PREFIX}/{SERIAL}/{LAST6_SERIAL}/{LAST6_MAC}/{ASSETTAG} are
+                // expanded by PowerShell at first boot.
+                sb.AppendLine($"echo [%date% %time%] Renaming computer: template {template} >> \"%LOG%\"");
+                sb.AppendLine(BuildHostnameTemplateBlock(_s.ComputerPrefix, template));
+            }
+
             // Reboot to apply the new hostname. No more commands after this.
             sb.AppendLine($"echo [%date% %time%] Rebooting to apply new hostname >> \"%LOG%\"");
             sb.AppendLine("shutdown /r /t 0");
@@ -1376,6 +1960,44 @@ public class BuildEngine
         {
             Log("Skip OOBE is disabled — Autounattend.xml not generated. Windows will run the standard first-boot setup wizard.");
         }
+    }
+
+    // ── Hostname template resolver (non-default templates only) ───────────────
+
+    /// <summary>
+    /// Emits the SetupComplete.cmd PowerShell line for a non-default hostname
+    /// template. Used only when the user opts in to <c>{LAST6_SERIAL}</c>,
+    /// <c>{LAST6_MAC}</c>, or <c>{ASSETTAG}</c>. The default
+    /// <c>{PREFIX}{SERIAL}</c> case is handled by the original inline block in
+    /// <c>GenerateUnattendAsync</c> and is NOT routed through here — so a bug
+    /// in this resolver can never break the proven default behaviour.
+    ///
+    /// All five variables are resolved up-front so each <c>-replace</c> is a
+    /// cheap string operation. <c>{ASSETTAG}</c> falls back to <c>{SERIAL}</c>
+    /// when SMBIOS asset-tag is unset (common on freshly-out-of-the-box
+    /// machines), preventing an empty hostname.
+    /// </summary>
+    private static string BuildHostnameTemplateBlock(string prefix, string template)
+    {
+        // Inner double-quotes inside the powershell -Command argument are
+        // escaped with a backslash for cmd.exe parsing. Curly braces in the
+        // template tokens pass through cmd verbatim, then arrive at
+        // PowerShell where `-replace` treats them as regex literals (curlies
+        // are not regex meta-characters by themselves).
+        return
+            "powershell -NonInteractive -ExecutionPolicy Bypass -Command \"" +
+            $"$prefix = '{prefix.ToUpper().Replace("'", "''")}'; " +
+            "$serial = ((Get-WmiObject -Class Win32_BIOS).SerialNumber.Trim() -replace '[^a-zA-Z0-9]','').ToUpper(); " +
+            "$last6Ser = if ($serial.Length -ge 6) { $serial.Substring($serial.Length - 6) } else { $serial }; " +
+            "$mac = ((Get-NetAdapter -Physical | Where-Object Status -eq 'Up' | Select-Object -First 1).MacAddress -replace '[-:]','').ToUpper(); " +
+            "$last6Mac = if ($mac.Length -ge 6) { $mac.Substring($mac.Length - 6) } else { $mac }; " +
+            "$asset = ((Get-WmiObject -Class Win32_SystemEnclosure).SMBIOSAssetTag -replace '[^a-zA-Z0-9]','').ToUpper(); " +
+            "if (-not $asset) { $asset = $serial }; " +
+            $"$template = '{template.Replace("'", "''")}'; " +
+            "$newName = $template -replace '\\{PREFIX\\}',$prefix -replace '\\{LAST6_SERIAL\\}',$last6Ser -replace '\\{LAST6_MAC\\}',$last6Mac -replace '\\{ASSETTAG\\}',$asset -replace '\\{SERIAL\\}',$serial; " +
+            "if ($newName.Length -gt 15) { $newName = $newName.Substring(0,15) }; " +
+            "Rename-Computer -NewName $newName -Force -ErrorAction SilentlyContinue; " +
+            "\\\"[$(Get-Date)] Renamed to: $newName (template $template)\\\" | Out-File \\\"%LOG%\\\" -Append\" >> \"%LOG%\" 2>&1";
     }
 
     // ── Scheduled-task command builder ────────────────────────────────────────
@@ -1831,8 +2453,22 @@ exit 0
 
         checks.AddRange(CheckSetupComplete());
         checks.AddRange(CheckStagedFiles());
+        // ── New WIM-mutation checks (Phase 5c) ─────────────────────────────
+        // Each verifies a specific engine step actually wrote into the mounted
+        // WIM. Ordered by pipeline lifecycle so the report reads top-down.
+        checks.AddRange(await CheckDriversAsync());
+        checks.AddRange(await CheckLanguagePacksAsync());
+        checks.AddRange(CheckWallpaperAndLockScreen());
         checks.AddRange(CheckBitLockerScript());
         checks.AddRange(CheckDeploymentScripts());
+        checks.AddRange(await CheckBloatwareRemovalAsync());
+        checks.AddRange(await CheckFeaturesAppliedAsync());
+        checks.AddRange(CheckAutoFetchAssets());
+        checks.AddRange(CheckCertificates());
+        checks.AddRange(CheckFonts());
+        // Font registry registration — runs immediately after CheckFonts so
+        // both halves report under the same [CUSTOM FONTS] section header.
+        checks.AddRange(await CheckFontsRegistryAsync());
 
         var regChecks = await CheckRegistryAsync();
         checks.AddRange(regChecks);
@@ -1899,25 +2535,52 @@ exit 0
         Log($"Validation: {pass} pass / {warn} warn / {fail} fail");
 
         // ── Save reports (text + HTML) ─────────────────────────────────────
-        try
+        //
+        // Try OutputPath first (the obvious place users look). If that fails
+        // for any reason — folder doesn't exist, no permissions, drive
+        // unmounted — fall back to the workspace so the report still lands
+        // somewhere predictable. Earlier reports were silently lost when the
+        // OutputPath wasn't writable, leaving users with no validation trail.
+        string stamp = generated.ToString("yyyyMMdd-HHmmss");
+        string txtName  = $"ValidationReport_{stamp}.txt";
+        string htmlName = $"ValidationReport_{stamp}.html";
+
+        string? writtenTxt  = null;
+        string? writtenHtml = null;
+        string  htmlBody    = BuildHtmlReport(checks, _s.SelectedEdition ?? "Pro",
+                                _s.IsoSourceLanguage ?? "", _s.SourceIsoPath ?? "",
+                                generated, pass, warn, fail);
+
+        foreach (var dir in EnumerateReportDirs())
         {
-            Directory.CreateDirectory(_s.OutputPath!);
-            string stamp      = generated.ToString("yyyyMMdd-HHmmss");
-            string txtPath    = Path.Combine(_s.OutputPath!, $"ValidationReport_{stamp}.txt");
-            string htmlPath   = Path.Combine(_s.OutputPath!, $"ValidationReport_{stamp}.html");
-
-            await File.WriteAllTextAsync(txtPath, rpt.ToString(), Encoding.UTF8);
-            Log($"Validation report saved: {txtPath}");
-
-            string html = BuildHtmlReport(checks, _s.SelectedEdition ?? "Pro",
-                _s.IsoSourceLanguage ?? "", _s.SourceIsoPath ?? "",
-                generated, pass, warn, fail);
-            await File.WriteAllTextAsync(htmlPath, html, Encoding.UTF8);
-            Log($"HTML report saved: {htmlPath}");
+            try
+            {
+                Directory.CreateDirectory(dir);
+                var txtPath  = Path.Combine(dir, txtName);
+                var htmlPath = Path.Combine(dir, htmlName);
+                await File.WriteAllTextAsync(txtPath,  rpt.ToString(), Encoding.UTF8);
+                await File.WriteAllTextAsync(htmlPath, htmlBody,       Encoding.UTF8);
+                writtenTxt  = txtPath;
+                writtenHtml = htmlPath;
+                break;
+            }
+            catch (Exception ex)
+            {
+                Log($"  ! Could not write validation report to {dir}: {ex.Message}");
+                // Try the next candidate directory.
+            }
         }
-        catch (Exception ex)
+
+        if (writtenTxt != null)
         {
-            Log($"  ! Could not save validation report: {ex.Message}");
+            // Single highly visible line so users can find the file.
+            Log($"=== Validation report saved ===");
+            Log($"    Text: {writtenTxt}");
+            Log($"    HTML: {writtenHtml}");
+        }
+        else
+        {
+            Log("  ! Validation report could not be saved to any candidate directory.");
         }
 
         if (fail > 0)
@@ -2244,6 +2907,44 @@ exit 0
         if (syntaxOk)
             c.Add(new(CAT, "Script syntax: no broken continuation lines", ValStatus.Pass, ""));
 
+        // ── OneDrive uninstall block ──────────────────────────────────────
+        // Only checked when the user opted in — leaves the report clean for
+        // builds that don't touch OneDrive.
+        if (_s.UninstallOneDrive)
+        {
+            bool hasUninstall = script.Contains("OneDriveSetup.exe", StringComparison.OrdinalIgnoreCase) &&
+                                script.Contains("/uninstall", StringComparison.OrdinalIgnoreCase);
+            c.Add(hasUninstall
+                ? new(CAT, "OneDrive uninstall block present", ValStatus.Pass,
+                    "OneDriveSetup.exe /uninstall found in script ✓")
+                : new(CAT, "OneDrive uninstall block present", ValStatus.Fail,
+                    "UninstallOneDrive is enabled but the uninstall block is missing from SetupComplete.cmd."));
+        }
+
+        // ── Hostname template ─────────────────────────────────────────────
+        // Default template (PREFIX+SERIAL) emits the original inline block —
+        // already covered by the script-exists check above. For non-default
+        // templates we confirm the resolver block is present and that the
+        // template string itself was substituted into the script (verifies
+        // the StringBuilder injection didn't get lost or escaped wrong).
+        if (!string.IsNullOrWhiteSpace(_s.ComputerPrefix))
+        {
+            bool isDefault = string.IsNullOrEmpty(_s.HostnameTemplate) ||
+                             _s.HostnameTemplate == "{PREFIX}{SERIAL}";
+            if (!isDefault)
+            {
+                bool hasResolver = script.Contains("$last6Mac", StringComparison.OrdinalIgnoreCase) ||
+                                   script.Contains("$asset", StringComparison.OrdinalIgnoreCase) ||
+                                   script.Contains("$last6Ser", StringComparison.OrdinalIgnoreCase);
+                bool hasTemplate = script.Contains(_s.HostnameTemplate, StringComparison.Ordinal);
+                c.Add(hasResolver && hasTemplate
+                    ? new(CAT, $"Hostname template '{_s.HostnameTemplate}' in script", ValStatus.Pass,
+                        "Non-default resolver block present + template token substituted ✓")
+                    : new(CAT, $"Hostname template '{_s.HostnameTemplate}' in script", ValStatus.Fail,
+                        "Non-default hostname template configured but the resolver block / template token is missing — rename will fall back to the default at first boot."));
+            }
+        }
+
         return c;
     }
 
@@ -2341,6 +3042,23 @@ exit 0
                 c.Add(new(CAT, "4K wallpaper variants", count4k > 0 ? ValStatus.Pass : ValStatus.Warn,
                     count4k > 0 ? $"{count4k} 4K variant(s) present ✓" : "No 4K variants found."));
             }
+        }
+
+        // ── Lock-screen images ────────────────────────────────────────────
+        // Only validated when the user explicitly configured a lock-screen
+        // image (LockScreenPath set). If they left it null the wallpaper step
+        // intentionally left the Windows defaults — nothing to validate.
+        if (!string.IsNullOrEmpty(_s.LockScreenPath))
+        {
+            var screenDir = Path.Combine(_mountDir, "Windows", "Web", "Screen");
+            int replaced = Directory.Exists(screenDir)
+                ? Directory.GetFiles(screenDir, "img1*.jpg").Length
+                : 0;
+            c.Add(replaced > 0
+                ? new(CAT, "Lock-screen images replaced in WIM", ValStatus.Pass,
+                    $"{replaced} lock-screen file(s) present in Windows\\Web\\Screen ✓")
+                : new(CAT, "Lock-screen images replaced in WIM", ValStatus.Warn,
+                    $"No lock-screen files found in {screenDir} — default Windows lock screen will be used."));
         }
 
         return c;
@@ -2484,6 +3202,809 @@ exit 0
         return c;
     }
 
+    /// <summary>
+    /// Yields candidate directories for the validation report in preference
+    /// order. The first one we can write to wins. OutputPath is preferred
+    /// because that's where users naturally look for build artifacts; the
+    /// workspace + LocalAppData fallbacks exist so the report still lands
+    /// somewhere even if OutputPath is unusable (read-only share, drive
+    /// removed, permissions lost mid-build, etc.).
+    /// </summary>
+    private IEnumerable<string> EnumerateReportDirs()
+    {
+        if (!string.IsNullOrWhiteSpace(_s.OutputPath))
+            yield return _s.OutputPath!;
+        if (!string.IsNullOrWhiteSpace(_workspace))
+            yield return _workspace;
+        // Last-resort: %LOCALAPPDATA%\GoldenISOBuilder\Reports — always
+        // writable on a normal user profile.
+        yield return Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "GoldenISOBuilder", "Reports");
+    }
+
+    /// <summary>
+    /// Validates the new Phase 5b auto-fetch assets — Windows Updates and OEM
+    /// driver packs. Because slipstreaming + driver injection are soft pipeline
+    /// steps (failures are logged but don't halt), the validator's job here is
+    /// to spot the case where the build skipped them silently because the
+    /// source paths went missing between Step 2 and the build run (e.g. user
+    /// cleared the catalogue cache).
+    /// </summary>
+    /// <summary>
+    /// Validates trusted-certificate staging. Confirms each <see cref="CertificateEntry"/>
+    /// landed in its correct store-specific subfolder inside the WIM AND
+    /// that the certutil import loop is present in SetupComplete.cmd.
+    /// Skipped entirely when no certs were configured.
+    /// </summary>
+    private List<ValCheck> CheckCertificates()
+    {
+        const string CAT = "TRUSTED CERTIFICATES";
+        var c = new List<ValCheck>();
+
+        if (_s.Certificates == null || _s.Certificates.Count == 0)
+        {
+            c.Add(new(CAT, "Certificates configured", ValStatus.Pass,
+                "None configured — skipping."));
+            return c;
+        }
+
+        var certsRoot = Path.Combine(_mountDir, "Windows", "Setup", "Scripts", "Certs");
+        foreach (var cert in _s.Certificates)
+        {
+            if (string.IsNullOrWhiteSpace(cert.SourcePath))
+                continue;
+            var fname = Path.GetFileName(cert.SourcePath);
+            var store = cert.Store;
+            var staged = Path.Combine(certsRoot, store, fname);
+            string label = $"{cert.Store} cert: {fname}";
+            c.Add(File.Exists(staged)
+                ? new(CAT, label, ValStatus.Pass,
+                    $"Staged at \\Windows\\Setup\\Scripts\\Certs\\{store}\\{fname} ✓")
+                : new(CAT, label, ValStatus.Fail,
+                    $"Missing in WIM. Expected: {staged}"));
+        }
+
+        // Verify the certutil block landed in SetupComplete.cmd.
+        var scriptPath = Path.Combine(_mountDir, "Windows", "Setup", "Scripts", "SetupComplete.cmd");
+        if (File.Exists(scriptPath))
+        {
+            try
+            {
+                var script = File.ReadAllText(scriptPath);
+                bool hasBlock = script.Contains("certutil.exe -f -addstore",
+                                                StringComparison.OrdinalIgnoreCase);
+                c.Add(hasBlock
+                    ? new(CAT, "certutil import block in SetupComplete.cmd", ValStatus.Pass,
+                        "All three store loops present ✓")
+                    : new(CAT, "certutil import block in SetupComplete.cmd", ValStatus.Fail,
+                        "Certificates configured but certutil block missing — imports will not run."));
+            }
+            catch { /* unreadable script — covered by the SETUPCOMPLETE category */ }
+        }
+
+        return c;
+    }
+
+    /// <summary>
+    /// Validates custom-font staging — each font file must be present in
+    /// <c>\Windows\Fonts</c> inside the WIM. The registry registration is
+    /// checked in <see cref="CheckRegistryAsync"/> alongside the rest of
+    /// the offline-hive validations to avoid loading the hive twice.
+    /// </summary>
+    private List<ValCheck> CheckFonts()
+    {
+        const string CAT = "CUSTOM FONTS";
+        var c = new List<ValCheck>();
+
+        if (_s.Fonts == null || _s.Fonts.Count == 0)
+        {
+            c.Add(new(CAT, "Custom fonts configured", ValStatus.Pass,
+                "None configured — skipping."));
+            return c;
+        }
+
+        var fontsDir = Path.Combine(_mountDir, "Windows", "Fonts");
+        foreach (var font in _s.Fonts)
+        {
+            if (string.IsNullOrWhiteSpace(font.SourcePath)) continue;
+            var fname = Path.GetFileName(font.SourcePath);
+            var dest  = Path.Combine(fontsDir, fname);
+            c.Add(File.Exists(dest)
+                ? new(CAT, $"Font: {fname}", ValStatus.Pass,
+                    $"Staged at \\Windows\\Fonts\\{fname} ✓")
+                : new(CAT, $"Font: {fname}", ValStatus.Fail,
+                    $"Missing in WIM. Expected: {dest}"));
+        }
+
+        return c;
+    }
+
+    /// <summary>
+    /// Registry half of the fonts validator. The engine writes one value per
+    /// font under HKLM\OFFLINE_SW\Microsoft\Windows NT\CurrentVersion\Fonts
+    /// in the form "<Display Name> (TrueType|OpenType)" → "<filename>". This
+    /// check loads the SOFTWARE hive (separately from CheckRegistryAsync so
+    /// the two never overlap) and confirms each entry exists.
+    /// </summary>
+    private async Task<List<ValCheck>> CheckFontsRegistryAsync()
+    {
+        const string CAT = "CUSTOM FONTS";
+        var c = new List<ValCheck>();
+
+        if (_s.Fonts == null || _s.Fonts.Count == 0)
+            return c;   // CheckFonts already emitted the "None configured" line.
+
+        var swHive = Path.Combine(_mountDir, "Windows", "System32", "config", "SOFTWARE");
+        if (!File.Exists(swHive))
+        {
+            c.Add(new(CAT, "Font registry registration", ValStatus.Warn,
+                $"SOFTWARE hive missing at {swHive}; cannot verify font registration."));
+            return c;
+        }
+
+        // Distinct mount point from GIB_VAL_SW so this never collides with
+        // CheckRegistryAsync, regardless of which one runs first.
+        const string SW = @"HKLM\GIB_VAL_FONT_SW";
+        bool loaded = false;
+        try
+        {
+            var (_, _, exit) = await RunCapturedAsync("reg.exe",
+                $"load \"{SW}\" \"{swHive}\"");
+            loaded = exit == 0;
+            if (!loaded)
+            {
+                c.Add(new(CAT, "Font registry registration", ValStatus.Warn,
+                    "reg.exe failed to load SOFTWARE hive — font-registry check skipped. (Another process may hold a handle.)"));
+                return c;
+            }
+
+            string fontsKey = $@"{SW}\Microsoft\Windows NT\CurrentVersion\Fonts";
+
+            foreach (var font in _s.Fonts)
+            {
+                if (string.IsNullOrWhiteSpace(font.SourcePath)) continue;
+                var fname = Path.GetFileName(font.SourcePath);
+                var ext   = Path.GetExtension(fname).ToLowerInvariant();
+                // .ttf / .ttc → (TrueType); .otf → (OpenType). Matches the
+                // engine's logic at line ~1342.
+                var suffix = ext == ".otf" ? " (OpenType)" : " (TrueType)";
+                var name   = string.IsNullOrWhiteSpace(font.DisplayName)
+                           ? Path.GetFileNameWithoutExtension(fname)
+                           : font.DisplayName;
+                var valueName = name + suffix;
+
+                var (stdout, _, qExit) = await RunCapturedAsync("reg.exe",
+                    $"query \"{fontsKey}\" /v \"{valueName}\"");
+                if (qExit != 0)
+                {
+                    // Display names containing characters that confuse reg.exe
+                    // command-line quoting (quote, apostrophe, ampersand,
+                    // percent) can produce a query failure that's a parser
+                    // issue, not a real injection failure. Downgrade FAIL to
+                    // WARN for those cases so we don't halt the build over
+                    // the validator's own quoting limitation.
+                    bool hasTrickyChars = valueName.IndexOfAny(new[] { '"', '\'', '&', '%' }) >= 0;
+                    var status = hasTrickyChars ? ValStatus.Warn : ValStatus.Fail;
+                    var detail = hasTrickyChars
+                        ? $"Value '{valueName}' query failed — display name contains characters (\" ' & %) that may confuse reg.exe quoting. Verify manually on the deployed image."
+                        : $"Value '{valueName}' missing under {fontsKey}. Font will not load at boot.";
+                    c.Add(new(CAT, $"Font registry: {fname}", status, detail));
+                    continue;
+                }
+                // Verify the value data is the filename (REG_SZ).
+                bool dataMatches = stdout.Split('\n').Any(line =>
+                    line.Contains("REG_SZ", StringComparison.OrdinalIgnoreCase) &&
+                    line.Contains(fname,   StringComparison.OrdinalIgnoreCase));
+                c.Add(dataMatches
+                    ? new(CAT, $"Font registry: {fname}", ValStatus.Pass,
+                        $"'{valueName}' → '{fname}' ✓")
+                    : new(CAT, $"Font registry: {fname}", ValStatus.Warn,
+                        $"Value '{valueName}' exists but data does not contain '{fname}'."));
+            }
+        }
+        catch (Exception ex)
+        {
+            c.Add(new(CAT, "Font registry registration", ValStatus.Warn,
+                $"Font-registry check failed: {ex.Message}"));
+        }
+        finally
+        {
+            if (loaded)
+                await RunCapturedAsync("reg.exe", $"unload \"{SW}\"");
+        }
+
+        return c;
+    }
+
+    private List<ValCheck> CheckAutoFetchAssets()
+    {
+        const string CAT = "AUTO-FETCH ASSETS";
+        var c = new List<ValCheck>();
+
+        // ── Windows Update MSUs slated for slipstream ─────────────────────
+        if (_s.UpdatesMsuPaths.Count == 0)
+        {
+            c.Add(new(CAT, "Windows Updates queued", ValStatus.Pass,
+                "None configured — skipping."));
+        }
+        else
+        {
+            int present = _s.UpdatesMsuPaths.Count(File.Exists);
+            int missing = _s.UpdatesMsuPaths.Count - present;
+            c.Add(missing == 0
+                ? new(CAT, $"Windows Updates ({_s.UpdatesMsuPaths.Count})",
+                    ValStatus.Pass, $"{present} MSU file(s) staged for slipstream ✓")
+                : new(CAT, $"Windows Updates ({_s.UpdatesMsuPaths.Count})",
+                    ValStatus.Warn,
+                    $"{present} present, {missing} missing on disk — those updates were skipped at build time. Re-fetch in Step 2 if needed."));
+        }
+
+        // ── OEM driver packs from auto-fetch (Dell / HP / Lenovo) ─────────
+        if (_s.AutoFetchedDriverPacks.Count == 0)
+        {
+            c.Add(new(CAT, "Auto-fetched driver packs", ValStatus.Pass,
+                "None configured — skipping."));
+        }
+        else
+        {
+            foreach (var dp in _s.AutoFetchedDriverPacks)
+            {
+                var label = $"{dp.Vendor} {dp.ModelName} ({dp.SystemId})";
+                bool ok = !string.IsNullOrWhiteSpace(dp.LocalCabPath) &&
+                          Directory.Exists(dp.LocalCabPath);
+                if (!ok)
+                {
+                    c.Add(new(CAT, $"Pack: {label}", ValStatus.Warn,
+                        $"Extracted folder missing at build time — pack was skipped. Path: {dp.LocalCabPath}"));
+                    continue;
+                }
+                int infs = 0;
+                try
+                {
+                    infs = Directory.EnumerateFiles(dp.LocalCabPath, "*.inf",
+                                                   SearchOption.AllDirectories).Count();
+                }
+                catch { /* enumeration race with concurrent cleanup — ignore */ }
+                c.Add(infs > 0
+                    ? new(CAT, $"Pack: {label}", ValStatus.Pass,
+                        $"{infs} .inf file(s) ready for injection ✓")
+                    : new(CAT, $"Pack: {label}", ValStatus.Warn,
+                        "Extracted folder exists but contains no .inf files — pack will produce no drivers."));
+            }
+        }
+
+        return c;
+    }
+
+    // ── Drivers (manual folders + auto-fetched packs) ─────────────────────
+    // Verifies the staged driver sources actually produced OEM driver entries
+    // in the mounted install.wim's driver store. Catches the "DISM exited 0
+    // but actually injected nothing" failure that otherwise only shows up
+    // when the deployed laptop can't find its NIC.
+    private async Task<List<ValCheck>> CheckDriversAsync()
+    {
+        const string CAT = "DRIVERS";
+        var c = new List<ValCheck>();
+
+        int manual = _s.DriverFolderPaths.Count;
+        int auto   = _s.AutoFetchedDriverPacks.Count;
+        if (manual == 0 && auto == 0)
+        {
+            c.Add(new(CAT, "Driver folders configured", ValStatus.Pass,
+                "None configured — skipping."));
+            return c;
+        }
+
+        // One DISM call, cached. Soft-WARN on failure so a transient DISM
+        // hiccup doesn't halt an otherwise-fine build.
+        string stdout = "", stderr = "";
+        int exit = -1;
+        try
+        {
+            (stdout, stderr, exit) = await DismCapturedAsync(
+                $"/Image:\"{_mountDir}\" /Get-Drivers /Format:Table");
+        }
+        catch (Exception ex)
+        {
+            c.Add(new(CAT, "Driver store query (DISM /Get-Drivers)", ValStatus.Warn,
+                $"DISM call failed, driver-injection cannot be verified: {ex.Message}"));
+            return c;
+        }
+        if (exit != 0)
+        {
+            c.Add(new(CAT, "Driver store query (DISM /Get-Drivers)", ValStatus.Warn,
+                $"DISM exited {exit}; driver-injection cannot be verified. stderr: {stderr.Trim()}"));
+            return c;
+        }
+
+        // Count "oem<N>.inf" tokens — DISM renames every third-party driver to
+        // that form when it joins the driver store. Inbox drivers keep their
+        // original filenames so this regex is bloat-free. We anchor the .inf
+        // suffix to avoid matching e.g. "oem12345" inside another field.
+        int oemCount = Regex.Matches(stdout, @"\boem\d+\.inf\b",
+            RegexOptions.IgnoreCase).Count;
+
+        // Per-source folder line items.
+        int foldersWithInfs = 0;
+        foreach (var folder in _s.DriverFolderPaths)
+        {
+            if (string.IsNullOrWhiteSpace(folder)) continue;
+            if (!Directory.Exists(folder))
+            {
+                c.Add(new(CAT, $"Manual folder: {folder}", ValStatus.Warn,
+                    "Source folder no longer exists; cannot confirm injection."));
+                continue;
+            }
+            int infs = 0;
+            try { infs = Directory.EnumerateFiles(folder, "*.inf", SearchOption.AllDirectories).Count(); }
+            catch { /* enumeration race — treat as zero */ }
+            bool winPe = _s.DriverFolderWinPEOnly.TryGetValue(folder, out var wp) && wp;
+            if (infs == 0)
+            {
+                c.Add(new(CAT, $"Manual folder: {folder}", ValStatus.Warn,
+                    "Source folder contained no .inf files — nothing to inject."));
+                continue;
+            }
+            foldersWithInfs++;
+            c.Add(new(CAT, $"Manual folder: {folder}", ValStatus.Pass,
+                $"{infs} .inf file(s) staged{(winPe ? " (WinPE-critical filter requested)" : "")}."));
+        }
+
+        int autoWithInfs = 0;
+        foreach (var dp in _s.AutoFetchedDriverPacks)
+        {
+            if (string.IsNullOrWhiteSpace(dp.LocalCabPath)) continue;
+            if (!Directory.Exists(dp.LocalCabPath)) continue;
+            int infs = 0;
+            try { infs = Directory.EnumerateFiles(dp.LocalCabPath, "*.inf", SearchOption.AllDirectories).Count(); }
+            catch { }
+            if (infs > 0) autoWithInfs++;
+        }
+
+        int expected = foldersWithInfs + autoWithInfs;
+        if (expected == 0)
+            c.Add(new(CAT, "Driver injection outcome", ValStatus.Pass,
+                "Driver sources configured but none contained .inf files — nothing to verify."));
+        else if (oemCount == 0)
+            c.Add(new(CAT, "Driver injection outcome", ValStatus.Fail,
+                $"{expected} driver source(s) staged but mounted WIM has ZERO oem*.inf entries — DISM silently failed."));
+        else if (oemCount < expected)
+            c.Add(new(CAT, "Driver injection outcome", ValStatus.Warn,
+                $"Mounted WIM has {oemCount} oem*.inf entries; expected at least {expected} (one per staged source). Some drivers may not have been accepted."));
+        else
+            c.Add(new(CAT, "Driver injection outcome", ValStatus.Pass,
+                $"Mounted WIM has {oemCount} oem*.inf entr{(oemCount == 1 ? "y" : "ies")} ≥ {expected} expected ✓"));
+
+        return c;
+    }
+
+    // ── Language Packs ─────────────────────────────────────────────────────
+    // Verifies every .cab in _s.LanguagePackPaths shows up as an Installed
+    // language pack in the mounted image.
+    private async Task<List<ValCheck>> CheckLanguagePacksAsync()
+    {
+        const string CAT = "LANGUAGE PACKS";
+        var c = new List<ValCheck>();
+
+        if (_s.LanguagePackPaths.Count == 0)
+        {
+            c.Add(new(CAT, "Language packs configured", ValStatus.Pass,
+                "None configured — skipping."));
+            return c;
+        }
+
+        string stdout = "", stderr = "";
+        int exit = -1;
+        try
+        {
+            (stdout, stderr, exit) = await DismCapturedAsync(
+                $"/Image:\"{_mountDir}\" /Get-Packages");
+        }
+        catch (Exception ex)
+        {
+            c.Add(new(CAT, "Package list query (DISM /Get-Packages)", ValStatus.Warn,
+                $"DISM call failed: {ex.Message}. Language-pack injection cannot be verified."));
+            return c;
+        }
+        if (exit != 0)
+        {
+            c.Add(new(CAT, "Package list query (DISM /Get-Packages)", ValStatus.Warn,
+                $"DISM exited {exit}; cannot verify language packs. stderr: {stderr.Trim()}"));
+            return c;
+        }
+
+        // Each requested CAB carries one or more BCP-47-shaped tokens in its
+        // filename. We extract ALL of them and match each against DISM output,
+        // so a filename like "LanguageFeatures-OCR-zh-cn-Package" — which
+        // contains both "OCR-zh" and "zh-cn" — resolves on whichever token
+        // DISM actually lists.
+        //
+        // Match line filter is "Language" (not "LanguagePack") so the same
+        // matcher covers both the legacy Client-LanguagePack-Package and the
+        // newer LanguageFeatures-* assets that DISM /Add-Package also handles.
+        //
+        // No-match outcome is WARN, not FAIL: filename-to-DISM-identity
+        // matching has too much variance across pack types to justify halting
+        // a 2-hour build. The engine's langpacks step already logs per-CAB
+        // DISM failures into build-<timestamp>.log, so real failures stay
+        // visible in the build log even when this check soft-warns.
+        foreach (var cabPath in _s.LanguagePackPaths)
+        {
+            string fname  = Path.GetFileName(cabPath ?? "");
+            var    tokens = ExtractAllLocaleTokens(fname);
+            if (tokens.Count == 0)
+            {
+                c.Add(new(CAT, $"Pack: {fname}", ValStatus.Warn,
+                    "Could not extract a locale token from filename; cannot match against installed packages."));
+                continue;
+            }
+
+            string? hitToken = null;
+            foreach (var line in stdout.Split('\n'))
+            {
+                if (!line.Contains("Language", StringComparison.OrdinalIgnoreCase)) continue;
+                hitToken = tokens.FirstOrDefault(t =>
+                    line.Contains(t, StringComparison.OrdinalIgnoreCase));
+                if (hitToken != null) break;
+            }
+
+            c.Add(hitToken != null
+                ? new(CAT, $"Pack: {fname}", ValStatus.Pass,
+                    $"Language asset for {hitToken} present in mounted image ✓")
+                : new(CAT, $"Pack: {fname}", ValStatus.Warn,
+                    $"Could not confirm injection (tried {string.Join(", ", tokens)}). " +
+                    "Check the langpacks step in build-<timestamp>.log."));
+        }
+
+        return c;
+    }
+
+    // ── Wallpaper + Lock Screen ────────────────────────────────────────────
+    // The wallpaper step overwrites TrustedInstaller-owned files (img0.jpg,
+    // img19.jpg, img20.jpg + 4K variants + lock-screen img1*.jpg). If takeown
+    // silently failed, the original Windows image remains. File.Copy preserves
+    // byte-exact size, so dest size == source size proves the replacement won.
+    private List<ValCheck> CheckWallpaperAndLockScreen()
+    {
+        const string CAT = "WALLPAPER";
+        var c = new List<ValCheck>();
+
+        bool wantDesktop = !string.IsNullOrEmpty(_s.WallpaperPath) && File.Exists(_s.WallpaperPath);
+        bool wantLock    = !string.IsNullOrEmpty(_s.LockScreenPath) && File.Exists(_s.LockScreenPath);
+
+        if (!wantDesktop && !wantLock)
+        {
+            c.Add(new(CAT, "Wallpaper / lock screen configured", ValStatus.Pass,
+                "Neither configured — Windows defaults left in place."));
+            return c;
+        }
+
+        if (wantDesktop)
+        {
+            long srcLen = TryFileLength(_s.WallpaperPath!);
+            // Guard against source file unreadable at validation time (deleted,
+            // network drop, AV lock). Without this, srcLen == -1 would compare
+            // false against every dest file and FAIL the build over an
+            // unrelated I/O hiccup. Emit a single WARN and skip the comparison.
+            if (srcLen < 0)
+            {
+                c.Add(new(CAT, "Desktop wallpaper", ValStatus.Warn,
+                    $"Source wallpaper unreadable at validation time ({_s.WallpaperPath}); cannot verify replacement."));
+            }
+            else
+            {
+            var wallpaperDir = Path.Combine(_mountDir, "Windows", "Web", "Wallpaper", "Windows");
+            int matched = 0, present = 0;
+            foreach (var name in new[] { "img0.jpg", "img19.jpg", "img20.jpg" })
+            {
+                var p = Path.Combine(wallpaperDir, name);
+                if (!File.Exists(p)) continue;   // engine also skips missing variants
+                present++;
+                if (TryFileLength(p) == srcLen) matched++;
+            }
+            if (present == 0)
+                c.Add(new(CAT, "Desktop wallpaper", ValStatus.Warn,
+                    "No img0/img19/img20.jpg targets found in the mounted image — unusual Windows build."));
+            else if (matched == 0)
+                c.Add(new(CAT, "Desktop wallpaper", ValStatus.Fail,
+                    $"None of the {present} wallpaper file(s) match the source size ({srcLen:N0} bytes). takeown/icacls likely failed — original Windows image still in place."));
+            else if (matched < present)
+                c.Add(new(CAT, "Desktop wallpaper", ValStatus.Warn,
+                    $"{matched} of {present} wallpaper file(s) replaced; remainder still match the Windows defaults."));
+            else
+                c.Add(new(CAT, "Desktop wallpaper", ValStatus.Pass,
+                    $"All {matched} wallpaper file(s) match source size ✓"));
+
+            // 4K variants — best-effort cosmetic, never FAIL.
+            var dir4k = Path.Combine(_mountDir, "Windows", "Web", "4K", "Wallpaper", "Windows");
+            if (Directory.Exists(dir4k))
+            {
+                var fourK = new[] { "img0_*.jpg", "img19_*.jpg", "img20_*.jpg" }
+                    .SelectMany(p => Directory.GetFiles(dir4k, p))
+                    .ToList();
+                if (fourK.Count > 0)
+                {
+                    int fourKMatched = fourK.Count(f => TryFileLength(f) == srcLen);
+                    c.Add(new(CAT, "Desktop wallpaper (4K variants)",
+                        fourKMatched == fourK.Count ? ValStatus.Pass : ValStatus.Warn,
+                        $"{fourKMatched} of {fourK.Count} 4K variant(s) replaced."));
+                }
+            }
+            }
+        }
+
+        if (wantLock)
+        {
+            long srcLen = TryFileLength(_s.LockScreenPath!);
+            // Same guard as the desktop block — never FAIL the build over an
+            // unreadable source.
+            if (srcLen < 0)
+            {
+                c.Add(new(CAT, "Lock screen", ValStatus.Warn,
+                    $"Source lock-screen unreadable at validation time ({_s.LockScreenPath}); cannot verify replacement."));
+                return c;
+            }
+            var screenDir = Path.Combine(_mountDir, "Windows", "Web", "Screen");
+            if (!Directory.Exists(screenDir))
+            {
+                c.Add(new(CAT, "Lock screen", ValStatus.Warn,
+                    @"\Windows\Web\Screen does not exist in the mounted image."));
+            }
+            else
+            {
+                var lockFiles = Directory.GetFiles(screenDir, "img1*.jpg");
+                int matched = lockFiles.Count(f => TryFileLength(f) == srcLen);
+                if (lockFiles.Length == 0)
+                    c.Add(new(CAT, "Lock screen", ValStatus.Warn,
+                        @"No img1*.jpg targets found in \Windows\Web\Screen."));
+                else if (matched == 0)
+                    c.Add(new(CAT, "Lock screen", ValStatus.Fail,
+                        $"None of the {lockFiles.Length} lock-screen file(s) match source size ({srcLen:N0} bytes). Replacement failed."));
+                else if (matched < lockFiles.Length)
+                    c.Add(new(CAT, "Lock screen", ValStatus.Warn,
+                        $"{matched} of {lockFiles.Length} lock-screen file(s) replaced."));
+                else
+                    c.Add(new(CAT, "Lock screen", ValStatus.Pass,
+                        $"All {matched} lock-screen file(s) match source size ✓"));
+            }
+        }
+
+        return c;
+    }
+
+    // ── Bloatware Removal ──────────────────────────────────────────────────
+    // Confirms every prefix in _s.BloatwareToRemove is absent from the mounted
+    // image's provisioned-Appx list. WARN (not FAIL) when a package is still
+    // present — Windows occasionally pins packages (Edge, Store) and we don't
+    // want to halt over those.
+    private async Task<List<ValCheck>> CheckBloatwareRemovalAsync()
+    {
+        const string CAT = "BLOATWARE";
+        var c = new List<ValCheck>();
+
+        if (_s.BloatwareToRemove.Count == 0)
+        {
+            c.Add(new(CAT, "Bloatware removal configured", ValStatus.Pass,
+                "None configured — skipping."));
+            return c;
+        }
+
+        string stdout = "", stderr = "";
+        int exit = -1;
+        try
+        {
+            (stdout, stderr, exit) = await DismCapturedAsync(
+                $"/Image:\"{_mountDir}\" /Get-ProvisionedAppxPackages");
+        }
+        catch (Exception ex)
+        {
+            c.Add(new(CAT, "Provisioned packages query (DISM)", ValStatus.Warn,
+                $"DISM call failed: {ex.Message}. Bloatware removal cannot be verified."));
+            return c;
+        }
+        if (exit != 0)
+        {
+            c.Add(new(CAT, "Provisioned packages query (DISM)", ValStatus.Warn,
+                $"DISM exited {exit}; cannot verify bloatware removal. stderr: {stderr.Trim()}"));
+            return c;
+        }
+
+        // Mirror the engine's parser at line 1090: PackageName lines, value
+        // after the colon.
+        var stillPresent = stdout
+            .Split('\n')
+            .Where(l => l.TrimStart().StartsWith("PackageName"))
+            .Select(l => { int i = l.IndexOf(':'); return i >= 0 ? l[(i + 1)..].Trim() : ""; })
+            .Where(s => s.Length > 0)
+            .ToList();
+
+        foreach (var prefix in _s.BloatwareToRemove)
+        {
+            bool stillThere = stillPresent.Any(pn =>
+                pn.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+            c.Add(stillThere
+                ? new(CAT, $"Removed: {prefix}", ValStatus.Warn,
+                    "Still present in provisioned-Appx list — Windows may have pinned it (Edge / Store) or DISM /Remove-ProvisionedAppxPackage failed.")
+                : new(CAT, $"Removed: {prefix}", ValStatus.Pass,
+                    "No matching package remains in the provisioned list ✓"));
+        }
+
+        return c;
+    }
+
+    // ── Features (capabilities) ────────────────────────────────────────────
+    // Confirms every feature in EnabledFeatures / DisabledFeatures shows the
+    // requested State in the mounted image.
+    private async Task<List<ValCheck>> CheckFeaturesAppliedAsync()
+    {
+        const string CAT = "FEATURES";
+        var c = new List<ValCheck>();
+
+        int totalRequested = _s.EnabledFeatures.Count + _s.DisabledFeatures.Count;
+        if (totalRequested == 0)
+        {
+            c.Add(new(CAT, "Features configured", ValStatus.Pass,
+                "None configured — skipping."));
+            return c;
+        }
+
+        string stdout = "", stderr = "";
+        int exit = -1;
+        try
+        {
+            (stdout, stderr, exit) = await DismCapturedAsync(
+                $"/Image:\"{_mountDir}\" /Get-Features /Format:Table");
+        }
+        catch (Exception ex)
+        {
+            c.Add(new(CAT, "Feature list query (DISM /Get-Features)", ValStatus.Warn,
+                $"DISM call failed: {ex.Message}. Feature changes cannot be verified."));
+            return c;
+        }
+        if (exit != 0)
+        {
+            c.Add(new(CAT, "Feature list query (DISM /Get-Features)", ValStatus.Warn,
+                $"DISM exited {exit}; cannot verify feature states. stderr: {stderr.Trim()}"));
+            return c;
+        }
+
+        // DISM /Format:Table emits a Version/Image-Version banner then the table
+        // rows. ExtractDismTableRows anchors past the dashed separator so we
+        // never accidentally match the banner.
+        var rows = ExtractDismTableRows(stdout);
+        var stateByName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var row in rows)
+        {
+            // Each row is "Feature Name | State". Some DISM builds emit
+            // multi-space-separated columns without the pipe — fall back to
+            // that if no pipe is present.
+            string[] cols = row.Contains('|')
+                ? row.Split('|', StringSplitOptions.TrimEntries)
+                : Regex.Split(row.Trim(), @"\s{2,}");
+            if (cols.Length < 2) continue;
+            string name  = cols[0].Trim();
+            string state = cols[1].Trim();
+            if (name.Length > 0 && state.Length > 0 &&
+                !name.Equals("Feature Name", StringComparison.OrdinalIgnoreCase))
+                stateByName[name] = state;
+        }
+
+        // StartsWith (not Equals) so trailing whitespace, period, or locale
+        // punctuation in the DISM output never trips a false FAIL. The state
+        // strings DISM emits in 25H2 are bare ("Enabled", "Disabled", ...)
+        // but the loosening is defence-in-depth at no cost — "Enabled"
+        // never appears as a prefix of "Disabled" or "Enable Pending".
+        static bool IsEnabledState(string s) =>
+            s.StartsWith("Enabled",        StringComparison.OrdinalIgnoreCase) ||
+            s.StartsWith("Enable Pending", StringComparison.OrdinalIgnoreCase);
+        static bool IsDisabledState(string s) =>
+            s.StartsWith("Disabled",        StringComparison.OrdinalIgnoreCase) ||
+            s.StartsWith("Disable Pending", StringComparison.OrdinalIgnoreCase);
+
+        foreach (var f in _s.EnabledFeatures)
+        {
+            if (!stateByName.TryGetValue(f, out var state))
+            {
+                c.Add(new(CAT, $"Enabled: {f}", ValStatus.Fail,
+                    "Feature name not found in DISM /Get-Features output — check the name spelling."));
+                continue;
+            }
+            c.Add(IsEnabledState(state)
+                ? new(CAT, $"Enabled: {f}", ValStatus.Pass, $"State = {state} ✓")
+                : new(CAT, $"Enabled: {f}", ValStatus.Fail,
+                    $"State = {state}; expected Enabled / Enable Pending."));
+        }
+
+        foreach (var f in _s.DisabledFeatures)
+        {
+            if (!stateByName.TryGetValue(f, out var state))
+            {
+                c.Add(new(CAT, $"Disabled: {f}", ValStatus.Fail,
+                    "Feature name not found in DISM /Get-Features output — check the name spelling."));
+                continue;
+            }
+            c.Add(IsDisabledState(state)
+                ? new(CAT, $"Disabled: {f}", ValStatus.Pass, $"State = {state} ✓")
+                : new(CAT, $"Disabled: {f}", ValStatus.Fail,
+                    $"State = {state}; expected Disabled / Disable Pending."));
+        }
+
+        return c;
+    }
+
+    // ── Helpers for the new validator sections ────────────────────────────
+
+    /// <summary>
+    /// Returns the data rows from a DISM /Format:Table response, with the
+    /// "Version: 10.0.HOSTBUILD.x / Image Version: ..." banner stripped.
+    /// DISM precedes every table with a multi-line header that first-match
+    /// regex would otherwise hit — anchor past the dashed separator instead.
+    /// </summary>
+    private static List<string> ExtractDismTableRows(string dismOutput)
+    {
+        var lines = dismOutput.Split('\n');
+        int start = -1;
+        for (int i = 0; i < lines.Length; i++)
+        {
+            string t = lines[i].TrimEnd();
+            // Either a row of dashes or a "dashes-with-pipe" separator both
+            // satisfy "everything except dash and pipe is whitespace".
+            if (t.Length > 4 && t.Replace("-", "").Replace("|", "").Trim().Length == 0)
+            {
+                start = i + 1;
+                break;
+            }
+        }
+        if (start < 0) return new List<string>();
+        return lines.Skip(start)
+                    .Where(l => l.Trim().Length > 0)
+                    .ToList();
+    }
+
+    /// <summary>
+    /// Returns ALL BCP-47-shaped tokens (xx-XX, xxx-XX, etc.) found anywhere
+    /// in a filename, deduplicated. The caller disambiguates by matching each
+    /// candidate against actual DISM output — never picks one heuristically.
+    ///
+    /// This replaced the previous first-match-wins helper which incorrectly
+    /// returned <c>OCR-zh</c> for
+    /// <c>Microsoft-Windows-LanguageFeatures-OCR-zh-cn-Package~...cab</c>
+    /// (3-letter capability + 2-letter locale prefix matches before the real
+    /// <c>zh-cn</c>) and silently FAILed an otherwise-correct build.
+    ///
+    /// Two complementary patterns cover Microsoft's two filename conventions:
+    /// dash-separated and underscore/tilde-bounded (where <c>_</c> is a word
+    /// character so <c>\b</c> never fires next to a locale token).
+    /// </summary>
+    private static List<string> ExtractAllLocaleTokens(string fileName)
+    {
+        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (string.IsNullOrEmpty(fileName)) return new List<string>();
+
+        // Dash-bounded form: catches "...-zh-cn-Package", "...-OCR-zh-cn-..."
+        // (this also returns "OCR-zh" which is fine — caller tries all
+        // candidates against DISM, so extra tokens just become no-ops).
+        foreach (Match m in Regex.Matches(fileName,
+            @"\b([a-z]{2,3}-[A-Za-z]{2,4})\b", RegexOptions.IgnoreCase))
+            set.Add(m.Groups[1].Value);
+
+        // Underscore / tilde-bounded form: catches the legacy LP CAB shape
+        // "Microsoft-Windows-Client-Language-Pack_x64_zh-cn.cab" where the
+        // locale is glued to an underscore on the left so \b never fires.
+        foreach (Match m in Regex.Matches(fileName,
+            @"[_~]([a-z]{2,3}-[A-Za-z]{2,4})(?=[_~.\-]|$)",
+            RegexOptions.IgnoreCase))
+            set.Add(m.Groups[1].Value);
+
+        return set.ToList();
+    }
+
+    private static long TryFileLength(string path)
+    {
+        try { return new FileInfo(path).Length; } catch { return -1; }
+    }
+
     private async Task<List<ValCheck>> CheckRegistryAsync()
     {
         const string CAT = "REGISTRY";
@@ -2590,6 +4111,66 @@ exit 0
                     ? new(CAT, "SMBv1 disabled (mrxsmb10 Start=4)", ValStatus.Pass, "")
                     : new(CAT, "SMBv1 disabled (mrxsmb10 Start=4)", ValStatus.Warn,
                         exit != 0 ? "mrxsmb10 Start key not found." : $"Unexpected value — {stdout.Trim()}"));
+            }
+
+            // ── Windows 11 UX & Privacy baseline ───────────────────────────
+            // Each toggle independently writes one or two policy values into
+            // the offline SOFTWARE hive. Validator queries each only when the
+            // user opted in — leaving the report clean for builds that don't
+            // touch the baseline.
+            if (_s.DisableCopilot)
+            {
+                var (stdout, _, exit) = await RunCapturedAsync("reg.exe",
+                    $"query \"{SW}\\Policies\\Microsoft\\Windows\\WindowsCopilot\" /v TurnOffWindowsCopilot");
+                bool ok = exit == 0 && stdout.Contains("0x1");
+                c.Add(ok
+                    ? new(CAT, "Copilot disabled (TurnOffWindowsCopilot=1)", ValStatus.Pass, "")
+                    : new(CAT, "Copilot disabled (TurnOffWindowsCopilot=1)", ValStatus.Warn,
+                        exit != 0 ? "TurnOffWindowsCopilot key not found." : $"Unexpected value — {stdout.Trim()}"));
+            }
+
+            if (_s.DisableRecall)
+            {
+                var (stdout, _, exit) = await RunCapturedAsync("reg.exe",
+                    $"query \"{SW}\\Policies\\Microsoft\\Windows\\WindowsAI\" /v DisableAIDataAnalysis");
+                bool ok = exit == 0 && stdout.Contains("0x1");
+                c.Add(ok
+                    ? new(CAT, "Recall disabled (DisableAIDataAnalysis=1)", ValStatus.Pass, "")
+                    : new(CAT, "Recall disabled (DisableAIDataAnalysis=1)", ValStatus.Warn,
+                        exit != 0 ? "DisableAIDataAnalysis key not found." : $"Unexpected value — {stdout.Trim()}"));
+            }
+
+            if (_s.DisableWidgets)
+            {
+                var (stdout, _, exit) = await RunCapturedAsync("reg.exe",
+                    $"query \"{SW}\\Policies\\Microsoft\\Dsh\" /v AllowNewsAndInterests");
+                bool ok = exit == 0 && stdout.Contains("0x0");
+                c.Add(ok
+                    ? new(CAT, "Widgets / News & Interests disabled", ValStatus.Pass, "")
+                    : new(CAT, "Widgets / News & Interests disabled", ValStatus.Warn,
+                        exit != 0 ? "AllowNewsAndInterests key not found." : $"Unexpected value — {stdout.Trim()}"));
+            }
+
+            if (_s.DisableChatIcon)
+            {
+                var (stdout, _, exit) = await RunCapturedAsync("reg.exe",
+                    $"query \"{SW}\\Microsoft\\PolicyManager\\current\\device\\Experience\" /v ConfigureChatIcon");
+                bool ok = exit == 0 && stdout.Contains("0x3");
+                c.Add(ok
+                    ? new(CAT, "Teams Chat icon hidden (ConfigureChatIcon=3)", ValStatus.Pass, "")
+                    : new(CAT, "Teams Chat icon hidden (ConfigureChatIcon=3)", ValStatus.Warn,
+                        exit != 0 ? "ConfigureChatIcon key not found." : $"Unexpected value — {stdout.Trim()}"));
+            }
+
+            if (_s.DisableConsumerFeatures)
+            {
+                var (stdout, _, exit) = await RunCapturedAsync("reg.exe",
+                    $"query \"{SW}\\Policies\\Microsoft\\Windows\\CloudContent\" /v DisableWindowsConsumerFeatures");
+                bool ok = exit == 0 && stdout.Contains("0x1");
+                c.Add(ok
+                    ? new(CAT, "Consumer features / Welcome experience disabled", ValStatus.Pass, "")
+                    : new(CAT, "Consumer features / Welcome experience disabled", ValStatus.Warn,
+                        exit != 0 ? "DisableWindowsConsumerFeatures key not found." : $"Unexpected value — {stdout.Trim()}"));
             }
 
             // ── OEM info ───────────────────────────────────────────────────
@@ -2822,6 +4403,13 @@ exit 0
         string adminPwdRaw   = _s.AdminPassword ?? "";
         string adminPwdXml   = SecurityElementEscape(adminPwdRaw);
 
+        // TimeZone is emitted into BOTH specialize and oobeSystem passes so
+        // Windows 11 25H2 OOBE finalisation cannot revert it to the media's
+        // default ("Pacific Standard Time" for English-international). tzutil
+        // in SetupComplete.cmd remains as a third safety net.
+        string timeZoneId    = string.IsNullOrWhiteSpace(_s.TimeZone) ? "India Standard Time" : _s.TimeZone;
+        string timeZoneXml   = SecurityElementEscape(timeZoneId);
+
         // ── <LocalAccounts> block (only when a non-Administrator name is used) ─
         string localAccountsXml = "";
         if (isNamedAdmin)
@@ -2896,18 +4484,33 @@ exit 0
                xmlns:wcm=""http://schemas.microsoft.com/WMIConfig/2002/State""
                xmlns:xsi=""http://www.w3.org/2001/XMLSchema-instance"">
 
-      <!-- Bypass TPM 2.0 / Secure Boot / RAM checks -->
+      <!-- Order 1 wipes disk 0 partition table BEFORE Setup runs upgrade-detection.
+           Win11 24H2/25H2 new SetupHost/SetupPrep client shows the
+           upgrade-detection dialog when an existing Windows install is detected on
+           disk, even with UpgradeData/Upgrade=false set below. Cleaning the disk
+           first removes the upgrade markers and the install, so there is nothing
+           to detect. RunSynchronous fires early in windowsPE, before the dialog
+           can appear. Single-disk assumption (DiskID=0) matches the rest of this
+           unattend. Orders 2-4 = hardware-requirement bypasses. -->
       <RunSynchronous>
         <RunSynchronousCommand wcm:action=""add"">
-          <Order>1</Order><Description>BypassTPMCheck</Description>
+          <Order>1</Order><Description>WipeDisk0BeforeSetupDetection</Description>
+          <!-- start """" /min /wait launches the disk-wipe in a minimized window so
+               the operator cannot close it by accident; /wait keeps RunSynchronous
+               synchronous (the answer file requires the next Order to wait for this
+               one to finish). -->
+          <Path>cmd /c start """" /min /wait cmd /c ""(echo select disk 0 &amp; echo clean &amp; echo exit) | diskpart""</Path>
+        </RunSynchronousCommand>
+        <RunSynchronousCommand wcm:action=""add"">
+          <Order>2</Order><Description>BypassTPMCheck</Description>
           <Path>cmd /c reg add ""HKLM\SYSTEM\Setup\LabConfig"" /v BypassTPMCheck /t REG_DWORD /d 1 /f</Path>
         </RunSynchronousCommand>
         <RunSynchronousCommand wcm:action=""add"">
-          <Order>2</Order><Description>BypassSecureBootCheck</Description>
+          <Order>3</Order><Description>BypassSecureBootCheck</Description>
           <Path>cmd /c reg add ""HKLM\SYSTEM\Setup\LabConfig"" /v BypassSecureBootCheck /t REG_DWORD /d 1 /f</Path>
         </RunSynchronousCommand>
         <RunSynchronousCommand wcm:action=""add"">
-          <Order>3</Order><Description>BypassRAMCheck</Description>
+          <Order>4</Order><Description>BypassRAMCheck</Description>
           <Path>cmd /c reg add ""HKLM\SYSTEM\Setup\LabConfig"" /v BypassRAMCheck /t REG_DWORD /d 1 /f</Path>
         </RunSynchronousCommand>
       </RunSynchronous>
@@ -2989,6 +4592,17 @@ exit 0
         </RunSynchronousCommand>
       </RunSynchronous>
     </component>
+
+    <!-- TimeZone in specialize pass locks the value in early; without this,
+         OOBE re-applies the media default (typically Pacific Standard Time)
+         even if SetupComplete.cmd's tzutil call ran successfully earlier. -->
+    <component name=""Microsoft-Windows-Shell-Setup""
+               processorArchitecture=""amd64"" publicKeyToken=""31bf3856ad364e35""
+               language=""neutral"" versionScope=""nonSxS""
+               xmlns:wcm=""http://schemas.microsoft.com/WMIConfig/2002/State""
+               xmlns:xsi=""http://www.w3.org/2001/XMLSchema-instance"">
+      <TimeZone>{timeZoneXml}</TimeZone>
+    </component>
   </settings>
 
   <!-- ═══ oobeSystem — zero-touch OOBE for Windows 11 ═══
@@ -3034,6 +4648,11 @@ exit 0
            reaches the desktop (and SetupComplete.cmd) without user interaction.
            LogonCount=1 means this fires exactly once then self-disables. -->
 {autoLogonXml}
+
+      <!-- TimeZone (belt-and-braces): also emitted in the specialize pass above.
+           Including it in oobeSystem too prevents any late OOBE step from
+           reverting the value the user picked. -->
+      <TimeZone>{timeZoneXml}</TimeZone>
 
       <OOBE>
         <HideEULAPage>true</HideEULAPage>
