@@ -515,7 +515,15 @@ public partial class TestVmPage : UserControl
         };
         msgText.SetResourceReference(TextBlock.ForegroundProperty, "FG1Brush");
 
-        var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 2) };
+        // Grid instead of horizontal StackPanel so the message column gets a
+        // finite width and TextWrapping.Wrap on msgText actually fires.
+        var row = new Grid { Margin = new Thickness(0, 2, 0, 2) };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(58) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        Grid.SetColumn(timeText,    0);
+        Grid.SetColumn(levelBorder, 1);
+        Grid.SetColumn(msgText,     2);
         row.Children.Add(timeText);
         row.Children.Add(levelBorder);
         row.Children.Add(msgText);

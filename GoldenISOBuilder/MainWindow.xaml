@@ -302,7 +302,7 @@
                                             </Border>
                                             <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                                 <TextBlock Text="Customizations" FontSize="12.5" FontWeight="Medium" Foreground="{DynamicResource FG1Brush}"/>
-                                                <TextBlock Text="Bloatware, hardening" FontSize="11" Foreground="{DynamicResource FG2Brush}"/>
+                                                <TextBlock Text="Package removal, security" FontSize="11" Foreground="{DynamicResource FG2Brush}"/>
                                             </StackPanel>
                                             <Path Grid.Column="2" Style="{StaticResource IconPath}" Data="{StaticResource LayersIcon}" Stroke="{DynamicResource CustomAccentBrush}" StrokeThickness="1.5" Width="14" Height="14" VerticalAlignment="Center"/>
                                         </Grid>
@@ -332,7 +332,7 @@
                                             </Border>
                                             <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                                 <TextBlock Text="Registry Changes" FontSize="12.5" FontWeight="Medium" Foreground="{DynamicResource FG1Brush}"/>
-                                                <TextBlock Text="Offline hive injection" FontSize="11" Foreground="{DynamicResource FG2Brush}"/>
+                                                <TextBlock Text="Registry tweaks" FontSize="11" Foreground="{DynamicResource FG2Brush}"/>
                                             </StackPanel>
                                             <Path Grid.Column="2" Style="{StaticResource IconPath}" Data="{StaticResource ShieldIcon}" Stroke="{DynamicResource RegistryAccentBrush}" StrokeThickness="1.5" Width="14" Height="14" VerticalAlignment="Center"/>
                                         </Grid>
@@ -377,7 +377,7 @@
                                             </Border>
                                             <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                                 <TextBlock Text="Build" FontSize="12.5" FontWeight="Medium" Foreground="{DynamicResource FG1Brush}"/>
-                                                <TextBlock Text="Run pipeline" FontSize="11" Foreground="{DynamicResource FG2Brush}"/>
+                                                <TextBlock Text="Start the build" FontSize="11" Foreground="{DynamicResource FG2Brush}"/>
                                             </StackPanel>
                                             <Path Grid.Column="2" Style="{StaticResource IconPath}" Data="{StaticResource ZapIcon}" Stroke="{DynamicResource BuildAccentBrush}" StrokeThickness="1.5" Width="14" Height="14" VerticalAlignment="Center"/>
                                         </Grid>

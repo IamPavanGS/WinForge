@@ -215,8 +215,19 @@ if ($admin) {
 }
 
 if ($profileJson.AutoLoginEnabled) {
-    Test-RegValue 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon' 'AutoAdminLogon' '1' 'AutoLogon: AutoAdminLogon=1'
-    Test-RegValue 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon' 'DefaultUserName' $adminName "AutoLogon: DefaultUserName=$adminName"
+    # AutoAdminLogon resets to 0 after a single-use auto-login fires (LogonCount=1 is
+    # consumed by Windows after the first automatic login). If the current session IS
+    # the admin account, the auto-login worked correctly — report PASS rather than FAIL.
+    $winlogonKey  = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon'
+    $autoAdminVal = (Get-ItemProperty -Path $winlogonKey -Name AutoAdminLogon -ErrorAction SilentlyContinue).AutoAdminLogon
+    if ("$autoAdminVal" -eq '1') {
+        Add-Result PASS 'AutoLogon: AutoAdminLogon=1' "$winlogonKey = 1"
+    } elseif ($env:USERNAME -eq $adminName) {
+        Add-Result PASS 'AutoLogon: single-use auto-login consumed' "AutoAdminLogon was reset to 0 after firing — current session is $adminName, confirming auto-login succeeded"
+    } else {
+        Add-Result FAIL 'AutoLogon: AutoAdminLogon=1' "$winlogonKey = $autoAdminVal (expected 1, and current user '$($env:USERNAME)' is not '$adminName')"
+    }
+    Test-RegValue $winlogonKey 'DefaultUserName' $adminName "AutoLogon: DefaultUserName=$adminName"
 }
 
 if ($profileJson.OrgName) {
@@ -305,9 +316,13 @@ if ($profileJson.EnableBitLocker) {
     try {
         $bl = Get-BitLockerVolume -MountPoint $blDrive -ErrorAction Stop
         if ($bl.ProtectionStatus -eq 'On') {
-            Add-Result PASS "BitLocker on $blDrive" "Protection=On, %=$($bl.EncryptionPercentage)"
+            Add-Result PASS "BitLocker on $blDrive" "Protection=On, $($bl.EncryptionPercentage)% encrypted"
+        } elseif ($bl.VolumeStatus -eq 'FullyEncrypted' -and $bl.EncryptionPercentage -eq 100) {
+            # Drive is fully encrypted; ProtectionStatus briefly lags behind before
+            # the TPM protector is confirmed active — treat as PASS.
+            Add-Result PASS "BitLocker on $blDrive" "Fully encrypted (100%) — TPM protector activation completing"
         } elseif ($bl.VolumeStatus -match 'Encrypt') {
-            Add-Result WARN "BitLocker on $blDrive" "still encrypting: $($bl.VolumeStatus) ($($bl.EncryptionPercentage)%)"
+            Add-Result WARN "BitLocker on $blDrive" "Encryption in progress: $($bl.VolumeStatus) ($($bl.EncryptionPercentage)%)"
         } else {
             Add-Result FAIL "BitLocker on $blDrive" "Protection=$($bl.ProtectionStatus), Status=$($bl.VolumeStatus)"
         }

@@ -160,7 +160,7 @@
                             <Grid>
                                 <StackPanel Margin="0,0,68,0">
                                     <TextBlock Text="Uninstall OneDrive at first boot" Foreground="{DynamicResource FG0Brush}" FontSize="13"/>
-                                    <TextBlock Text="Runs OneDriveSetup.exe /uninstall (both 64-bit and 32-bit copies) from SetupComplete.cmd. Catches the per-user installer that the provisioned-package match above doesn't always reach."
+                                    <TextBlock Text="Completely removes OneDrive during first boot, including per-user installations that are not covered by the package removal list above."
                                                Foreground="{DynamicResource FG2Brush}" FontSize="11" TextWrapping="Wrap"/>
                                 </StackPanel>
                                 <CheckBox x:Name="BloatUninstallOneDrive" HorizontalAlignment="Right" VerticalAlignment="Center"
@@ -295,7 +295,7 @@
                             <Grid>
                                 <StackPanel>
                                     <TextBlock Text="Update Defender Signatures at First Boot" Foreground="{DynamicResource FG0Brush}" FontSize="13"/>
-                                    <TextBlock Text="Runs MpCmdRun -SignatureUpdate in SetupComplete.cmd" Foreground="{DynamicResource FG2Brush}" FontSize="11"/>
+                                    <TextBlock Text="Downloads the latest antivirus definitions on first boot so Defender is up to date immediately." Foreground="{DynamicResource FG2Brush}" FontSize="11"/>
                                 </StackPanel>
                                 <CheckBox x:Name="SecDefenderUpdate" HorizontalAlignment="Right" IsChecked="True" Style="{StaticResource ToggleSwitchStyle}"/>
                             </Grid>
@@ -306,7 +306,7 @@
                                 <Grid>
                                     <StackPanel>
                                         <TextBlock Text="Enable BitLocker Drive Encryption" Foreground="{DynamicResource FG0Brush}" FontSize="13"/>
-                                        <TextBlock Text="Encrypts C: at first boot via scheduled task (SYSTEM/TPM + Recovery Password)" Foreground="{DynamicResource FG2Brush}" FontSize="11" TextWrapping="Wrap"/>
+                                        <TextBlock Text="Encrypts the system drive at first boot using TPM-based protection with a recovery key." Foreground="{DynamicResource FG2Brush}" FontSize="11" TextWrapping="Wrap"/>
                                     </StackPanel>
                                     <CheckBox x:Name="SecBitLocker" HorizontalAlignment="Right" IsChecked="False"
                                               Style="{StaticResource ToggleSwitchStyle}"
@@ -322,7 +322,7 @@
                                             <Grid Margin="0,0,0,8">
                                                 <StackPanel>
                                                     <TextBlock Text="Save recovery key to disk" Foreground="{DynamicResource FG0Brush}" FontSize="12"/>
-                                                    <TextBlock Text="Writes BitlockerPassword_L{serial}.txt to the folder below" Foreground="{DynamicResource FG2Brush}" FontSize="11" TextWrapping="Wrap"/>
+                                                    <TextBlock Text="Saves the recovery key as a text file in the folder below, named using the device serial number." Foreground="{DynamicResource FG2Brush}" FontSize="11" TextWrapping="Wrap"/>
                                                 </StackPanel>
                                                 <CheckBox x:Name="SecBitLockerSaveKey" HorizontalAlignment="Right"
                                                           IsChecked="True" Style="{StaticResource ToggleSwitchStyle}"
@@ -373,7 +373,7 @@
                     </Expander.Header>
                     <StackPanel Margin="0,12,0,0" h:PanelSpacing.Spacing="10">
                         <TextBlock Foreground="{DynamicResource FG2Brush}" FontSize="12" TextWrapping="Wrap"
-                                   Text="Add your organisation's certificate files (.cer / .crt). They are staged into the image and imported via certutil at first boot. Pick the right store: Root for your corporate root CA, Intermediate for issuing CAs, Code-signing for software-publisher certificates."/>
+                                   Text="Add your organization's trusted certificate files. They are imported into the Windows certificate store on first boot. Choose Root for root certificates, Intermediate for issuing certificates, or TrustedPublisher for code-signing certificates."/>
                         <StackPanel x:Name="CertListPanel" h:PanelSpacing.Spacing="6"/>
                         <Button x:Name="AddCertBtn" Content="+ Add certificate"
                                 Style="{StaticResource GhostButtonStyle}"
@@ -440,7 +440,7 @@
                             <Grid>
                                 <StackPanel Margin="0,0,68,0">
                                     <TextBlock Text="Disable Copilot" Foreground="{DynamicResource FG0Brush}" FontSize="13"/>
-                                    <TextBlock Text="Removes the Copilot taskbar icon and blocks invocation (TurnOffWindowsCopilot=1). Required where AI assistants aren't yet approved for enterprise use."
+                                    <TextBlock Text="Removes the Copilot button from the taskbar and prevents it from being enabled. Recommended for environments where AI assistants are not approved for use."
                                                Foreground="{DynamicResource FG2Brush}" FontSize="11" TextWrapping="Wrap"/>
                                 </StackPanel>
                                 <CheckBox x:Name="UxDisableCopilot" HorizontalAlignment="Right" VerticalAlignment="Center"
@@ -451,7 +451,7 @@
                             <Grid>
                                 <StackPanel Margin="0,0,68,0">
                                     <TextBlock Text="Disable Recall" Foreground="{DynamicResource FG0Brush}" FontSize="13"/>
-                                    <TextBlock Text="Win11 24H2+ AI screen-capture feature. Sets DisableAIDataAnalysis=1 and AllowRecallEnablement=0 to block enablement entirely."
+                                    <TextBlock Text="Disables the Windows AI screen-capture feature and prevents it from being turned on. Recommended for environments with data privacy or compliance requirements."
                                                Foreground="{DynamicResource FG2Brush}" FontSize="11" TextWrapping="Wrap"/>
                                 </StackPanel>
                                 <CheckBox x:Name="UxDisableRecall" HorizontalAlignment="Right" VerticalAlignment="Center"
@@ -462,7 +462,7 @@
                             <Grid>
                                 <StackPanel Margin="0,0,68,0">
                                     <TextBlock Text="Disable Widgets / News &amp; Interests" Foreground="{DynamicResource FG0Brush}" FontSize="13"/>
-                                    <TextBlock Text="Removes the widgets pane from the taskbar (AllowNewsAndInterests=0)."
+                                    <TextBlock Text="Removes the Widgets panel from the taskbar, including news feeds and interest cards."
                                                Foreground="{DynamicResource FG2Brush}" FontSize="11" TextWrapping="Wrap"/>
                                 </StackPanel>
                                 <CheckBox x:Name="UxDisableWidgets" HorizontalAlignment="Right" VerticalAlignment="Center"
@@ -473,7 +473,7 @@
                             <Grid>
                                 <StackPanel Margin="0,0,68,0">
                                     <TextBlock Text="Hide Teams Chat icon" Foreground="{DynamicResource FG0Brush}" FontSize="13"/>
-                                    <TextBlock Text="Hides the consumer Chat icon on the taskbar (ConfigureChatIcon=3)."
+                                    <TextBlock Text="Hides the consumer Microsoft Teams Chat shortcut from the taskbar."
                                                Foreground="{DynamicResource FG2Brush}" FontSize="11" TextWrapping="Wrap"/>
                                 </StackPanel>
                                 <CheckBox x:Name="UxDisableChat" HorizontalAlignment="Right" VerticalAlignment="Center"
@@ -484,7 +484,7 @@
                             <Grid>
                                 <StackPanel Margin="0,0,68,0">
                                     <TextBlock Text="Disable Consumer Features" Foreground="{DynamicResource FG0Brush}" FontSize="13"/>
-                                    <TextBlock Text="Blocks the &quot;Welcome experience&quot; tour, Spotlight promotions and Microsoft Store consumer ads (DisableWindowsConsumerFeatures=1)."
+                                    <TextBlock Text="Blocks the Windows Welcome tour, Spotlight lock-screen promotions, and Microsoft Store consumer app suggestions."
                                                Foreground="{DynamicResource FG2Brush}" FontSize="11" TextWrapping="Wrap"/>
                                 </StackPanel>
                                 <CheckBox x:Name="UxDisableConsumer" HorizontalAlignment="Right" VerticalAlignment="Center"
@@ -514,7 +514,7 @@
                         <Border Background="{DynamicResource BG3Brush}" CornerRadius="6" Padding="14,10">
                             <TextBlock TextWrapping="Wrap"
                                        Foreground="{DynamicResource FG2Brush}" FontSize="12"
-                                       Text="Policies are injected into the offline registry during the build. Select which ADMX source to use for the policy picker below."/>
+                                       Text="Group Policy settings are applied to the image during the build. Select which policy definition source to use when browsing available settings."/>
                         </Border>
 
                         <!-- ADMX Source Selector -->
@@ -526,7 +526,7 @@
                                         <TextBlock Text="Policy Definitions Source"
                                                    Foreground="{DynamicResource FG0Brush}"
                                                    FontSize="13" FontWeight="SemiBold"/>
-                                        <TextBlock Text="Which ADMX templates to use in the policy picker"
+                                        <TextBlock Text="Which policy definitions to use when browsing available Group Policy settings"
                                                    Foreground="{DynamicResource FG2Brush}"
                                                    FontSize="11" Margin="0,2,0,0"/>
                                     </StackPanel>
