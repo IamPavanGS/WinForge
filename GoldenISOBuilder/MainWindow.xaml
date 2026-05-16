@@ -48,7 +48,7 @@
                 </Border>
                 <TextBlock Text="ALE Image Forge" FontSize="12" FontWeight="SemiBold"
                            Foreground="{DynamicResource FG0Brush}" VerticalAlignment="Center"/>
-                <TextBlock Text=" v2.4.7" FontSize="12" FontWeight="Normal"
+                <TextBlock Text=" v2.4.8" FontSize="12" FontWeight="Normal"
                            Foreground="{DynamicResource FG2Brush}" VerticalAlignment="Center"/>
             </StackPanel>
 

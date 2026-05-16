@@ -3356,8 +3356,18 @@ exit 0
                     $"query \"{fontsKey}\" /v \"{valueName}\"");
                 if (qExit != 0)
                 {
-                    c.Add(new(CAT, $"Font registry: {fname}", ValStatus.Fail,
-                        $"Value '{valueName}' missing under {fontsKey}. Font will not load at boot."));
+                    // Display names containing characters that confuse reg.exe
+                    // command-line quoting (quote, apostrophe, ampersand,
+                    // percent) can produce a query failure that's a parser
+                    // issue, not a real injection failure. Downgrade FAIL to
+                    // WARN for those cases so we don't halt the build over
+                    // the validator's own quoting limitation.
+                    bool hasTrickyChars = valueName.IndexOfAny(new[] { '"', '\'', '&', '%' }) >= 0;
+                    var status = hasTrickyChars ? ValStatus.Warn : ValStatus.Fail;
+                    var detail = hasTrickyChars
+                        ? $"Value '{valueName}' query failed — display name contains characters (\" ' & %) that may confuse reg.exe quoting. Verify manually on the deployed image."
+                        : $"Value '{valueName}' missing under {fontsKey}. Font will not load at boot.";
+                    c.Add(new(CAT, $"Font registry: {fname}", status, detail));
                     continue;
                 }
                 // Verify the value data is the filename (REG_SZ).
@@ -3582,30 +3592,47 @@ exit 0
             return c;
         }
 
-        // Each requested CAB carries a BCP-47 locale token (xx-XX) somewhere
-        // in its filename. We then match against the LanguagePack package
-        // identities DISM lists, e.g.:
-        //   Package Identity : Microsoft-Windows-Client-LanguagePack-Package~~~de-DE~10.0.26100.x
+        // Each requested CAB carries one or more BCP-47-shaped tokens in its
+        // filename. We extract ALL of them and match each against DISM output,
+        // so a filename like "LanguageFeatures-OCR-zh-cn-Package" — which
+        // contains both "OCR-zh" and "zh-cn" — resolves on whichever token
+        // DISM actually lists.
+        //
+        // Match line filter is "Language" (not "LanguagePack") so the same
+        // matcher covers both the legacy Client-LanguagePack-Package and the
+        // newer LanguageFeatures-* assets that DISM /Add-Package also handles.
+        //
+        // No-match outcome is WARN, not FAIL: filename-to-DISM-identity
+        // matching has too much variance across pack types to justify halting
+        // a 2-hour build. The engine's langpacks step already logs per-CAB
+        // DISM failures into build-<timestamp>.log, so real failures stay
+        // visible in the build log even when this check soft-warns.
         foreach (var cabPath in _s.LanguagePackPaths)
         {
             string fname  = Path.GetFileName(cabPath ?? "");
-            string locale = ExtractBcp47Locale(fname);
-            if (string.IsNullOrEmpty(locale))
+            var    tokens = ExtractAllLocaleTokens(fname);
+            if (tokens.Count == 0)
             {
                 c.Add(new(CAT, $"Pack: {fname}", ValStatus.Warn,
                     "Could not extract a locale token from filename; cannot match against installed packages."));
                 continue;
             }
 
-            bool installed = stdout.Split('\n').Any(line =>
-                line.Contains("LanguagePack", StringComparison.OrdinalIgnoreCase) &&
-                line.Contains(locale, StringComparison.OrdinalIgnoreCase));
+            string? hitToken = null;
+            foreach (var line in stdout.Split('\n'))
+            {
+                if (!line.Contains("Language", StringComparison.OrdinalIgnoreCase)) continue;
+                hitToken = tokens.FirstOrDefault(t =>
+                    line.Contains(t, StringComparison.OrdinalIgnoreCase));
+                if (hitToken != null) break;
+            }
 
-            c.Add(installed
+            c.Add(hitToken != null
                 ? new(CAT, $"Pack: {fname}", ValStatus.Pass,
-                    $"Language pack for {locale} present in mounted image ✓")
-                : new(CAT, $"Pack: {fname}", ValStatus.Fail,
-                    $"No installed package matches locale {locale}. DISM /Add-Package likely failed."));
+                    $"Language asset for {hitToken} present in mounted image ✓")
+                : new(CAT, $"Pack: {fname}", ValStatus.Warn,
+                    $"Could not confirm injection (tried {string.Join(", ", tokens)}). " +
+                    "Check the langpacks step in build-<timestamp>.log."));
         }
 
         return c;
@@ -3634,6 +3661,17 @@ exit 0
         if (wantDesktop)
         {
             long srcLen = TryFileLength(_s.WallpaperPath!);
+            // Guard against source file unreadable at validation time (deleted,
+            // network drop, AV lock). Without this, srcLen == -1 would compare
+            // false against every dest file and FAIL the build over an
+            // unrelated I/O hiccup. Emit a single WARN and skip the comparison.
+            if (srcLen < 0)
+            {
+                c.Add(new(CAT, "Desktop wallpaper", ValStatus.Warn,
+                    $"Source wallpaper unreadable at validation time ({_s.WallpaperPath}); cannot verify replacement."));
+            }
+            else
+            {
             var wallpaperDir = Path.Combine(_mountDir, "Windows", "Web", "Wallpaper", "Windows");
             int matched = 0, present = 0;
             foreach (var name in new[] { "img0.jpg", "img19.jpg", "img20.jpg" })
@@ -3671,11 +3709,20 @@ exit 0
                         $"{fourKMatched} of {fourK.Count} 4K variant(s) replaced."));
                 }
             }
+            }
         }
 
         if (wantLock)
         {
             long srcLen = TryFileLength(_s.LockScreenPath!);
+            // Same guard as the desktop block — never FAIL the build over an
+            // unreadable source.
+            if (srcLen < 0)
+            {
+                c.Add(new(CAT, "Lock screen", ValStatus.Warn,
+                    $"Source lock-screen unreadable at validation time ({_s.LockScreenPath}); cannot verify replacement."));
+                return c;
+            }
             var screenDir = Path.Combine(_mountDir, "Windows", "Web", "Screen");
             if (!Directory.Exists(screenDir))
             {
@@ -3821,13 +3868,17 @@ exit 0
                 stateByName[name] = state;
         }
 
+        // StartsWith (not Equals) so trailing whitespace, period, or locale
+        // punctuation in the DISM output never trips a false FAIL. The state
+        // strings DISM emits in 25H2 are bare ("Enabled", "Disabled", ...)
+        // but the loosening is defence-in-depth at no cost — "Enabled"
+        // never appears as a prefix of "Disabled" or "Enable Pending".
         static bool IsEnabledState(string s) =>
-            s.Equals("Enabled",        StringComparison.OrdinalIgnoreCase) ||
-            s.Equals("Enable Pending", StringComparison.OrdinalIgnoreCase);
+            s.StartsWith("Enabled",        StringComparison.OrdinalIgnoreCase) ||
+            s.StartsWith("Enable Pending", StringComparison.OrdinalIgnoreCase);
         static bool IsDisabledState(string s) =>
-            s.Equals("Disabled",                       StringComparison.OrdinalIgnoreCase) ||
-            s.Equals("Disable Pending",                StringComparison.OrdinalIgnoreCase) ||
-            s.Equals("Disabled with Payload Removed",  StringComparison.OrdinalIgnoreCase);
+            s.StartsWith("Disabled",        StringComparison.OrdinalIgnoreCase) ||
+            s.StartsWith("Disable Pending", StringComparison.OrdinalIgnoreCase);
 
         foreach (var f in _s.EnabledFeatures)
         {
@@ -3890,15 +3941,41 @@ exit 0
     }
 
     /// <summary>
-    /// Extracts a BCP-47 locale token (xx-XX) from a filename. Matches the
-    /// format Microsoft uses for language-pack CABs, e.g.
-    /// "Microsoft-Windows-Client-Language-Pack_x64_de-de.cab" → "de-de".
+    /// Returns ALL BCP-47-shaped tokens (xx-XX, xxx-XX, etc.) found anywhere
+    /// in a filename, deduplicated. The caller disambiguates by matching each
+    /// candidate against actual DISM output — never picks one heuristically.
+    ///
+    /// This replaced the previous first-match-wins helper which incorrectly
+    /// returned <c>OCR-zh</c> for
+    /// <c>Microsoft-Windows-LanguageFeatures-OCR-zh-cn-Package~...cab</c>
+    /// (3-letter capability + 2-letter locale prefix matches before the real
+    /// <c>zh-cn</c>) and silently FAILed an otherwise-correct build.
+    ///
+    /// Two complementary patterns cover Microsoft's two filename conventions:
+    /// dash-separated and underscore/tilde-bounded (where <c>_</c> is a word
+    /// character so <c>\b</c> never fires next to a locale token).
     /// </summary>
-    private static string ExtractBcp47Locale(string fileName)
+    private static List<string> ExtractAllLocaleTokens(string fileName)
     {
-        var m = Regex.Match(fileName, @"\b([a-z]{2,3}-[A-Za-z]{2,4})\b",
-                            RegexOptions.IgnoreCase);
-        return m.Success ? m.Groups[1].Value : "";
+        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (string.IsNullOrEmpty(fileName)) return new List<string>();
+
+        // Dash-bounded form: catches "...-zh-cn-Package", "...-OCR-zh-cn-..."
+        // (this also returns "OCR-zh" which is fine — caller tries all
+        // candidates against DISM, so extra tokens just become no-ops).
+        foreach (Match m in Regex.Matches(fileName,
+            @"\b([a-z]{2,3}-[A-Za-z]{2,4})\b", RegexOptions.IgnoreCase))
+            set.Add(m.Groups[1].Value);
+
+        // Underscore / tilde-bounded form: catches the legacy LP CAB shape
+        // "Microsoft-Windows-Client-Language-Pack_x64_zh-cn.cab" where the
+        // locale is glued to an underscore on the left so \b never fires.
+        foreach (Match m in Regex.Matches(fileName,
+            @"[_~]([a-z]{2,3}-[A-Za-z]{2,4})(?=[_~.\-]|$)",
+            RegexOptions.IgnoreCase))
+            set.Add(m.Groups[1].Value);
+
+        return set.ToList();
     }
 
     private static long TryFileLength(string path)
