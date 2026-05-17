@@ -84,7 +84,7 @@
                             <DropShadowEffect Color="#C9A42A" Opacity="0.45"
                                               BlurRadius="18" ShadowDepth="0"/>
                         </Border.Effect>
-                        <TextBlock Text="A" FontSize="38" FontWeight="Black"
+                        <TextBlock Text="W" FontSize="38" FontWeight="Black"
                                    Foreground="#0A1628"
                                    HorizontalAlignment="Center"
                                    VerticalAlignment="Center"/>

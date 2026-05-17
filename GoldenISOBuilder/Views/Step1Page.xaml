@@ -334,7 +334,7 @@
                         <StackPanel>
                             <TextBlock Text="Output Filename" Style="{StaticResource FieldLabelText}" Margin="0,0,0,6"/>
                             <TextBox x:Name="OutputFilenameBox"
-                                     Text="GoldenImage_{edition}_{date}.iso"
+                                     Text="WinForge_{edition}_{date}.iso"
                                      Style="{StaticResource MonoTextInputStyle}"/>
                             <TextBlock Text="Use {edition}, {date}, {version} as dynamic tokens"
                                        Style="{StaticResource FieldHintText}" Margin="0,4,0,0"/>

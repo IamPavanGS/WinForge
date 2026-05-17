@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Profile-driven end-to-end validator for ALE Golden Image deployments.
+    Profile-driven end-to-end validator for WinForge deployments.
 
 .DESCRIPTION
     Reads a .gibprofile file and dynamically generates all checks against the
@@ -147,7 +147,7 @@ function Get-KbFromPath([string]$path) {
 # Header banner + profile summary
 $banner = '=' * 78
 Write-Host $banner -ForegroundColor Cyan
-Write-Host 'ALE Golden Image -- Profile-Driven Validator' -ForegroundColor Cyan
+Write-Host 'WinForge -- Profile-Driven Validator' -ForegroundColor Cyan
 Write-Host $banner -ForegroundColor Cyan
 Write-Host "Profile : $(Split-Path -Leaf $ProfilePath)"
 Write-Host "Host    : $env:COMPUTERNAME"
@@ -811,7 +811,7 @@ Write-Host ''
 # Write text report
 $lines = @()
 $lines += '=' * 78
-$lines += 'ALE Golden Image -- Profile-Driven Validation Report'
+$lines += 'WinForge -- Profile-Driven Validation Report'
 $lines += "Profile : $(Split-Path -Leaf $ProfilePath)"
 $lines += "Host    : $env:COMPUTERNAME"
 $lines += "User    : $env:USERNAME"

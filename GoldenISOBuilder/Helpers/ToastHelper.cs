@@ -17,7 +17,7 @@ namespace GoldenISOBuilder.Helpers;
 /// </summary>
 public static class ToastHelper
 {
-    private const string AumId = "ALE.GoldenISOBuilder";
+    private const string AumId = "WinForge.WinForge";
     private static bool _ready;
 
     // ── One-time setup — call from App.OnStartup ──────────────────────────────

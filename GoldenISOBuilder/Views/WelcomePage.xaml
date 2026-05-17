@@ -20,7 +20,7 @@
                         BorderBrush="{DynamicResource LineSoftBrush}" BorderThickness="1">
 
                     <StackPanel>
-                        <TextBlock Text="ALE IMAGE FORGE · ENTERPRISE" FontSize="11" FontWeight="SemiBold"
+                        <TextBlock Text="WINFORGE · ENTERPRISE" FontSize="11" FontWeight="SemiBold"
                                    Foreground="{DynamicResource Gold1Brush}"/>
                         <TextBlock Margin="0,14,0,10" TextWrapping="Wrap" LineHeight="42">
                             <Run Text="Build a " FontSize="32" FontWeight="Bold"

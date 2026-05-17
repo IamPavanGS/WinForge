@@ -22,7 +22,7 @@ public class BuildSession
 
     public string OutputPath      { get; set; } = "";
     public string WorkspacePath   { get; set; } = "";
-    public string OutputFilename  { get; set; } = "GoldenImage_{edition}_{date}.iso";
+    public string OutputFilename  { get; set; } = "WinForge_{edition}_{date}.iso";
 
     // ── Step 2: Assets ────────────────────────────────────────────────────────
     public string?         WallpaperPath           { get; set; }

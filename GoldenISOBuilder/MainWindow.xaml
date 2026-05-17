@@ -43,7 +43,7 @@
                             <GradientStop Color="{DynamicResource Gold3Color}" Offset="1"/>
                         </LinearGradientBrush>
                     </Border.Background>
-                    <TextBlock Text="A" FontSize="9" FontWeight="Black" Foreground="{DynamicResource BG0Brush}"
+                    <TextBlock Text="W" FontSize="9" FontWeight="Black" Foreground="{DynamicResource BG0Brush}"
                                HorizontalAlignment="Center" VerticalAlignment="Center"/>
                 </Border>
                 <TextBlock Text="WinForge" FontSize="12" FontWeight="SemiBold"
