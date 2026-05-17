@@ -1,19 +1,19 @@
 <div align="center">
 
-# ALE Image Forge
+# WinForge
 
 **Build a fully-customised, deploy-ready Windows 11 ISO in a single guided wizard.**
 
 No template VM. No Sysprep. No manual steps after imaging.
 
-[![Version](https://img.shields.io/badge/version-2.4.8-blue?style=for-the-badge)](https://github.com/IamPavanGS/ALE-ISO-Creator/releases)
+[![Version](https://img.shields.io/badge/version-2.4.8-blue?style=for-the-badge)](https://github.com/IamPavanGS/WinForge/releases)
 [![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?style=for-the-badge&logo=dotnet)](https://dotnet.microsoft.com)
 [![Platform](https://img.shields.io/badge/Windows%2011-0078D6?style=for-the-badge&logo=windows)](https://www.microsoft.com/windows)
 [![License](https://img.shields.io/badge/license-MIT-green?style=for-the-badge)](LICENSE)
 
 <br>
 
-![ALE Image Forge — Build pipeline and live log](docs/screenshots/build-pipeline.png)
+![WinForge — Build pipeline and live log](docs/screenshots/build-pipeline.png)
 
 </div>
 
@@ -116,13 +116,13 @@ The machine being imaged has no special requirements beyond being Win 11-capable
 
 ## Installation
 
-Download the latest installer from [**Releases**](https://github.com/IamPavanGS/ALE-ISO-Creator/releases):
+Download the latest installer from [**Releases**](https://github.com/IamPavanGS/WinForge/releases):
 
 ```
-ALEImageForge-Setup-2.4.8.exe
+WinForge-Setup-2.4.8.exe
 ```
 
-The installer requires administrator privileges. It registers a Start Menu shortcut and installs to `%ProgramFiles%\ALE Image Forge\`. Settings survive uninstall and reinstall.
+The installer requires administrator privileges. It registers a Start Menu shortcut and installs to `%ProgramFiles%\WinForge\`. Settings survive uninstall and reinstall.
 
 ---
 
@@ -141,7 +141,7 @@ dotnet publish -c Release -p:Platform=x64 -r win-x64 --self-contained true `
     -p:EnableCompressionInSingleFile=true --nologo
 
 # 3. Compile the Inno Setup installer (requires Inno Setup 6)
-& "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe" Installer\ALEImageForge.iss
+& "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe" Installer\WinForge.iss
 ```
 
 Building `GoldenISOBuilder` automatically triggers `dotnet publish` on `GIBFirstBoot` and copies the resulting exe into the publish folder.
