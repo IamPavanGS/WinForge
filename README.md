@@ -6,7 +6,7 @@
 
 No template VM. No Sysprep. No manual steps after imaging.
 
-[![Version](https://img.shields.io/badge/version-2.4.8-blue?style=for-the-badge)](https://github.com/your-org/ALE-ISO-Creator/releases)
+[![Version](https://img.shields.io/badge/version-2.4.8-blue?style=for-the-badge)](https://github.com/IamPavanGS/ALE-ISO-Creator/releases)
 [![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?style=for-the-badge&logo=dotnet)](https://dotnet.microsoft.com)
 [![Platform](https://img.shields.io/badge/Windows%2011-0078D6?style=for-the-badge&logo=windows)](https://www.microsoft.com/windows)
 [![License](https://img.shields.io/badge/license-MIT-green?style=for-the-badge)](LICENSE)
@@ -53,8 +53,8 @@ Bare Windows ISOs require dozens of manual steps after every install: drivers, a
 </td>
 <td width="50%">
 
-![Advanced — Deployment identity and auto-rename](docs/screenshots/step6-advanced-identity.png)
-**Advanced** — Deployment identity, hostname template, OEM branding, optional Windows features
+![Pre-deployment validation report](docs/screenshots/validation-report.png)
+**Validator** — 96% health score, 104 checks passed, 0 failed — before DISM commits a single byte
 
 </td>
 </tr>
@@ -116,7 +116,7 @@ The machine being imaged has no special requirements beyond being Win 11-capable
 
 ## Installation
 
-Download the latest installer from [**Releases**](https://github.com/your-org/ALE-ISO-Creator/releases):
+Download the latest installer from [**Releases**](https://github.com/IamPavanGS/ALE-ISO-Creator/releases):
 
 ```
 ALEImageForge-Setup-2.4.8.exe
