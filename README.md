@@ -58,11 +58,19 @@ Bare Windows ISOs require dozens of manual steps after every install: drivers, a
 
 </td>
 </tr>
+<tr>
+<td colspan="2">
+
+![Test in VM — Boot the ISO in Hyper-V](docs/screenshots/test-in-vm.png)
+**Test in VM** — Boot the produced ISO directly inside Hyper-V (Gen 2, Secure Boot, TPM 2.0) with live CPU/RAM/disk telemetry and one-click RDP connect — without leaving the app
+
+</td>
+</tr>
 </table>
 
 ---
 
-## Why Image Forge?
+## Why WinForge?
 
 - **Offline, no VM required.** Everything is applied directly to the mounted WIM using DISM and `reg.exe` — no Sysprep, no generalization, no golden image to maintain.
 - **Machines arrive ready.** First boot: Windows installs unattended, renames itself, runs your scripts, installs your applications silently, and enables BitLocker — all before the user ever touches the keyboard.
