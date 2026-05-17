@@ -32,7 +32,7 @@ public static class ToastHelper
                 $@"SOFTWARE\Classes\AppUserModelId\{AumId}");
             if (key != null)
             {
-                key.SetValue("DisplayName",   "ALE Image Forge");
+                key.SetValue("DisplayName",   "WinForge");
                 // Point the icon at our own EXE so the notification badge looks right
                 string exe = System.Diagnostics.Process.GetCurrentProcess()
                                  .MainModule?.FileName ?? "";
@@ -63,7 +63,7 @@ public static class ToastHelper
     <binding template=""ToastGeneric"">
       <text>{Esc(title)}</text>
       <text>{Esc(body)}</text>
-      <text placement=""attribution"">ALE Image Forge</text>
+      <text placement=""attribution"">WinForge</text>
     </binding>
   </visual>
   <audio src=""ms-winsoundevent:Notification.Default"" silent=""{(kind == ToastKind.Failure ? "false" : "true")}""/>

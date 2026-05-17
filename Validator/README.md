@@ -1,6 +1,6 @@
-# ALE Image Forge — Post-Deployment Validator
+# WinForge — Post-Deployment Validator
 
-Validates that a laptop deployed from an ALE Image Forge ISO actually matches what the build profile asked for.
+Validates that a laptop deployed from an WinForge ISO actually matches what the build profile asked for.
 
 Run it on the **deployed laptop** after first login to confirm every step the build engine applied — drivers, apps, language packs, wallpaper, certificates, Group Policies, BitLocker, fonts, registry entries, and more — actually landed correctly.
 
@@ -156,4 +156,4 @@ Validate-GoldenImage-Auto.ps1
 
 **Pavan G S** — BTQ Infra, Alcatel-Lucent Enterprise.
 
-Part of [ALE Image Forge](../README.md) — enterprise Windows 11 image builder.
+Part of [WinForge](../README.md) — enterprise Windows 11 image builder.

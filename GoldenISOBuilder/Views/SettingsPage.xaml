@@ -374,7 +374,7 @@
                                           Data="{StaticResource DiscIcon}" Stroke="{DynamicResource Gold1Brush}"/>
                                 </Border>
                                 <StackPanel VerticalAlignment="Center">
-                                    <TextBlock Text="ALE Image Forge" Foreground="{DynamicResource FG0Brush}"
+                                    <TextBlock Text="WinForge" Foreground="{DynamicResource FG0Brush}"
                                                FontSize="16" FontWeight="SemiBold"/>
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="Version " Foreground="{DynamicResource FG2Brush}" FontSize="12"/>

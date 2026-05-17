@@ -259,7 +259,7 @@ public partial class WelcomePage : UserControl
                 new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
             if (loaded == null)
             {
-                AppDialog.Alert(this, "That file isn't a valid ALE Image Forge profile.",
+                AppDialog.Alert(this, "That file isn't a valid WinForge profile.",
                     "Open Profile", AppDialogIcon.Warning);
                 return;
             }

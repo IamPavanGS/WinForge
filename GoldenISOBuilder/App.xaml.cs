@@ -69,7 +69,7 @@ public partial class App : Application
         LogCrash("Dispatcher", e.Exception);
         MessageBox.Show(
             $"An unexpected error occurred:\n\n{e.Exception.Message}\n\nThe error has been logged. The app will continue to run.",
-            "ALE Image Forge", MessageBoxButton.OK, MessageBoxImage.Error);
+            "WinForge", MessageBoxButton.OK, MessageBoxImage.Error);
         e.Handled = true;
     }
 

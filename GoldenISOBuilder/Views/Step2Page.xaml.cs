@@ -378,7 +378,7 @@ public partial class Step2Page : UserControl
         }
         else
         {
-            sb.AppendLine($"ALE Image Forge -- Windows Update list ({DateTime.Now:yyyy-MM-dd HH:mm})");
+            sb.AppendLine($"WinForge -- Windows Update list ({DateTime.Now:yyyy-MM-dd HH:mm})");
             sb.AppendLine($"Total available: {_availableUpdates.Count}    Selected: {_selectedUpdateIds.Count}");
             sb.AppendLine(new string('─', 100));
             sb.AppendLine($"{"Sel",-4}{"KB",-13}{"Title",-70}{"Size",-12}{"Updated"}");

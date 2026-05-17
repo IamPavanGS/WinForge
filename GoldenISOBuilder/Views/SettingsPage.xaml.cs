@@ -472,7 +472,7 @@ public partial class SettingsPage : UserControl
     private void CheckForUpdates_Click(object sender, RoutedEventArgs e)
     {
         AppDialog.Alert(this,
-            $"You are running ALE Image Forge {GetAppVersion()}.\n\n" +
+            $"You are running WinForge {GetAppVersion()}.\n\n" +
             "Update checking is not yet implemented in this build.",
             "Check for Updates", AppDialogIcon.Info);
     }

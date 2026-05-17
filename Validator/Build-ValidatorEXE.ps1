@@ -141,10 +141,10 @@ $ps2Args = @{
     noConsole    = $true          # WPF GUI — no console window
     sta          = $true          # WPF requires single-threaded apartment
     requireAdmin = $false         # Building the kit needs no admin; the kit's Run-Validator.bat handles elevation
-    title        = 'ALE Validator Builder'
-    description  = 'ALE Image Forge — Validation Kit Builder'
-    company      = 'Alcatel-Lucent Enterprise'
-    product      = 'ALE Image Forge'
+    title        = 'WinForge Validator Builder'
+    description  = 'WinForge — Validation Kit Builder'
+    company      = 'Pavan G S'
+    product      = 'WinForge'
     version      = '2.4.8.0'
 }
 if (Test-Path $iconPath) {
