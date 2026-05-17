@@ -39,8 +39,8 @@ Bare Windows ISOs require dozens of manual steps after every install: drivers, a
 </td>
 <td width="50%">
 
-![Cinematic build view](docs/screenshots/build-cinematic.png)
-**Build** — 19-stage pipeline with cinematic progress view
+![Build complete](docs/screenshots/build-complete.png)
+**Build complete** — 9.71 GB ISO, 20/20 steps, SHA-256 verified in 1 h 07 min
 
 </td>
 </tr>
